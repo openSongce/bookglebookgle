@@ -1,7 +1,7 @@
 # bookglebookgle-server/Dockerfile
 
 # 1. 경량화된 Temurin JRE 17 베이스 이미지 사용
-FROM eclipse-temurin:17-jre-slim
+FROM eclipse-temurin:17-jre
 
 # 2. 애플리케이션 작업 디렉터리
 WORKDIR /app
