@@ -23,6 +23,12 @@ repositories {
     mavenCentral()
 }
 
+bootJar {
+    // 빌드 산출물을 항상 app.jar 로 만듭니다
+    archiveFileName.set("app.jar")
+}
+
+
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-web'
