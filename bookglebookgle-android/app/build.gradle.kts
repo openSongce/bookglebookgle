@@ -48,9 +48,13 @@ android {
 
 dependencies {
 
+    implementation("com.google.accompanist:accompanist-navigation-animation:0.31.3-beta")
+
+    implementation ("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("androidx.datastore:datastore-preferences:1.1.1")
 
     implementation("com.google.dagger:hilt-android:2.48")
+    implementation(libs.androidx.core.splashscreen)
     kapt("com.google.dagger:hilt-compiler:2.48")
     implementation("androidx.hilt:hilt-navigation-compose:1.1.0")
 

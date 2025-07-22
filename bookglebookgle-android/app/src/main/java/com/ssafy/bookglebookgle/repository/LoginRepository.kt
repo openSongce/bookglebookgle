@@ -6,6 +6,7 @@ package com.ssafy.bookglebookgle.repository
 import com.ssafy.bookglebookgle.network.LoginApi
 import com.ssafy.bookglebookgle.entity.LoginRequest
 import com.ssafy.bookglebookgle.entity.LoginResponse
+import com.ssafy.bookglebookgle.entity.RefreshRequest
 import javax.inject.Inject
 
 class LoginRepository @Inject constructor(
@@ -15,5 +16,9 @@ class LoginRepository @Inject constructor(
         val request = LoginRequest(id, password)
         return loginApi.login(request)
     }
+
+    suspend fun refreshToken(refreshToken: String) =
+        loginApi.refreshToken(RefreshRequest(refreshToken))
+
 }
 

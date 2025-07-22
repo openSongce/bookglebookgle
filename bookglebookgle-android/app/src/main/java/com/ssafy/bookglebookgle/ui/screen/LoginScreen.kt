@@ -27,6 +27,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Divider
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -91,7 +93,7 @@ fun LoginScreen(navController: NavController, loginviewModel: LoginViewModel = h
 
     // UI
     BoxWithConstraints(
-        modifier = Modifier.fillMaxSize()
+        modifier = Modifier.fillMaxSize().background(Color(0xFFFCF7F0))
     ) {
         val maxW = maxWidth
         val maxH = maxHeight
@@ -132,6 +134,7 @@ fun LoginScreen(navController: NavController, loginviewModel: LoginViewModel = h
                 value = id,
                 onValueChange = { loginviewModel.id.value = it },
                 placeholder = { Text("아이디를 입력해주세요.") },
+                shape = RoundedCornerShape(maxW * 0.02f),
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -142,6 +145,7 @@ fun LoginScreen(navController: NavController, loginviewModel: LoginViewModel = h
                 onValueChange = { loginviewModel.password.value = it },
                 placeholder = { Text("비밀번호를 입력해주세요.") },
                 visualTransformation = PasswordVisualTransformation(),
+                shape = RoundedCornerShape(maxW * 0.02f),
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -152,7 +156,7 @@ fun LoginScreen(navController: NavController, loginviewModel: LoginViewModel = h
                 onClick = { loginviewModel.login() },
                 colors = ButtonDefaults.buttonColors(
                     containerColor = if (id.isNotBlank() && password.isNotBlank())
-                        Color(0xFFE2D4C3) else Color(0xFFCCC7C0)
+                        Color(0xFFDED0BB) else Color(0xFFCCC7C0)
                 ),
                 enabled = id.isNotBlank() && password.isNotBlank(),
                 shape = RoundedCornerShape(maxW * 0.02f),
@@ -164,6 +168,8 @@ fun LoginScreen(navController: NavController, loginviewModel: LoginViewModel = h
             }
 
             Spacer(modifier = Modifier.weight(0.25f))
+
+            OrDivider()
 
             // 카카오 & 구글 로그인 버튼
             Row(
@@ -214,20 +220,20 @@ fun LoginScreen(navController: NavController, loginviewModel: LoginViewModel = h
                             modifier = Modifier.fillMaxHeight(0.5f)
                         )
                         Spacer(modifier = Modifier.width(maxW * 0.02f))
-                        Text("시작하기", color = Color.Black)
+                        Text("시작하기", color = Color.Black, fontWeight = FontWeight.Bold)
                     }
                 }
             }
 
             TextButton(onClick = { /* 비밀번호 찾기 */ }) {
-                Text("비밀번호 찾기", color = Color.Gray, fontSize = maxW.value.times(0.03).sp)
+                Text("비밀번호 찾기", color = Color(0xFFCCC7C0), fontSize = maxW.value.times(0.03).sp)
             }
 
             Spacer(modifier = Modifier.weight(1f))
 
             Button(
                 onClick = { /* 회원가입 */ },
-                colors = ButtonDefaults.outlinedButtonColors(containerColor = Color(0xFFF5F0E6)),
+                colors = ButtonDefaults.outlinedButtonColors(containerColor = Color(0xFFDED0BB)),
                 shape = RoundedCornerShape(maxW * 0.02f),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -242,11 +248,21 @@ fun LoginScreen(navController: NavController, loginviewModel: LoginViewModel = h
 
 }
 
-@Preview(showBackground = true)
 @Composable
-fun LoginScreenPreview() {
-    // NavController 대신 미리보기용으로 rememberNavController 사용
-    val navController = rememberNavController()
-    LoginScreen(navController = navController)
+fun OrDivider(modifier: Modifier = Modifier, text: String = "또는") {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 16.dp)
+    ) {
+        HorizontalDivider(modifier = Modifier.weight(1f), color = Color.Gray)
+        Text(
+            text = "  $text  ",
+            color = Color.Gray,
+            style = MaterialTheme.typography.bodyMedium
+        )
+        HorizontalDivider(modifier = Modifier.weight(1f), color = Color.Gray)
+    }
 }
 
