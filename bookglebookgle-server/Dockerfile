@@ -1,9 +1,6 @@
-# bookglebookgle-server/Dockerfile
-
-FROM eclipse-temurin:17-jre
+# 실행용 Dockerfile (bookglebookgle-server/Dockerfile)
+FROM openjdk:17-jdk-slim
 WORKDIR /app
-
-# Gradle이 생성한 app.jar 하나만 복사
 COPY build/libs/app.jar app.jar
-
-ENTRYPOINT ["java", "-jar", "/app/app.jar"]
+EXPOSE 8081
+ENTRYPOINT ["java", "-jar", "app.jar"]
