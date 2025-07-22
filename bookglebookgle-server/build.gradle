@@ -23,6 +23,16 @@ repositories {
     mavenCentral()
 }
 
+// 1) plain JAR 생성 비활성화
+tasks.named('jar') {
+    enabled = false
+}
+
+// 2) fat-jar 이름을 항상 app.jar 로 고정
+bootJar {
+    archiveFileName.set("app.jar")
+}
+
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-web'
