@@ -25,9 +25,10 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Divider
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -41,28 +42,32 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
-import androidx.navigation.compose.rememberNavController
 import com.ssafy.bookglebookgle.R
 import com.ssafy.bookglebookgle.viewmodel.LoginViewModel
 
 @Composable
-fun LoginScreen(navController: NavController, loginviewModel: LoginViewModel = hiltViewModel()) {
-    val id = loginviewModel.id.value
-    val password = loginviewModel.password.value
-    val loginResult = loginviewModel.loginSuccess.value
+fun LoginScreen(navController: NavController, loginViewModel: LoginViewModel = hiltViewModel()) {
+
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    val id = loginViewModel.id.value
+    val password = loginViewModel.password.value
+    val loginResult = loginViewModel.loginSuccess.value
 
     val context = LocalContext.current
 
@@ -84,16 +89,16 @@ fun LoginScreen(navController: NavController, loginviewModel: LoginViewModel = h
     }
 
     // 에러 메세지 토스트
-    LaunchedEffect(loginviewModel.errorMessage.value) {
-        loginviewModel.errorMessage.value?.let {
+    LaunchedEffect(loginViewModel.errorMessage.value) {
+        loginViewModel.errorMessage.value?.let {
             Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
-            loginviewModel.errorMessage.value = null
+            loginViewModel.errorMessage.value = null
         }
     }
 
     // UI
     BoxWithConstraints(
-        modifier = Modifier.fillMaxSize().background(Color(0xFFFCF7F0))
+        modifier = Modifier.fillMaxSize()
     ) {
         val maxW = maxWidth
         val maxH = maxHeight
@@ -132,28 +137,42 @@ fun LoginScreen(navController: NavController, loginviewModel: LoginViewModel = h
 
             OutlinedTextField(
                 value = id,
-                onValueChange = { loginviewModel.id.value = it },
+                onValueChange = { loginViewModel.id.value = it },
                 placeholder = { Text("아이디를 입력해주세요.") },
                 shape = RoundedCornerShape(maxW * 0.02f),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(
+                    onDone = {
+                        focusManager.clearFocus()
+                        keyboardController?.hide()  // 👈 키보드 내려감
+                    }
+                )
             )
 
             Spacer(modifier = Modifier.weight(0.25f))
 
             OutlinedTextField(
                 value = password,
-                onValueChange = { loginviewModel.password.value = it },
+                onValueChange = { loginViewModel.password.value = it },
                 placeholder = { Text("비밀번호를 입력해주세요.") },
                 visualTransformation = PasswordVisualTransformation(),
                 shape = RoundedCornerShape(maxW * 0.02f),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(
+                    onDone = {
+                        focusManager.clearFocus()
+                        keyboardController?.hide()  // 👈 키보드 내려감
+                    }
+                )
             )
 
             Spacer(modifier = Modifier.weight(0.25f))
 
             // 로그인 버튼
             Button(
-                onClick = { loginviewModel.login() },
+                onClick = { loginViewModel.login() },
                 colors = ButtonDefaults.buttonColors(
                     containerColor = if (id.isNotBlank() && password.isNotBlank())
                         Color(0xFFDED0BB) else Color(0xFFCCC7C0)
@@ -232,7 +251,7 @@ fun LoginScreen(navController: NavController, loginviewModel: LoginViewModel = h
             Spacer(modifier = Modifier.weight(1f))
 
             Button(
-                onClick = { /* 회원가입 */ },
+                onClick = { navController.navigate("register") },
                 colors = ButtonDefaults.outlinedButtonColors(containerColor = Color(0xFFDED0BB)),
                 shape = RoundedCornerShape(maxW * 0.02f),
                 modifier = Modifier

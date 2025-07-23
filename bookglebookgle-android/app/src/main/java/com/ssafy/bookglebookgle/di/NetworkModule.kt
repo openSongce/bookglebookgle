@@ -1,5 +1,6 @@
 package com.ssafy.bookglebookgle.di
 
+import com.ssafy.bookglebookgle.network.AuthApi
 import com.ssafy.bookglebookgle.network.AuthInterceptor
 import com.ssafy.bookglebookgle.network.LoginApi
 import com.ssafy.bookglebookgle.network.TokenAuthenticator
@@ -31,6 +32,12 @@ object NetworkModule {
     fun provideLoginApi(
         retrofit: Retrofit
     ): LoginApi = retrofit.create(LoginApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideAuthApi(retrofit: Retrofit): AuthApi =
+        retrofit.create(AuthApi::class.java)
+
 
     @Provides
     @Singleton
