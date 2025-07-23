@@ -1,4 +1,4 @@
-package com.example.auth.dto;
+package com.example.bookglebookgleserver.auth.dto;
 
 
 import lombok.AllArgsConstructor;

@@ -1,4 +1,4 @@
-package com.example.auth.service;
+package com.example.bookglebookgleserver.auth.service;
 
 
 import io.jsonwebtoken.Jwts;

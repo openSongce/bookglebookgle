@@ -1,8 +1,10 @@
-package com.example.auth.dto;
+package com.example.bookglebookgleserver.auth.dto;
 
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
 
 @Data
 public class LoginRequest {
