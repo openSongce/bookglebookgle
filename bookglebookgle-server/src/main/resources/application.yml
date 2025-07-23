@@ -3,10 +3,10 @@ server:
 
 spring:
   config:
-      import: optional:file:.env
+    import: optional:env[.env]
   datasource:
     url: jdbc:mysql://127.0.0.1:3307/bookglebookgle
-    #url: jdbc:mysql://localhost:3307/bookglebookgle
+#    url: jdbc:mysql://localhost:3307/bookglebookgle
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
