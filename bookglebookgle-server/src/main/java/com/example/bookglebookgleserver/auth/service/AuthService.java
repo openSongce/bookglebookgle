@@ -42,7 +42,7 @@ public class AuthService {
         refreshTokenService.saveRefreshToken(user.getEmail(), refreshToken);
 
 
-        return new JwtResponse(accessToken, refreshToken, 3600L);
+        return new JwtResponse(accessToken, refreshToken);
 
     }
 
@@ -69,7 +69,7 @@ public class AuthService {
         refreshTokenService.saveRefreshToken(email, newRefreshToken);
 
         System.out.println("토큰 갱신 완료");
-        return new JwtResponse(newAccessToken, newRefreshToken, 3600L);
+        return new JwtResponse(newAccessToken, newRefreshToken);
     }
 
 
