@@ -11,7 +11,7 @@ services:
     ports:
       - "3306:3306"
     volumes:
-      - mysql-data:/var/lib/mysql
+      - ./mysql-data:/var/lib/mysql
 
   spring:
     build:
@@ -27,5 +27,3 @@ services:
       DB_USERNAME: root
       DB_PASSWORD: ${DB_PASSWORD}
 
-volumes:
-  mysql-data:
