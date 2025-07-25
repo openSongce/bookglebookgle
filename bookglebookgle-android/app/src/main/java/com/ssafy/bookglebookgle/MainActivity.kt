@@ -32,6 +32,7 @@ import com.ssafy.bookglebookgle.ui.screen.SplashScreen
 import com.ssafy.bookglebookgle.ui.theme.BookgleBookgleTheme
 import dagger.hilt.android.AndroidEntryPoint
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import com.ssafy.bookglebookgle.ui.screen.MainScreen
 import com.ssafy.bookglebookgle.ui.screen.RegisterScreen
 
 
@@ -63,7 +64,7 @@ class MainActivity : ComponentActivity() {
                     ) {
                         composable("splash") { SplashScreen(navController) }
                         composable("login") { LoginScreen(navController) }
-                        composable("main") { /* MainScreen(navController) */ }
+                        composable("main") { MainScreen(navController)}
                         composable("register"){ RegisterScreen(navController) }
                     }
 

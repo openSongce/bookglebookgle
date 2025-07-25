@@ -11,20 +11,15 @@ import androidx.compose.ui.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.*
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
-import androidx.navigation.compose.rememberNavController
-import com.ssafy.bookglebookgle.R
 import com.ssafy.bookglebookgle.entity.RegisterStep
-import com.ssafy.bookglebookgle.ui.theme.BookgleBookgleTheme
 import com.ssafy.bookglebookgle.viewmodel.RegisterViewModel
 
 
@@ -33,6 +28,15 @@ import com.ssafy.bookglebookgle.viewmodel.RegisterViewModel
 fun RegisterScreen(navController: NavController, registerViewModel: RegisterViewModel = hiltViewModel()) {
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
+
+    LaunchedEffect(registerViewModel.registerSuccess) {
+        if (registerViewModel.registerSuccess) {
+            navController.navigate("main") {
+                popUpTo("register") { inclusive = true } // 뒤로가기 시 회원가입 화면 안 보이게
+            }
+        }
+    }
+
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val maxW = maxWidth
@@ -48,13 +52,6 @@ fun RegisterScreen(navController: NavController, registerViewModel: RegisterView
         ) {
             Spacer(modifier = Modifier.height(maxH * 0.05f))
 
-            Image(
-                painter = painterResource(id = R.drawable.register_back),
-                contentDescription = "Back",
-                modifier = Modifier
-                    .size(maxW * 0.06f)
-                    .clickable { navController.popBackStack() }
-            )
 
             Spacer(modifier = Modifier.height(maxH * 0.05f))
             Text("북글북글에서 사용할", fontWeight = FontWeight.Bold, fontSize = (maxW * 0.06f).value.sp)
@@ -108,20 +105,22 @@ fun RegisterScreen(navController: NavController, registerViewModel: RegisterView
                     )
                     Box(
                         modifier = Modifier
-                            .clickable(enabled = isValidEmail(registerViewModel.email)) {
+                            .clickable(enabled = isValidEmail(registerViewModel.email) && registerViewModel.isRequestButtonEnabled) {
+                                keyboardController?.hide()
                                 registerViewModel.onRequestAuthCode()
                             }
                             .wrapContentWidth()
                             .background(
-                                if (isValidEmail(registerViewModel.email)) Color(0xFFADB5BD) else Color(0xFFDEE2E6),
+                                if (isValidEmail(registerViewModel.email) && registerViewModel.isRequestButtonEnabled)
+                                    Color(0xFFADB5BD) else Color(0xFFDEE2E6),
                                 RoundedCornerShape(maxW * 0.015f)
                             )
                             .padding(horizontal = maxW * 0.03f, vertical = maxH * 0.01f),
-                        contentAlignment = Alignment.Center,
-
+                        contentAlignment = Alignment.Center
                     ) {
-                        Text("인증요청", color = Color.White, fontSize = (maxW * 0.03f).value.sp)
+                        Text("중복 확인", color = Color.White, fontSize = (maxW * 0.03f).value.sp)
                     }
+
                 }
 
                 Spacer(modifier = Modifier.height(maxH * 0.025f))
@@ -137,7 +136,50 @@ fun RegisterScreen(navController: NavController, registerViewModel: RegisterView
                     Spacer(modifier = Modifier.height(maxH * 0.025f))
                 }
             } else {
-                CustomInputField("닉네임", maxW, registerViewModel.nickname, onValueChange = registerViewModel::onNicknameChange)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = registerViewModel.nickname,
+                        onValueChange = registerViewModel::onNicknameChange,
+                        modifier = Modifier.weight(1f),
+                        placeholder = { Text("닉네임") },
+                        enabled = !registerViewModel.isNicknameValid
+                    )
+
+                    Spacer(modifier = Modifier.width(maxW * 0.02f))
+
+                    Box(
+                        modifier = Modifier
+                            .clickable(
+                                enabled = registerViewModel.nickname.isNotBlank()
+                                        && !registerViewModel.isNicknameChecking
+                                        && !registerViewModel.isNicknameValid
+                            ) {
+                                keyboardController?.hide()
+                                registerViewModel.onCheckNickname()
+                            }
+                            .background(
+                                when {
+                                    registerViewModel.isNicknameValid -> Color(0xFF51CF66) // 초록
+                                    registerViewModel.nickname.isNotBlank() -> Color(0xFFADB5BD)
+                                    else -> Color(0xFFDEE2E6)
+                                },
+                                RoundedCornerShape(maxW * 0.015f)
+                            )
+                            .padding(horizontal = maxW * 0.03f, vertical = maxH * 0.01f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = if (registerViewModel.isNicknameValid) "사용 가능" else "중복 확인",
+                            color = Color.White,
+                            fontSize = (maxW * 0.03f).value.sp
+                        )
+                    }
+                }
+
+
                 Spacer(modifier = Modifier.height(maxH * 0.015f))
                 CustomInputField("비밀번호", maxW, registerViewModel.password, onValueChange = registerViewModel::onPasswordChange, isPassword = true)
                 Spacer(modifier = Modifier.height(maxH * 0.015f))
@@ -160,7 +202,7 @@ fun RegisterScreen(navController: NavController, registerViewModel: RegisterView
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(maxH * 0.065f)
-                    .background(Color(0xFFF5F0E6), RoundedCornerShape(maxW * 0.02f))
+                    .background(Color(0xFFDED0BB), RoundedCornerShape(maxW * 0.02f))
                     .clickable { registerViewModel.onNextOrSubmit() },
                 contentAlignment = Alignment.Center
             ) {
@@ -221,16 +263,3 @@ fun CustomInputField(
     )
 }
 
-
-
-
-
-
-@Preview(showBackground = true, showSystemUi = true)
-@Composable
-fun RegisterScreenPreview() {
-    val navController = rememberNavController()
-    BookgleBookgleTheme {
-        RegisterScreen(navController)
-    }
-}

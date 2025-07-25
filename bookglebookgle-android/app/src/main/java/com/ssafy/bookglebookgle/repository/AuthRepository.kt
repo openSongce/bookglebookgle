@@ -35,4 +35,14 @@ class AuthRepository @Inject constructor(
             false
         }
     }
+
+    suspend fun checkNickname(nickname: String): Boolean {
+        return try {
+            authApi.checkNickname(nickname)
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
 }

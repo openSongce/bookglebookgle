@@ -5,7 +5,9 @@ import com.ssafy.bookglebookgle.entity.SendCodeRequest
 import com.ssafy.bookglebookgle.entity.VerifyCodeRequest
 import retrofit2.Response
 import retrofit2.http.Body
+import retrofit2.http.GET
 import retrofit2.http.POST
+import retrofit2.http.Query
 
 interface AuthApi {
     @POST("/api/auth/send-code")
@@ -16,5 +18,9 @@ interface AuthApi {
 
     @POST("/api/auth/register")
     suspend fun register(@Body request: RegisterRequest): Response<Unit>
+
+    @GET("auth/check-nickname")
+    suspend fun checkNickname(@Query("nickname") nickname: String)
+
 
 }

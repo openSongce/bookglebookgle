@@ -19,7 +19,7 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object NetworkModule {
 
-    private const val BASE_URL = "https://your.api.url/" // 실제 서버 주소로 교체
+    private const val BASE_URL = "http://52.79.59.66:8081/" // 실제 서버 주소로 교체
 
     @Provides
     @Singleton

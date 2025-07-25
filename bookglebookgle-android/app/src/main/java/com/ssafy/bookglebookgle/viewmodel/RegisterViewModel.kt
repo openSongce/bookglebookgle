@@ -7,17 +7,23 @@ import com.ssafy.bookglebookgle.entity.RegisterRequest
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import com.ssafy.bookglebookgle.entity.RegisterStep
-import com.ssafy.bookglebookgle.repository.AuthRepository
 import com.ssafy.bookglebookgle.ui.screen.isValidEmail
+import com.ssafy.bookglebookgle.usecase.RegisterUseCase
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @HiltViewModel
 class RegisterViewModel @Inject constructor(
-    private val authRepository: AuthRepository
+    private val registerUseCase: RegisterUseCase
 ) : ViewModel() {
 
     var step by mutableStateOf(RegisterStep.EMAIL)
         private set
+
+    var registerSuccess by mutableStateOf(false)
+        private set
+
 
     var email by mutableStateOf("")
     var authCode by mutableStateOf("")
@@ -29,6 +35,13 @@ class RegisterViewModel @Inject constructor(
 
     var errorMessage by mutableStateOf<String?>(null)
 
+    var isRequestButtonEnabled by mutableStateOf(true)
+    private var resendTimerJob: Job? = null
+
+    var isNicknameValid by mutableStateOf(false)
+    var isNicknameChecking by mutableStateOf(false)
+
+
     fun onEmailChange(value: String) {
         email = value
     }
@@ -39,6 +52,7 @@ class RegisterViewModel @Inject constructor(
 
     fun onNicknameChange(value: String) {
         nickname = value
+        isNicknameValid = false
     }
 
     fun onPasswordChange(value: String) {
@@ -50,26 +64,43 @@ class RegisterViewModel @Inject constructor(
     }
 
 
+
     fun onRequestAuthCode() {
         viewModelScope.launch {
             if (!isValidEmail(email)) {
                 errorMessage = "올바른 이메일 형식이 아닙니다."
                 return@launch
             }
-            val success = authRepository.sendAuthCode(email)
+
+            isRequestButtonEnabled = false // 버튼 비활성화
+
+            val success = registerUseCase.sendAuthCode(email)
+
             if (success) {
+                errorMessage = null
                 isAuthFieldVisible = true
+                startResendTimer()
             } else {
-                errorMessage = "인증코드 전송에 실패했습니다."
+                errorMessage = "이미 가입된 이메일입니다." // 중복된 경우 메시지
+                isRequestButtonEnabled = true // 실패했을 경우 다시 활성화
             }
         }
     }
+
+    private fun startResendTimer() {
+        resendTimerJob?.cancel()
+        resendTimerJob = viewModelScope.launch {
+            delay(60000) // 60초
+            isRequestButtonEnabled = true
+        }
+    }
+
 
     fun onNextOrSubmit() {
         when (step) {
             RegisterStep.EMAIL -> {
                 viewModelScope.launch {
-                    val valid = authRepository.verifyCode(email, authCode)
+                    val valid = registerUseCase.verifyCode(email, authCode)
                     if (valid) {
                         step = RegisterStep.DETAILS
                         errorMessage = null
@@ -84,6 +115,10 @@ class RegisterViewModel @Inject constructor(
                     errorMessage = "닉네임을 입력해주세요."
                     return
                 }
+                if (!isNicknameValid) {
+                    errorMessage = "닉네임 중복 확인이 필요합니다."
+                    return
+                }
                 if (password != confirmPassword) {
                     errorMessage = "비밀번호가 일치하지 않습니다."
                     return
@@ -94,19 +129,32 @@ class RegisterViewModel @Inject constructor(
                 }
 
                 viewModelScope.launch {
-                    val request = RegisterRequest(email, nickname, password)
-                    val success = authRepository.registerUser(request)
+                    val success = registerUseCase.registerUser(email, nickname, password)
                     if (success) {
-                        // TODO: 회원가입 완료 후 이동 처리
                         errorMessage = null
-                        // 예시: navController.navigate("login") 등
+                        registerSuccess = true
                     } else {
                         errorMessage = "회원가입에 실패했습니다."
                     }
                 }
-
-
             }
         }
     }
+
+    fun onCheckNickname() {
+        viewModelScope.launch {
+            isNicknameChecking = true
+            val available = registerUseCase.checkNicknameAvailable(nickname)
+            isNicknameChecking = false
+
+            if (available) {
+                isNicknameValid = true
+                errorMessage = null
+            } else {
+                isNicknameValid = false
+                errorMessage = "이미 사용 중인 닉네임입니다."
+            }
+        }
+    }
+
 }
