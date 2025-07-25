@@ -3,6 +3,7 @@ package com.ssafy.bookglebookgle.repository
 // LoginRepository.kt
 
 
+import com.ssafy.bookglebookgle.entity.GoogleLoginRequest
 import com.ssafy.bookglebookgle.network.LoginApi
 import com.ssafy.bookglebookgle.entity.LoginRequest
 import com.ssafy.bookglebookgle.entity.LoginResponse
@@ -19,6 +20,10 @@ class LoginRepository @Inject constructor(
 
     suspend fun refreshToken(refreshToken: String) =
         loginApi.refreshToken(RefreshRequest(refreshToken))
+
+    suspend fun loginWithGoogle(idToken: String): LoginResponse {
+        return loginApi.googleLogin(GoogleLoginRequest(idToken))
+    }
 
 }
 

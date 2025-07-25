@@ -26,12 +26,15 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.ssafy.bookglebookgle.navigation.BottomNavigationBar
+import com.ssafy.bookglebookgle.viewmodel.LoginViewModel
+import dagger.hilt.android.lifecycle.HiltViewModel
 
 
 @Composable
-fun MainScreen(navController: NavController) {
+fun MainScreen(navController: NavController, loginViewModel: LoginViewModel = hiltViewModel()) {
     val tabs = listOf("독서", "학습", "첨삭")
     var selectedTab by remember { mutableStateOf("독서") }
     var selectedIndex by remember { mutableStateOf(0) }

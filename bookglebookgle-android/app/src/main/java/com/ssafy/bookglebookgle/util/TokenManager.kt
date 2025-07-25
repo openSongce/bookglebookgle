@@ -22,8 +22,8 @@ class TokenManager @Inject constructor(
         }
     }
 
-    fun getUserInfo(token: String): JSONObject? {
-        return getPayload(token)?.optJSONObject("userInfo")
+    fun getUserInfo(token: String): String? {
+        return getPayload(token)?.optString("sub")
     }
 
 

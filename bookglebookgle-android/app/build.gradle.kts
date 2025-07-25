@@ -127,6 +127,14 @@ dependencies {
     // FlowLayout (태그, 버튼 등 가변적인 Row/Column 레이아웃)
     implementation("com.google.accompanist:accompanist-flowlayout:0.32.0")
 
+    //Google Login
+    dependencies {
+        implementation ("androidx.credentials:credentials:1.5.0")
+        implementation ("androidx.credentials:credentials-play-services-auth:1.5.0")
+        implementation ("com.google.android.libraries.identity.googleid:googleid:1.1.1")
+    }
+
+
 }
 
 kapt {

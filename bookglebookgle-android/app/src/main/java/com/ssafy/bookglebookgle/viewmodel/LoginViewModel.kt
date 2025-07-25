@@ -2,20 +2,23 @@ package com.ssafy.bookglebookgle.viewmodel
 
 // LoginViewModel.kt
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.mutableStateOf
 import com.ssafy.bookglebookgle.repository.LoginRepository
+import com.ssafy.bookglebookgle.usecase.GoogleLoginUseCase
+import com.ssafy.bookglebookgle.usecase.LoginUseCase
 import com.ssafy.bookglebookgle.util.TokenManager
 import javax.inject.Inject
 
 
 @HiltViewModel
 class LoginViewModel @Inject constructor(
-    private val loginRepository: LoginRepository,
-    private val tokenManager: TokenManager
+    private val loginUseCase: LoginUseCase,
+    private val googleLoginUseCase: GoogleLoginUseCase,
 ) : ViewModel() {
 
     val id = mutableStateOf("")
@@ -26,14 +29,10 @@ class LoginViewModel @Inject constructor(
     fun login() {
         viewModelScope.launch {
             try {
-//                val response = loginRepository.login(id.value, password.value)
-//
-//                tokenManager.saveTokens(
-//                    accessToken = response.accessToken,
-//                    refreshToken = response.refreshToken
-//                )
+                val success = loginUseCase(id.value, password.value)
+                loginSuccess.value = success
 
-                loginSuccess.value = true
+
             } catch (e: Exception) {
                 e.printStackTrace()
                 errorMessage.value = "로그인에 실패했습니다: ${e.message}"
@@ -41,4 +40,14 @@ class LoginViewModel @Inject constructor(
             }
         }
     }
+
+
+    fun googleLogin(idToken: String) {
+        viewModelScope.launch {
+            val success = googleLoginUseCase(idToken)
+            loginSuccess.value = success
+        }
+    }
+
+
 }

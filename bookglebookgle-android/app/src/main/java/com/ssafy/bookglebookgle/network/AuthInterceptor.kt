@@ -1,5 +1,6 @@
 package com.ssafy.bookglebookgle.network
 
+import android.util.Log
 import com.ssafy.bookglebookgle.util.TokenManager
 import kotlinx.coroutines.runBlocking
 import okhttp3.Interceptor
@@ -11,6 +12,7 @@ class AuthInterceptor @Inject constructor(
 ) : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val accessToken = runBlocking { tokenManager.getAccessToken() }
+
         val newRequest = chain.request().newBuilder().apply {
             if (!accessToken.isNullOrEmpty()) {
                 addHeader("Authorization", "Bearer $accessToken")
