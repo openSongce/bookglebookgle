@@ -23,14 +23,12 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
+                .cors(cors -> cors.disable())
                 .httpBasic(httpBasic -> httpBasic.disable()) // <- 기본 인증 비활성화
                 .formLogin(formLogin -> formLogin.disable()) // <- 로그인 폼 비활성화
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/auth/**",
-                                "/swagger-ui/**",
-                                "/v3/api-docs/**",
-                                "/swagger-resources/**",
-                                "/webjars/**").permitAll()
+                        .requestMatchers("/auth/**").permitAll() // 명시적으로 /auth/** 허용
+                        .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-resources/**", "/webjars/**").permitAll()
                         .anyRequest().authenticated()
                 );
 

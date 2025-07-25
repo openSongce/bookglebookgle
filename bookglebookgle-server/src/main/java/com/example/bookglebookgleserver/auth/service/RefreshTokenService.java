@@ -26,7 +26,7 @@ public class RefreshTokenService {
 
     public void deleteRefreshToken(String email) {
         refreshTokenStore.remove(email);
-        System.out.println("🗑️ Refresh Token 삭제: " + email);
+        System.out.println("🗑 Refresh Token 삭제: " + email);
     }
 
 
