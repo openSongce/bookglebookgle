@@ -2,16 +2,15 @@ package com.example.bookglebookgleserver.user.entity;
 
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 @Entity
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@Getter
+@Setter
 @Table(name="users")
 public class User {
 
@@ -23,4 +22,5 @@ public class User {
     private  String email;
 
     private String password;
+    private String nickname;
 }

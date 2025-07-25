@@ -4,6 +4,7 @@ package com.example.bookglebookgleserver.auth.controller;
 import com.example.bookglebookgleserver.auth.dto.JwtResponse;
 import com.example.bookglebookgleserver.auth.dto.LoginRequest;
 import com.example.bookglebookgleserver.auth.dto.RefreshRequest;
+import com.example.bookglebookgleserver.auth.dto.SignupRequest;
 import com.example.bookglebookgleserver.auth.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -105,7 +106,11 @@ public class AuthController {
         return ResponseEntity.ok("인증 코드가 이메일로 발송되었습니다.");
     }
 
-
+    @PostMapping("/signup")
+    public ResponseEntity<String> signup(@RequestBody SignupRequest request) {
+        authService.signup(request);
+        return ResponseEntity.ok("회원가입 완료");
+    }
 
 
 
