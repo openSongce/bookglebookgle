@@ -48,7 +48,8 @@ dependencies {
 
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.5.0'
 
-
+    //stmp
+    implementation 'org.springframework.boot:spring-boot-starter-mail'
 
     // JWT
     implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
