@@ -1,4 +1,7 @@
 package com.example.bookglebookgleserver.pdf.repository;
 
-public interface PdfFileRepository {
+import com.example.bookglebookgleserver.pdf.entity.PdfFile;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+public interface PdfFileRepository extends JpaRepository<PdfFile, Long> {
 }
