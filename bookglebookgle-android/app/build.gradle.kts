@@ -44,6 +44,11 @@ android {
     buildFeatures {
         compose = true
     }
+    hilt{
+        enableAggregatingTask = false
+    }
+
+
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -52,6 +57,27 @@ android {
 }
 
 dependencies {
+
+    implementation("com.google.accompanist:accompanist-navigation-animation:0.31.3-beta")
+
+    implementation ("androidx.security:security-crypto:1.1.0-alpha06")
+    implementation("androidx.datastore:datastore-preferences:1.1.1")
+
+    implementation("com.google.dagger:hilt-android:2.48")
+    implementation(libs.androidx.core.splashscreen)
+    kapt("com.google.dagger:hilt-compiler:2.48")
+    implementation("androidx.hilt:hilt-navigation-compose:1.1.0")
+
+
+
+
+    implementation("androidx.navigation:navigation-compose:2.7.7")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.6.2")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.6.2")
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+
+
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)

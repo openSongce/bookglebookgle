@@ -1,56 +1,65 @@
 package com.ssafy.bookglebookgle
 
+import android.os.Build
+import com.ssafy.bookglebookgle.ui.screen.LoginScreen
+
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.ExperimentalAnimationApi
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.navigation.NavController
-import com.ssafy.bookglebookgle.navigation.MainNavigation
+import com.google.accompanist.navigation.animation.composable
+import com.google.accompanist.navigation.animation.AnimatedNavHost
+import com.google.accompanist.navigation.animation.rememberAnimatedNavController
+import com.ssafy.bookglebookgle.ui.screen.SplashScreen
 import com.ssafy.bookglebookgle.ui.theme.BookgleBookgleTheme
 import dagger.hilt.android.AndroidEntryPoint
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import com.ssafy.bookglebookgle.ui.screen.MainScreen
+import com.ssafy.bookglebookgle.ui.screen.RegisterScreen
+
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    @OptIn(ExperimentalAnimationApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            installSplashScreen().setKeepOnScreenCondition { false }
+        }
+
         setContent {
             BookgleBookgleTheme {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    MainNavigation()
+                val navController = rememberAnimatedNavController()
+                Surface(modifier = Modifier.fillMaxWidth( ), color = MaterialTheme.colorScheme.background) {
+                    AnimatedNavHost(
+                        navController = navController,
+                        startDestination = "splash",
+                        enterTransition = { EnterTransition.None },
+                        exitTransition = { ExitTransition.None },
+                        popEnterTransition = { EnterTransition.None },
+                        popExitTransition = { ExitTransition.None }
+
+
+
+                    ) {
+                        composable("splash") { SplashScreen(navController) }
+                        composable("login") { LoginScreen(navController) }
+                        composable("main") { MainScreen(navController)}
+                        composable("register"){ RegisterScreen(navController) }
+                    }
+
+
                 }
+
             }
         }
-    }
-}
-
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
-
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    BookgleBookgleTheme {
-        Greeting("Android")
     }
 }
