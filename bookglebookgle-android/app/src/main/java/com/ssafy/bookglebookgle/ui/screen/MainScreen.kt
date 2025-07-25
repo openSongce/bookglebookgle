@@ -51,7 +51,7 @@ fun MainScreen(navController: NavController) {
         WindowCompat.getInsetsController(window, window.decorView)?.isAppearanceLightStatusBars = true
     }
 
-    Box(modifier = Modifier.fillMaxSize().padding(WindowInsets.statusBars.asPaddingValues())) {
+    Box(modifier = Modifier.fillMaxSize().padding(WindowInsets.systemBars.asPaddingValues())) {
         Column(modifier = Modifier.fillMaxSize()) {
             Column(modifier = Modifier.weight(1f)) {
                 // 앱 이름

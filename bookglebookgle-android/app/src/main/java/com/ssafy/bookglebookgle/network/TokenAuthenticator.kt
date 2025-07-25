@@ -26,7 +26,7 @@ class TokenAuthenticator @Inject constructor(
                 tokenManager.saveTokens(newToken.accessToken, newToken.refreshToken)
             }
 
-            response.request().newBuilder()
+            response.request.newBuilder()
                 .header("Authorization", "Bearer ${newToken.accessToken}")
                 .build()
         } catch (e: Exception) {
