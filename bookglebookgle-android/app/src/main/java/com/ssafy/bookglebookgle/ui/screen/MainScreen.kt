@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import androidx.navigation.NavController
+import com.ssafy.bookglebookgle.navigation.BottomNavigationBar
 
 
 @Composable
@@ -51,7 +52,7 @@ fun MainScreen(navController: NavController) {
         WindowCompat.getInsetsController(window, window.decorView)?.isAppearanceLightStatusBars = true
     }
 
-    Box(modifier = Modifier.fillMaxSize().padding(WindowInsets.statusBars.asPaddingValues())) {
+    Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
             Column(modifier = Modifier.weight(1f)) {
                 // 앱 이름
@@ -171,15 +172,9 @@ fun MainScreen(navController: NavController) {
                     }
                 }
             }
-
-            BottomNavigationBar(
-                selectedIndex = selectedIndex,
-                onItemSelected = { selectedIndex = it }
-            )
         }
     }
 }
-
 
 @Composable
 fun RecommendCard(title: String, description: String, imageRes: Int, width: Dp, height: Dp, rightMargin: Dp) {
@@ -271,67 +266,6 @@ fun MeetingCard(title: String) {
         }
     }
 }
-
-
-
-@Composable
-fun BottomNavigationBar(
-    modifier: Modifier = Modifier,
-    selectedIndex: Int = 0,
-    onItemSelected: (Int) -> Unit
-) {
-    val screenWidth = LocalConfiguration.current.screenWidthDp.dp
-    val iconSize = screenWidth * 0.06f
-
-    val items = listOf(
-        Triple("홈", R.drawable.main_home, R.drawable.main_selected_home),
-        Triple("채팅", R.drawable.main_chat, R.drawable.main_selected_chat),
-        Triple("내 모임", R.drawable.main_meeting, R.drawable.main_selected_meeting),
-        Triple("프로필", R.drawable.main_profile, R.drawable.main_selected_profile)
-    )
-
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(Color.White),
-        horizontalArrangement = Arrangement.SpaceEvenly
-    ) {
-        items.forEachIndexed { index, (label, normalIcon, selectedIcon) ->
-            val selected = selectedIndex == index
-            val iconRes = if (selected) selectedIcon else normalIcon
-
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
-                    ) {
-                        onItemSelected(index)
-                    }
-                    .padding(vertical = screenWidth * 0.025f),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Image(
-                    painter = painterResource(id = iconRes),
-                    contentDescription = label,
-                    modifier = Modifier.size(iconSize)
-                )
-                Text(
-                    text = label,
-                    color = if (selected) Color.Black else Color.Gray,
-                    fontSize = screenWidth.value.times(0.03f).sp
-                )
-            }
-        }
-
-    }
-}
-
-
-
-
-
 
 val meetingCard = listOf(
     Triple("독서 모임", "이번 주제는 인생을 변화시키는 독서입니다.", R.drawable.main_reading),
