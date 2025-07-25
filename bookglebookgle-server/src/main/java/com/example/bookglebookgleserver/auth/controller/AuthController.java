@@ -94,7 +94,7 @@ public class AuthController {
             @ApiResponse(responseCode = "200", description = "인증 코드 발송 성공"),
             @ApiResponse(responseCode = "409", description = "이미 등록된 이메일")
     })
-    @PostMapping("/check-email")
+    @PostMapping("/check/email")
     public ResponseEntity<String> checkEmailAndSendCode(@RequestBody Map<String, String> request) {
         String email = request.get("email");
         System.out.println("check-email 요청 도달!");
