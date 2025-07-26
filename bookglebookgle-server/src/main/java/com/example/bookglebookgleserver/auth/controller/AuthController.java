@@ -108,16 +108,15 @@ public class AuthController {
 
     @PostMapping("/signup")
     public ResponseEntity<String> signup(@RequestBody SignupRequest request) {
-        System.out.println("🎯 signup 요청 도달!");
-        System.out.println("📧 이메일: " + request.getEmail());
-        System.out.println("👤 닉네임: " + request.getNickname());
+        System.out.println("signup 요청 도달");
+
 
         try {
             authService.signup(request);
-            System.out.println("✅ 회원가입 성공!");
+            System.out.println("회원가입 성공");
             return ResponseEntity.ok("회원가입 완료");
         } catch (Exception e) {
-            System.err.println("💥 회원가입 실패: " + e.getMessage());
+            System.err.println(" 회원가입 실패: " + e.getMessage());
             e.printStackTrace();
 
             // 구체적인 에러 메시지 반환
