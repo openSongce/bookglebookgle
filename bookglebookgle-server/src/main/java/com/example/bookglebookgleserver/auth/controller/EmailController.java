@@ -2,7 +2,7 @@ package com.example.bookglebookgleserver.auth.controller;
 
 
 import com.example.bookglebookgleserver.auth.dto.EmailVerificationRequest;
-import com.example.bookglebookgleserver.auth.service.EmailService;
+import com.example.bookglebookgleserver.auth.service.EmailVerificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -10,13 +10,11 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Map;
-
 @RestController
 @RequestMapping("/auth/email")
 @RequiredArgsConstructor
 public class EmailController {
-    private final EmailService emailService;
+    private final EmailVerificationService emailService;
 
     @PostMapping("/verify")
     public ResponseEntity<Boolean> verifyCode(@RequestBody EmailVerificationRequest request) {

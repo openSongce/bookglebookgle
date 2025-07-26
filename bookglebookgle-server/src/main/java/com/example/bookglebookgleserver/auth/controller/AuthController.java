@@ -108,8 +108,28 @@ public class AuthController {
 
     @PostMapping("/signup")
     public ResponseEntity<String> signup(@RequestBody SignupRequest request) {
-        authService.signup(request);
-        return ResponseEntity.ok("회원가입 완료");
+        System.out.println("🎯 signup 요청 도달!");
+        System.out.println("📧 이메일: " + request.getEmail());
+        System.out.println("👤 닉네임: " + request.getNickname());
+
+        try {
+            authService.signup(request);
+            System.out.println("✅ 회원가입 성공!");
+            return ResponseEntity.ok("회원가입 완료");
+        } catch (Exception e) {
+            System.err.println("💥 회원가입 실패: " + e.getMessage());
+            e.printStackTrace();
+
+            // 구체적인 에러 메시지 반환
+            if (e.getMessage().contains("이미 존재")) {
+                return ResponseEntity.status(HttpStatus.CONFLICT).body("이미 존재하는 이메일입니다.");
+            } else if (e.getMessage().contains("인증")) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("이메일 인증이 필요합니다.");
+            } else {
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .body("회원가입 처리 중 오류가 발생했습니다: " + e.getMessage());
+            }
+        }
     }
 
 
