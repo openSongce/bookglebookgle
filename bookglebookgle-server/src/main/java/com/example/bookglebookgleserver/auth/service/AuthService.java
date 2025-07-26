@@ -2,12 +2,14 @@ package com.example.bookglebookgleserver.auth.service;
 
 
 import com.example.bookglebookgleserver.auth.dto.JwtResponse;
-import com.example.bookglebookgleserver.common.util.EmailService;
+import com.example.bookglebookgleserver.auth.dto.SignupRequest;
+import com.example.bookglebookgleserver.common.util.EmailSender;
 import com.example.bookglebookgleserver.common.verification.entity.VerificationCode;
 import com.example.bookglebookgleserver.common.verification.repository.VerificationCodeRepository;
 import com.example.bookglebookgleserver.user.entity.User;
 import com.example.bookglebookgleserver.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
@@ -27,10 +29,12 @@ public class AuthService {
     private final JwtService jwtService;
     private final RefreshTokenService refreshTokenService;
 
+    private final RedisTemplate<String, String> redisTemplate;
+
 
     //email인증
     private final VerificationCodeRepository verificationCodeRepository;
-    private final EmailService emailService;
+    private final EmailSender emailSender;
 
     public boolean isEmailDuplicated(String email) {
         return userRepository.findByEmail(email).isPresent();
@@ -44,7 +48,7 @@ public class AuthService {
                 .createdAt(LocalDateTime.now())
                 .build();
         verificationCodeRepository.save(verificationCode);
-        emailService.send(email, "북글북글 인증코드", getEmailBody(code));
+        emailSender.send(email, "북글북글 인증코드", getEmailBody(code));
     }
 
 
@@ -117,6 +121,20 @@ public class AuthService {
         }
         return jwtService.extractEmailFromAccessToken(token);
     }
+
+    public void signup(SignupRequest request){
+        // 비밀번호 암호화 및 저장
+        User user = User.builder()
+                .email(request.getEmail())
+                .password(passwordEncoder.encode(request.getPassword()))
+                .nickname(request.getNickname())
+                .build();
+
+        userRepository.save(user);
+//        redisTemplate.delete(request.getEmail()); // 인증코드 삭제
+
+    }
+
 
 
 
