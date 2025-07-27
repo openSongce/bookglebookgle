@@ -15,8 +15,7 @@ public class JwtService {
     private final String ACCESS_SECRET = "your-access-token-secret-key-should-be-very-long-at-least-32-characters";
     private final String REFRESH_SECRET = "your-refresh-token-secret-key-should-be-very-long-at-least-32-characters";
 
-//    private final long ACCESS_TOKEN_EXPIRATION = 1000 * 60 * 60; // 1시간
-    private final long ACCESS_TOKEN_EXPIRATION = 1000 * 30; // 30초
+    private final long ACCESS_TOKEN_EXPIRATION = 1000 * 60 * 60; // 1시간
     private final long REFRESH_TOKEN_EXPIRATION = 1000 * 60 * 60 * 24 * 7; // 7일
 
 
