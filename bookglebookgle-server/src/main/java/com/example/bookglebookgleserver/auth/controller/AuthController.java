@@ -4,6 +4,7 @@ package com.example.bookglebookgleserver.auth.controller;
 import com.example.bookglebookgleserver.auth.dto.JwtResponse;
 import com.example.bookglebookgleserver.auth.dto.LoginRequest;
 import com.example.bookglebookgleserver.auth.dto.RefreshRequest;
+import com.example.bookglebookgleserver.auth.dto.SignupRequest;
 import com.example.bookglebookgleserver.auth.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -105,7 +106,30 @@ public class AuthController {
         return ResponseEntity.ok("인증 코드가 이메일로 발송되었습니다.");
     }
 
+    @PostMapping("/signup")
+    public ResponseEntity<String> signup(@RequestBody SignupRequest request) {
+        System.out.println("signup 요청 도달");
 
+
+        try {
+            authService.signup(request);
+            System.out.println("회원가입 성공");
+            return ResponseEntity.ok("회원가입 완료");
+        } catch (Exception e) {
+            System.err.println(" 회원가입 실패: " + e.getMessage());
+            e.printStackTrace();
+
+            // 구체적인 에러 메시지 반환
+            if (e.getMessage().contains("이미 존재")) {
+                return ResponseEntity.status(HttpStatus.CONFLICT).body("이미 존재하는 이메일입니다.");
+            } else if (e.getMessage().contains("인증")) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("이메일 인증이 필요합니다.");
+            } else {
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .body("회원가입 처리 중 오류가 발생했습니다: " + e.getMessage());
+            }
+        }
+    }
 
 
 

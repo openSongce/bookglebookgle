@@ -9,5 +9,5 @@ import java.util.Optional;
 
 @Repository
 public interface VerificationCodeRepository extends JpaRepository<VerificationCode,Long> {
-    Optional<VerificationCode> findTopByEmailOrderByCreatedAtDesc(String email);
+     Optional<VerificationCode> findTopByEmailOrderByCreatedAtDesc(String email);
 }
