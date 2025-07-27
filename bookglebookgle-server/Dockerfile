@@ -1,15 +1,24 @@
+# 실행용 Dockerfile (bookglebookgle-server/Dockerfile)
 FROM openjdk:17-jdk-slim
+
+# 작업 디렉토리 설정
 WORKDIR /app
 
+# 시간대 설정
 ENV TZ=Asia/Seoul
-ENV JAVA_TOOL_OPTIONS="-Duser.timezone=Asia/Seoul"
 
-RUN apt-get update && apt-get install -y tzdata && \
+RUN apt-get update && \
+    apt-get install -y tzdata && \
     ln -sf /usr/share/zoneinfo/Asia/Seoul /etc/localtime && \
-    dpkg-reconfigure -f noninteractive tzdata
+    dpkg-reconfigure -f noninteractive tzdata && \
+    apt-get clean
 
+# JAR 및 환경변수 파일 복사
 COPY build/libs/app.jar app.jar
 COPY .env .env
 
+# 포트 오픈
 EXPOSE 8081
-ENTRYPOINT ["java", "-jar", "app.jar"]
+
+# JVM에 타임존 옵션 명시적으로 전달
+ENTRYPOINT ["java", "-Duser.timezone=Asia/Seoul", "-jar", "app.jar"]
