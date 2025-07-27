@@ -3,7 +3,7 @@ package com.ssafy.bookglebookgle.repository
 // LoginRepository.kt
 
 
-import com.ssafy.bookglebookgle.network.LoginApi
+import com.ssafy.bookglebookgle.network.api.LoginApi
 import com.ssafy.bookglebookgle.entity.LoginRequest
 import com.ssafy.bookglebookgle.entity.LoginResponse
 import com.ssafy.bookglebookgle.entity.RefreshRequest
