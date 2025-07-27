@@ -30,6 +30,7 @@ public class SecurityConfig {
                 .formLogin(formLogin -> formLogin.disable()) // <- 로그인 폼 비활성화
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/auth/**").permitAll() // 명시적으로 /auth/** 허용
+                        .requestMatchers("/pdf/upload").permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-resources/**", "/webjars/**").permitAll()
                         .anyRequest().authenticated()
                 ).addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
