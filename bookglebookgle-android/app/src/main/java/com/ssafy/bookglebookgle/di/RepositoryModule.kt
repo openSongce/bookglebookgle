@@ -1,7 +1,7 @@
 package com.ssafy.bookglebookgle.di
 
-import com.ssafy.bookglebookgle.network.AuthApi
-import com.ssafy.bookglebookgle.network.LoginApi
+import com.ssafy.bookglebookgle.network.api.AuthApi
+import com.ssafy.bookglebookgle.network.api.LoginApi
 import com.ssafy.bookglebookgle.repository.AuthRepository
 import com.ssafy.bookglebookgle.repository.LoginRepository
 import dagger.Module
@@ -24,6 +24,5 @@ object RepositoryModule {
     @Singleton
     fun provideAuthRepository(authApi: AuthApi): AuthRepository {
         return AuthRepository(authApi)
-
     }
 }

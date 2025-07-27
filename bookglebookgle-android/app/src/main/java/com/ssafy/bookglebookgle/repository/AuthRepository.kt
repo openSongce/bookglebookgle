@@ -3,7 +3,7 @@ package com.ssafy.bookglebookgle.repository
 import com.ssafy.bookglebookgle.entity.RegisterRequest
 import com.ssafy.bookglebookgle.entity.SendCodeRequest
 import com.ssafy.bookglebookgle.entity.VerifyCodeRequest
-import com.ssafy.bookglebookgle.network.AuthApi
+import com.ssafy.bookglebookgle.network.api.AuthApi
 import javax.inject.Inject
 
 class AuthRepository @Inject constructor(

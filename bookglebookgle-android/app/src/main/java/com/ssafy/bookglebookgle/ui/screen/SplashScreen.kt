@@ -4,6 +4,7 @@ package com.ssafy.bookglebookgle.ui.screen
 import androidx.compose.runtime.*
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import com.ssafy.bookglebookgle.navigation.Screen
 import com.ssafy.bookglebookgle.viewmodel.SplashViewModel
 
 @Composable
@@ -18,14 +19,14 @@ fun SplashScreen(navController: NavController) {
         }
         SplashViewModel.UiState.GoMain -> {
             LaunchedEffect(Unit) {
-                navController.navigate("main") {
+                navController.navigate(Screen.MainScreen.route) {
                     popUpTo("splash") { inclusive = true }
                 }
             }
         }
         SplashViewModel.UiState.GoLogin -> {
             LaunchedEffect(Unit) {
-                navController.navigate("login") {
+                navController.navigate(Screen.LoginScreen.route) {
                     popUpTo("splash") { inclusive = true }
                 }
             }

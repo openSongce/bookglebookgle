@@ -1,9 +1,10 @@
 package com.ssafy.bookglebookgle.di
 
-import com.ssafy.bookglebookgle.network.AuthApi
+import com.ssafy.bookglebookgle.network.api.AuthApi
 import com.ssafy.bookglebookgle.network.AuthInterceptor
-import com.ssafy.bookglebookgle.network.LoginApi
+import com.ssafy.bookglebookgle.network.api.LoginApi
 import com.ssafy.bookglebookgle.network.TokenAuthenticator
+import com.ssafy.bookglebookgle.network.api.PdfApi
 import com.ssafy.bookglebookgle.util.TokenManager
 import dagger.Module
 import dagger.Provides
@@ -19,14 +20,11 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object NetworkModule {
 
-    private const val BASE_URL = "http://52.79.59.66:8081/" // 실제 서버 주소로 교체
+    private const val BASE_URL = "http://52.79.59.66:8081/" // TODO: 실제 서버 주소로 교체
 
-    @Provides
-    @Singleton
-    fun provideAuthInterceptor(
-        tokenManager: TokenManager
-    ): AuthInterceptor = AuthInterceptor(tokenManager)
-
+    /**
+     * API
+     * */
     @Provides
     @Singleton
     fun provideLoginApi(
@@ -38,6 +36,16 @@ object NetworkModule {
     fun provideAuthApi(retrofit: Retrofit): AuthApi =
         retrofit.create(AuthApi::class.java)
 
+    @Provides
+    @Singleton
+    fun providePdfApi(retrofit: Retrofit): PdfApi =
+        retrofit.create(PdfApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideAuthInterceptor(
+        tokenManager: TokenManager
+    ): AuthInterceptor = AuthInterceptor(tokenManager)
 
     @Provides
     @Singleton
@@ -65,5 +73,4 @@ object NetworkModule {
         .client(okHttpClient)
         .addConverterFactory(GsonConverterFactory.create())
         .build()
-
 }
