@@ -18,8 +18,10 @@ public class PdfController {
 
     @PostMapping("/upload")
     public ResponseEntity<Void> uploadPdf(@RequestPart MultipartFile file) {
+        System.out.println("✅ PdfController 도달 - 파일 이름: " + file.getOriginalFilename());
         pdfService.handlePdfUpload(file);
         return ResponseEntity.ok().build();
     }
+
 
 }
