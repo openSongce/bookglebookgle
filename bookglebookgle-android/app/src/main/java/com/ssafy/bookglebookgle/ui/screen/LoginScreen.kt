@@ -2,9 +2,6 @@ package com.ssafy.bookglebookgle.ui.screen
 
 import android.app.Activity
 import android.widget.Toast
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.IntentSenderRequest
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -71,6 +68,7 @@ import androidx.credentials.*
 import com.google.android.libraries.identity.googleid.*
 import android.util.Log
 import androidx.credentials.exceptions.GetCredentialException
+import com.ssafy.bookglebookgle.BuildConfig
 
 
 @Composable
@@ -88,6 +86,8 @@ fun LoginScreen(navController: NavController, loginViewModel: LoginViewModel = h
     val window = (LocalView.current.context as Activity).window
 
     val lifecycleOwner = LocalLifecycleOwner.current
+
+    val clientId = BuildConfig.GOOGLE_CLIENT_ID
 
     SideEffect {
         WindowCompat.getInsetsController(window, window.decorView)?.isAppearanceLightStatusBars = true
@@ -117,7 +117,7 @@ fun LoginScreen(navController: NavController, loginViewModel: LoginViewModel = h
     val startGoogleLogin = {
         val googleIdOption = GetGoogleIdOption.Builder()
             .setFilterByAuthorizedAccounts(false)
-            .setServerClientId("506257640023-8t29bfk4cqp6pjkcgf6bb48ptj9go5pl.apps.googleusercontent.com") // 웹 클라이언트 ID 꼭 바꿔!
+            .setServerClientId(clientId) // 웹 클라이언트 ID 꼭 바꿔!
             .build()
 
         val request = GetCredentialRequest.Builder()
