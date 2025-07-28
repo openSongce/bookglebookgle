@@ -1,6 +1,10 @@
 server:
   port: 8081
 
+ocr:
+  server:
+    url: http://bgbg-container:50052/ocr
+
 spring:
   config:
     import: optional:env[.env]
