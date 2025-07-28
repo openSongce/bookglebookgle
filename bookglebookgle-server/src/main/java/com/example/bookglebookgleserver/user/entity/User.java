@@ -23,4 +23,9 @@ public class User {
 
     private String password;
     private String nickname;
+
+    //로그인 제공자
+    private String provider;
+
+
 }
