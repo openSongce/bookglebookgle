@@ -1,6 +1,7 @@
 package com.ssafy.bookglebookgle.network.api
 
 import com.ssafy.bookglebookgle.entity.GoogleLoginRequest
+import com.ssafy.bookglebookgle.entity.KakaoLoginRequest
 import com.ssafy.bookglebookgle.entity.LoginRequest
 import com.ssafy.bookglebookgle.entity.LoginResponse
 import com.ssafy.bookglebookgle.entity.RefreshRequest
@@ -14,6 +15,9 @@ interface LoginApi {
     @POST("auth/refresh")
     suspend fun refreshToken(@Body request: RefreshRequest): LoginResponse
 
-    @POST("/auth/google")
+    @POST("auth/google")
     suspend fun googleLogin(@Body token: GoogleLoginRequest): LoginResponse
+
+    @POST("auth/kakao")
+    suspend fun kakaoLogin(@Body token: KakaoLoginRequest): LoginResponse
 }

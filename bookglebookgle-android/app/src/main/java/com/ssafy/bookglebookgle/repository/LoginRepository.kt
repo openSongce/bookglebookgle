@@ -4,6 +4,7 @@ package com.ssafy.bookglebookgle.repository
 
 
 import com.ssafy.bookglebookgle.entity.GoogleLoginRequest
+import com.ssafy.bookglebookgle.entity.KakaoLoginRequest
 import com.ssafy.bookglebookgle.network.api.LoginApi
 import com.ssafy.bookglebookgle.entity.LoginRequest
 import com.ssafy.bookglebookgle.entity.LoginResponse
@@ -24,6 +25,11 @@ class LoginRepository @Inject constructor(
     suspend fun loginWithGoogle(idToken: String): LoginResponse {
         return loginApi.googleLogin(GoogleLoginRequest(idToken))
     }
+
+    suspend fun loginWithKakao(accessToken: String): LoginResponse {
+        return loginApi.kakaoLogin(KakaoLoginRequest(accessToken))
+    }
+
 
 }
 

@@ -68,6 +68,7 @@ import androidx.credentials.*
 import com.google.android.libraries.identity.googleid.*
 import android.util.Log
 import androidx.credentials.exceptions.GetCredentialException
+import com.kakao.sdk.user.UserApiClient
 import com.ssafy.bookglebookgle.BuildConfig
 
 
@@ -152,6 +153,19 @@ fun LoginScreen(navController: NavController, loginViewModel: LoginViewModel = h
             } catch (e: GetCredentialException) {
                 Log.e("GOOGLE_LOGIN", "Credential 요청 실패", e)
                 Toast.makeText(context, "구글 로그인 실패", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    // Kakao Login
+    val startKakaoLogin = {
+        if (UserApiClient.instance.isKakaoTalkLoginAvailable(context)) {
+            UserApiClient.instance.loginWithKakaoTalk(context) { token, error ->
+                token?.let { loginViewModel.kakaoLogin(it.accessToken) }
+            }
+        } else {
+            UserApiClient.instance.loginWithKakaoAccount(context) { token, error ->
+                token?.let { loginViewModel.kakaoLogin(it.accessToken) }
             }
         }
     }
@@ -261,7 +275,7 @@ fun LoginScreen(navController: NavController, loginViewModel: LoginViewModel = h
                         .aspectRatio(4.5f / 1.5f) // 너비:높이 비율
                         .clip(RoundedCornerShape(maxW * 0.03f))
                         .background(Color(0xFFFEE500))
-                        .clickable { /* 카카오 로그인 */ },
+                        .clickable { startKakaoLogin() },
                     contentAlignment = Alignment.Center
                 ) {
                     Row(

@@ -6,7 +6,7 @@ val localProperties = Properties().apply {
 }
 
 val googleClientId = localProperties.getProperty("GOOGLE_CLIENT_ID")
-
+val kakaoNativeKey = localProperties.getProperty("KAKAO_NATIVE_KEY")
 
 
 plugins {
@@ -32,6 +32,7 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField("String", "GOOGLE_CLIENT_ID", "\"$googleClientId\"")
+        buildConfigField("String", "KAKAO_NATIVE_KEY", "\"$kakaoNativeKey\"")
 
         vectorDrawables {
             useSupportLibrary = true
@@ -142,11 +143,12 @@ dependencies {
     implementation("com.google.accompanist:accompanist-flowlayout:0.32.0")
 
     //Google Login
-    dependencies {
-        implementation ("androidx.credentials:credentials:1.5.0")
-        implementation ("androidx.credentials:credentials-play-services-auth:1.5.0")
-        implementation ("com.google.android.libraries.identity.googleid:googleid:1.1.1")
-    }
+    implementation ("androidx.credentials:credentials:1.5.0")
+    implementation ("androidx.credentials:credentials-play-services-auth:1.5.0")
+    implementation ("com.google.android.libraries.identity.googleid:googleid:1.1.1")
+
+    //Kakao Login
+    implementation("com.kakao.sdk:v2-user:2.21.6")
 
 
 }

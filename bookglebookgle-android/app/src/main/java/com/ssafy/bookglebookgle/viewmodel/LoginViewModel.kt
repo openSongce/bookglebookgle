@@ -8,6 +8,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.mutableStateOf
 import com.ssafy.bookglebookgle.usecase.GoogleLoginUseCase
+import com.ssafy.bookglebookgle.usecase.KakaoLoginUseCase
 import com.ssafy.bookglebookgle.usecase.LoginUseCase
 import javax.inject.Inject
 
@@ -16,6 +17,7 @@ import javax.inject.Inject
 class LoginViewModel @Inject constructor(
     private val loginUseCase: LoginUseCase,
     private val googleLoginUseCase: GoogleLoginUseCase,
+    private var kakaoLoginUseCase: KakaoLoginUseCase
 ) : ViewModel() {
 
     val id = mutableStateOf("")
@@ -45,6 +47,14 @@ class LoginViewModel @Inject constructor(
             loginSuccess.value = success
         }
     }
+
+    fun kakaoLogin(accessToken: String) {
+        viewModelScope.launch {
+            val success = kakaoLoginUseCase(accessToken)
+            loginSuccess.value = success
+        }
+    }
+
 
 
 }
