@@ -135,7 +135,14 @@ public class AuthService {
 
     }
 
-
+    public String generateUniqueNickname(String base) {
+        String nickname = base;
+        int suffix = 1;
+        while (userRepository.existsByNickname(nickname)) {
+            nickname = base + suffix++;
+        }
+        return nickname;
+    }
 
 
 
