@@ -10,13 +10,13 @@ import retrofit2.http.POST
 import retrofit2.http.Query
 
 interface AuthApi {
-    @POST("/api/auth/send-code")
+    @POST("auth/check/email")
     suspend fun sendAuthCode(@Body request: SendCodeRequest): Response<Unit>
 
-    @POST("/api/auth/verify-code")
+    @POST("auth/email/verify")
     suspend fun verifyAuthCode(@Body request: VerifyCodeRequest): Response<Unit>
 
-    @POST("/api/auth/register")
+    @POST("auth/signup")
     suspend fun register(@Body request: RegisterRequest): Response<Unit>
 
     @GET("auth/check-nickname")
