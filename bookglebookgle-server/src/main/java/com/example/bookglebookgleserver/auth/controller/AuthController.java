@@ -6,6 +6,11 @@ import com.example.bookglebookgleserver.auth.dto.LoginRequest;
 import com.example.bookglebookgleserver.auth.dto.RefreshRequest;
 import com.example.bookglebookgleserver.auth.dto.SignupRequest;
 import com.example.bookglebookgleserver.auth.service.AuthService;
+import com.example.bookglebookgleserver.auth.service.GoogleTokenVerifier;
+import com.example.bookglebookgleserver.auth.service.JwtService;
+import com.example.bookglebookgleserver.user.entity.User;
+import com.example.bookglebookgleserver.user.repository.UserRepository;
+import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -21,6 +26,9 @@ import java.util.Map;
 @RequestMapping("/auth")
 public class AuthController {
     private final AuthService authService;
+
+    private final UserRepository userRepository;
+    private final JwtService jwtService;
 
 
     @Operation(
@@ -131,6 +139,53 @@ public class AuthController {
         }
     }
 
+
+    @Operation(
+            summary = "구글 소셜 로그인",
+            description = "프론트엔드에서 전달한 Google ID Token을 검증하여 회원가입 또는 로그인을 수행하고 JWT 토큰을 발급합니다."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "로그인 또는 회원가입 성공, Access Token과 Refresh Token 반환"),
+            @ApiResponse(responseCode = "400", description = "ID Token이 유효하지 않음"),
+            @ApiResponse(responseCode = "500", description = "서버 오류")
+    })
+    @PostMapping("/google")
+    public ResponseEntity<?> loginWithGoogle(@RequestBody Map<String, String> body) {
+        String idToken = body.get("idToken");
+
+        // 1. ID 토큰 검증
+        GoogleIdToken.Payload payload = GoogleTokenVerifier.verify(idToken);
+        String email = payload.getEmail();
+        String name = (String) payload.get("name");
+
+        // 2. 닉네임 중복 처리
+        String nickname = generateUniqueNickname(name);
+
+        // 3. 회원가입 or 기존 로그인
+        User user = userRepository.findByEmail(email)
+                .orElseGet(() -> userRepository.save(User.builder()
+                        .email(email)
+                        .nickname(nickname)
+                        .provider("google")
+                        .build()));
+
+        // 4. JWT 발급
+        String accessToken = jwtService.createAccessToken(user.getEmail());
+        String refreshToken= jwtService.createRefreshToken(user.getEmail());
+
+        JwtResponse response = new JwtResponse(accessToken, refreshToken);
+        return ResponseEntity.ok(response);
+
+    }
+
+    private String generateUniqueNickname(String base) {
+        String nickname = base;
+        int suffix = 1;
+        while (userRepository.existsByNickname(nickname)) {
+            nickname = base + suffix++;
+        }
+        return nickname;
+    }
 
 
 }
