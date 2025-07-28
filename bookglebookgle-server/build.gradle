@@ -119,3 +119,5 @@ tasks.withType(ProcessResources).configureEach {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 
+compileJava.dependsOn 'generateProto'
+
