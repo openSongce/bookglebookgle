@@ -18,6 +18,7 @@ public class EmailSender {
     private  final JavaMailSender mailSender;
 
     public void send(String to, String subject, String html) {
+        System.out.println("이메일 전송 시도 대상: " + to);
         try {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, "UTF-8");
