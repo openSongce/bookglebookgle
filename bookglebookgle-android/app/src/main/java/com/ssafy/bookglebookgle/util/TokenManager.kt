@@ -2,6 +2,7 @@ package com.ssafy.bookglebookgle.util
 
 
 import android.util.Base64
+import android.util.Log
 import org.json.JSONObject
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -34,7 +35,13 @@ class TokenManager @Inject constructor(
     }
 
     fun getAccessToken(): String? {
-        return encryptedDataStore.getAccessToken()
+//        return encryptedDataStore.getAccessToken()
+        val token = encryptedDataStore.getAccessToken()
+        val payload = getPayload(token ?: return null)
+        val exp = payload?.optLong("exp")
+        val iat = payload?.optLong("iat")
+        Log.d("Problem", "🕒 accessToken iat=$iat, exp=$exp, now=${System.currentTimeMillis() / 1000}")
+        return token
     }
 
     fun getRefreshToken(): String? {

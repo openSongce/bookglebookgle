@@ -95,14 +95,20 @@ fun LoginScreen(navController: NavController, loginViewModel: LoginViewModel = h
 
     // 로그인 성공 시 화면 전환
     LaunchedEffect(loginResult) {
-        if (loginResult == true) {
-            navController.navigate("main") {
-                popUpTo("login") { inclusive = true }
+        when (loginResult) {
+            true -> {
+                navController.navigate("main") {
+                    popUpTo("login") { inclusive = true }
+                }
             }
-        } else if (loginResult == false) {
-            Toast.makeText(context, "로그인 실패", Toast.LENGTH_SHORT).show()
+            false -> {
+                Toast.makeText(context, "로그인 실패", Toast.LENGTH_SHORT).show()
+                loginViewModel.loginSuccess.value = null // ✅ 다시 초기화
+            }
+            null -> {} // 아무것도 안함
         }
     }
+
 
     // 에러 메세지 토스트
     LaunchedEffect(loginViewModel.errorMessage.value) {

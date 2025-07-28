@@ -31,15 +31,22 @@ class SplashViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val refresh = tokenManager.getRefreshToken()
+                val access = tokenManager.getAccessToken()  // 👈 이 줄 추가
+                Log.d("Problem", "🔍 저장된 accessToken = $access")
+                Log.d("Problem", "🔍 저장된 refreshToken = $refresh")
 
                 if (refresh.isNullOrBlank()) {
                     _uiState.value = UiState.GoLogin
                     return@launch
                 }
+
+                Log.d("Problem", "🔁 refresh 요청 시도 중...")
                 // 2 서버에 refresh 요청
                 val newToken = withTimeoutOrNull(5000) {
                     loginRepository.refreshToken(refresh)
                 }
+
+                Log.d("Problem", "✅ refresh 결과 = ${newToken?.accessToken}")
 
                 if (newToken != null) {
                     tokenManager.saveTokens(newToken.accessToken, newToken.refreshToken)
