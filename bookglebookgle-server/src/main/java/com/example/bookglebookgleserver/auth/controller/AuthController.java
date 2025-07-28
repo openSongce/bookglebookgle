@@ -159,7 +159,7 @@ public class AuthController {
         String name = (String) payload.get("name");
 
         // 2. 닉네임 중복 처리
-        String nickname = generateUniqueNickname(name);
+        String nickname = authService.generateUniqueNickname(name);
 
         // 3. 회원가입 or 기존 로그인
         User user = userRepository.findByEmail(email)
@@ -178,14 +178,7 @@ public class AuthController {
 
     }
 
-    private String generateUniqueNickname(String base) {
-        String nickname = base;
-        int suffix = 1;
-        while (userRepository.existsByNickname(nickname)) {
-            nickname = base + suffix++;
-        }
-        return nickname;
-    }
+
 
 
 }
