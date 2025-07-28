@@ -30,6 +30,7 @@ import com.ssafy.bookglebookgle.navigation.BottomNavigationBar
 import com.ssafy.bookglebookgle.viewmodel.LoginViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import com.ssafy.bookglebookgle.ui.component.CustomTopAppBar
+import com.ssafy.bookglebookgle.util.ScreenSize
 
 
 @Composable
@@ -38,13 +39,10 @@ fun MainScreen(navController: NavController) {
     var selectedTab by remember { mutableStateOf("독서") }
     var selectedIndex by remember { mutableStateOf(0) }
 
-    val config = LocalConfiguration.current
-    val screenWidth = config.screenWidthDp.dp
-    val screenHeight = config.screenHeightDp.dp
-    val horizontalPadding = screenWidth * 0.04f
-    val verticalPadding = screenHeight * 0.01f
-    val cardWidth = screenWidth * 0.8f
-    val cardHeight = screenHeight * 0.22f
+    val horizontalPadding = ScreenSize.width * 0.04f
+    val verticalPadding = ScreenSize.height * 0.01f
+    val cardWidth = ScreenSize.width * 0.8f
+    val cardHeight = ScreenSize.height * 0.22f
 
     Column(
         modifier = Modifier
@@ -59,7 +57,7 @@ fun MainScreen(navController: NavController) {
         // 카테고리 추천
         Text(
             text = "카테고리",
-            fontSize = screenWidth.value.times(0.06f).sp,
+            fontSize = ScreenSize.width.value.times(0.06f).sp,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(start = horizontalPadding, top = verticalPadding)
         )
@@ -84,7 +82,7 @@ fun MainScreen(navController: NavController) {
 
         Text(
             text = "카테고리별 모임",
-            fontSize = screenWidth.value.times(0.06f).sp,
+            fontSize = ScreenSize.width.value.times(0.06f).sp,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(
                 horizontal = horizontalPadding,
@@ -96,7 +94,7 @@ fun MainScreen(navController: NavController) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = screenWidth * 0.02f),
+                .padding(top = ScreenSize.width * 0.02f),
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
             tabs.forEach { tab ->
@@ -112,11 +110,11 @@ fun MainScreen(navController: NavController) {
                             selectedTab = tab
                         }
                     )
-                    Spacer(modifier = Modifier.height(screenHeight * 0.005f))
+                    Spacer(modifier = Modifier.height(ScreenSize.height * 0.005f))
                     Box(
                         modifier = Modifier
-                            .height(screenHeight * 0.0015f)
-                            .width(screenWidth * 0.05f)
+                            .height(ScreenSize.height * 0.0015f)
+                            .width(ScreenSize.width * 0.05f)
                             .background(if (selectedTab == tab) Color.Black else Color.Transparent)
                     )
                 }
