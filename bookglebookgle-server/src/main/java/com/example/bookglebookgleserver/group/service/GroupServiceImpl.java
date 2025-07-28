@@ -1,6 +1,7 @@
 package com.example.bookglebookgleserver.group.service;
 
 import com.bgbg.ai.grpc.ProcessPdfResponse;
+import com.bgbg.ai.grpc.TextBlock;
 import com.example.bookglebookgleserver.global.util.AuthUtil;
 import com.example.bookglebookgleserver.group.dto.GroupCreateRequestDto;
 import com.example.bookglebookgleserver.group.entity.Group;
@@ -51,9 +52,28 @@ public class GroupServiceImpl implements GroupService {
 
         // 3. OCR 필요 시 gRPC 요청 및 결과 저장
         if (dto.isImageBased()) {
+            log.info("🟡 OCR 요청 시작 - PDF ID: {}, 파일명: {}", savedPdf.getPdfId(), pdfFile.getOriginalFilename());
+
             ProcessPdfResponse response = grpcOcrClient.sendPdf(savedPdf.getPdfId(), pdfFile);
+
+            // ✅ 여기서부터 로그 추가
+            log.info("🟢 OCR 응답 수신 완료");
+            log.info(" - 성공 여부: {}", response.getSuccess());
+            log.info(" - 메시지: {}", response.getMessage());
+            log.info(" - 문서 ID: {}", response.getDocumentId());
+            log.info(" - 전체 페이지 수: {}", response.getTotalPages());
+            log.info(" - OCR 인식 블록 수: {}", response.getTextBlocksCount());
+
+            if (response.getTextBlocksCount() > 0) {
+                TextBlock block = response.getTextBlocks(0);
+                log.info(" - 첫 번째 블럭 내용: [{}] (페이지: {})", block.getText(), block.getPageNumber());
+            }
+
+            // OCR 결과 저장
             ocrService.saveOcrResults(savedPdf, response);
         }
+
+
 
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
 

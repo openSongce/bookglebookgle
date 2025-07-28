@@ -7,41 +7,42 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
-
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/group")
+@Tag(name = "스터디 그룹", description = "스터디 그룹 관련 API")
 public class GroupController {
 
     private final GroupService groupService;
 
     @Operation(
-            summary = "스터디 그룹 생성",
-            description = "PDF와 그룹 정보를 업로드하여 스터디 그룹을 생성합니다."
+            summary = "스터디 그룹 생성 (OCR 포함 여부 설정 가능)",
+            description = """
+                PDF와 그룹 정보를 함께 업로드하여 스터디 그룹을 생성합니다.
+                - `imageBased`가 true인 경우 OCR 서버로 전송됩니다.
+                - JWT 토큰 필요 (Authorization 헤더에 Bearer 토큰 포함)
+                """,
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "스터디 그룹 생성 성공"),
+                    @ApiResponse(responseCode = "400", description = "요청 값 오류"),
+                    @ApiResponse(responseCode = "500", description = "서버 오류")
+            }
     )
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "스터디 그룹 생성 성공"),
-            @ApiResponse(responseCode = "500", description = "서버 내부 에러")
-    })
-    @PostMapping(value = "/create", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PostMapping(value = "/create", consumes = "multipart/form-data")
     public ResponseEntity<?> createGroup(
-            @Parameter(
-                    description = "스터디 그룹 생성 정보 (JSON)",
-                    required = true,
-                    content = @Content(schema = @Schema(implementation = GroupCreateRequestDto.class))
-            )
+            @Parameter(description = "그룹 정보 JSON", required = true,
+                    content = @Content(schema = @Schema(implementation = GroupCreateRequestDto.class)))
             @RequestPart("groupInfo") GroupCreateRequestDto groupDto,
 
             @Parameter(description = "PDF 파일", required = true)
             @RequestPart("file") MultipartFile pdfFile,
 
-            @Parameter(description = "Access Token", required = true, example = "Bearer {JWT}")
+            @Parameter(description = "JWT 토큰", required = true)
             @RequestHeader("Authorization") String token
     ) {
         groupService.createGroup(groupDto, pdfFile, token);
@@ -50,25 +51,12 @@ public class GroupController {
 
     @Operation(
             summary = "OCR 없이 스터디 그룹 생성",
-            description = "PDF와 그룹 정보를 업로드하여 OCR 없이 그룹을 생성합니다."
+            description = "PDF 파일을 업로드하되 OCR 처리를 하지 않고 그룹을 생성합니다."
     )
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "OCR 없이 그룹 생성 성공"),
-            @ApiResponse(responseCode = "500", description = "서버 내부 에러")
-    })
-    @PostMapping(value = "/create/no-ocr", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PostMapping("/create/no-ocr")
     public ResponseEntity<?> createGroupWithoutOcr(
-            @Parameter(
-                    description = "스터디 그룹 생성 정보 (JSON)",
-                    required = true,
-                    content = @Content(schema = @Schema(implementation = GroupCreateRequestDto.class))
-            )
             @RequestPart("groupInfo") GroupCreateRequestDto groupDto,
-
-            @Parameter(description = "PDF 파일", required = true)
             @RequestPart("file") MultipartFile pdfFile,
-
-            @Parameter(description = "Access Token", required = true, example = "Bearer {JWT}")
             @RequestHeader("Authorization") String token
     ) {
         groupService.createGroupWithoutOcr(groupDto, pdfFile, token);
