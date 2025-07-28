@@ -1,3 +1,14 @@
+import java.util.Properties
+import java.io.File
+
+val localProperties = Properties().apply {
+    load(File(rootDir, "local.properties").inputStream())
+}
+
+val googleClientId = localProperties.getProperty("GOOGLE_CLIENT_ID")
+
+
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -19,6 +30,8 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField("String", "GOOGLE_CLIENT_ID", "\"$googleClientId\"")
 
         vectorDrawables {
             useSupportLibrary = true
@@ -43,6 +56,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     hilt{
         enableAggregatingTask = false
@@ -126,6 +140,14 @@ dependencies {
 
     // FlowLayout (태그, 버튼 등 가변적인 Row/Column 레이아웃)
     implementation("com.google.accompanist:accompanist-flowlayout:0.32.0")
+
+    //Google Login
+    dependencies {
+        implementation ("androidx.credentials:credentials:1.5.0")
+        implementation ("androidx.credentials:credentials-play-services-auth:1.5.0")
+        implementation ("com.google.android.libraries.identity.googleid:googleid:1.1.1")
+    }
+
 
 }
 

@@ -54,10 +54,22 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
+import androidx.credentials.CredentialManager
+import androidx.credentials.GetCredentialRequest
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavController
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.ssafy.bookglebookgle.R
 import com.ssafy.bookglebookgle.viewmodel.LoginViewModel
+import kotlinx.coroutines.launch
+import androidx.credentials.*
+import com.google.android.libraries.identity.googleid.*
+import android.util.Log
+import androidx.credentials.exceptions.GetCredentialException
+import com.ssafy.bookglebookgle.BuildConfig
+
 
 @Composable
 fun LoginScreen(navController: NavController, loginViewModel: LoginViewModel = hiltViewModel()) {
@@ -72,6 +84,10 @@ fun LoginScreen(navController: NavController, loginViewModel: LoginViewModel = h
     val context = LocalContext.current
 
     val window = (LocalView.current.context as Activity).window
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    val clientId = BuildConfig.GOOGLE_CLIENT_ID
 
     SideEffect {
         WindowCompat.getInsetsController(window, window.decorView)?.isAppearanceLightStatusBars = true
@@ -93,6 +109,44 @@ fun LoginScreen(navController: NavController, loginViewModel: LoginViewModel = h
         loginViewModel.errorMessage.value?.let {
             Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
             loginViewModel.errorMessage.value = null
+        }
+    }
+
+
+    //Google Login
+    val startGoogleLogin = {
+        val googleIdOption = GetGoogleIdOption.Builder()
+            .setFilterByAuthorizedAccounts(false)
+            .setServerClientId(clientId) // 웹 클라이언트 ID 꼭 바꿔!
+            .build()
+
+        val request = GetCredentialRequest.Builder()
+            .addCredentialOption(googleIdOption)
+            .build()
+
+        val credentialManager = CredentialManager.create(context)
+
+        lifecycleOwner.lifecycleScope.launch {
+            try {
+                val result = credentialManager.getCredential(
+                    request = request,
+                    context = context as Activity
+                )
+
+                val credential = result.credential
+                if (
+                    credential is CustomCredential &&
+                    credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
+                ) {
+                    val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
+                    val idToken = googleIdTokenCredential.idToken
+                    loginViewModel.googleLogin(idToken)
+                }
+
+            } catch (e: GetCredentialException) {
+                Log.e("GOOGLE_LOGIN", "Credential 요청 실패", e)
+                Toast.makeText(context, "구글 로그인 실패", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
@@ -226,7 +280,7 @@ fun LoginScreen(navController: NavController, loginViewModel: LoginViewModel = h
                         .aspectRatio(4.5f / 1.5f)
                         .clip(RoundedCornerShape(maxW * 0.03f))
                         .border(1.dp, Color.Gray, shape = RoundedCornerShape(maxW * 0.03f))
-                        .clickable { /* 구글 로그인 */ },
+                        .clickable { startGoogleLogin() },
                     contentAlignment = Alignment.Center
                 ) {
                     Row(
@@ -265,6 +319,9 @@ fun LoginScreen(navController: NavController, loginViewModel: LoginViewModel = h
         }
     }
 
+
+
+
 }
 
 @Composable
@@ -284,4 +341,3 @@ fun OrDivider(modifier: Modifier = Modifier, text: String = "또는") {
         HorizontalDivider(modifier = Modifier.weight(1f), color = Color.Gray)
     }
 }
-

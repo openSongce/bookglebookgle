@@ -1,5 +1,6 @@
 package com.ssafy.bookglebookgle.network
 
+import android.util.Log
 import com.ssafy.bookglebookgle.entity.RefreshRequest
 import com.ssafy.bookglebookgle.network.api.LoginApi
 import com.ssafy.bookglebookgle.util.TokenManager
@@ -19,13 +20,15 @@ class TokenAuthenticator @Inject constructor(
         val loginApi = loginApiProvider.get()
         val refreshToken = runBlocking { tokenManager.getRefreshToken() } ?: return null
 
+        Log.d("JWT", "⚠️ accessToken 만료 감지. refreshToken = $refreshToken")
+
         return try {
             val newToken = runBlocking {
                 loginApi.refreshToken(RefreshRequest(refreshToken))
             }
-            runBlocking {
-                tokenManager.saveTokens(newToken.accessToken, newToken.refreshToken)
-            }
+
+
+            tokenManager.saveTokens(newToken.accessToken, newToken.refreshToken)
 
             response.request.newBuilder()
                 .header("Authorization", "Bearer ${newToken.accessToken}")

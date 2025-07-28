@@ -23,7 +23,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import com.ssafy.bookglebookgle.navigation.BottomNavigationBar
+import com.ssafy.bookglebookgle.viewmodel.LoginViewModel
+import dagger.hilt.android.lifecycle.HiltViewModel
 import com.ssafy.bookglebookgle.ui.component.CustomTopAppBar
 
 
