@@ -13,6 +13,7 @@ import lombok.Setter;
 @Getter
 @Setter
 public class GroupCreateRequestDto {
+
     @Schema(description = "모임 제목", example = "7월 독서모임")
     private String roomTitle;
 
@@ -34,7 +35,11 @@ public class GroupCreateRequestDto {
     @Schema(description = "읽기 방식", example = "FOLLOW")
     private String readingMode;
 
-    @Schema(description = "이미지 기반인지 여부", example = "false")
+    @Schema(
+            name = "imageBased", // JSON 필드명으로 Swagger가 인식하게 함
+            description = "이미지 기반인지 여부",
+            example = "false"
+    )
     @JsonProperty("imageBased")
-    private boolean isImageBased;
+    private boolean imageBased;
 }
