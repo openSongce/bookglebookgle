@@ -1,7 +1,8 @@
 package com.ssafy.bookglebookgle
 
-import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -23,9 +24,14 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            installSplashScreen().setKeepOnScreenCondition { false }
-        }
+        setTheme(R.style.Theme_BookgleBookgle)
+
+        // 시스템 스플래시를 최대한 빨리 제거
+        val splashScreen = installSplashScreen()
+
+        // 즉시 스플래시 제거
+        splashScreen.setKeepOnScreenCondition { false }
+
 
         enableEdgeToEdge()
         setContent {

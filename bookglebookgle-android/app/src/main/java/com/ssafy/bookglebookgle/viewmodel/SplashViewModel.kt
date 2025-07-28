@@ -7,6 +7,7 @@ import com.ssafy.bookglebookgle.repository.LoginRepository
 import com.ssafy.bookglebookgle.entity.RefreshRequest
 import com.ssafy.bookglebookgle.util.TokenManager
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -20,44 +21,71 @@ class SplashViewModel @Inject constructor(
     private val loginRepository: LoginRepository      // refresh API 호출용
 ) : ViewModel() {
 
-    sealed class UiState { data object Loading : UiState()
+    sealed class UiState {
+        data object Loading : UiState()
         data object GoMain  : UiState()
-        data object GoLogin : UiState() }
+        data object GoLogin : UiState()
+    }
 
     private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
     val uiState = _uiState.asStateFlow()
 
     fun autoLogin() {
         viewModelScope.launch {
+            val startTime = System.currentTimeMillis()
+
             try {
+                Log.d("SplashViewModel", "자동 로그인 시작")
+
                 val refresh = tokenManager.getRefreshToken()
-                val access = tokenManager.getAccessToken()  // 👈 이 줄 추가
-                Log.d("Problem", "🔍 저장된 accessToken = $access")
-                Log.d("Problem", "🔍 저장된 refreshToken = $refresh")
+                val access = tokenManager.getAccessToken()
 
-                if (refresh.isNullOrBlank()) {
-                    _uiState.value = UiState.GoLogin
-                    return@launch
+                Log.d("SplashViewModel", "저장된 accessToken = $access")
+                Log.d("SplashViewModel", "저장된 refreshToken = $refresh")
+
+                val result = if (refresh.isNullOrBlank()) {
+                    Log.d("SplashViewModel", "refreshToken 없음 -> 로그인 화면으로")
+                    UiState.GoLogin
+                } else {
+                    Log.d("SplashViewModel", "refresh 요청 시도 중...")
+
+                    val newToken = withTimeoutOrNull(5000) {
+                        loginRepository.refreshToken(refresh)
+                    }
+
+                    Log.d("SplashViewModel", "refresh 결과 = ${newToken?.accessToken}")
+
+                    if (newToken != null) {
+                        tokenManager.saveTokens(newToken.accessToken, newToken.refreshToken)
+                        Log.d("SplashViewModel", "자동 로그인 성공 -> 메인 화면으로")
+                        UiState.GoMain
+                    } else {
+                        Log.d("SplashViewModel", "refresh 실패 -> 로그인 화면으로")
+                        tokenManager.clearTokens()
+                        UiState.GoLogin
+                    }
                 }
 
-                Log.d("Problem", "🔁 refresh 요청 시도 중...")
-                // 2 서버에 refresh 요청
-                val newToken = withTimeoutOrNull(5000) {
-                    loginRepository.refreshToken(refresh)
+                // 최소 2초 보장
+                val elapsedTime = System.currentTimeMillis() - startTime
+                val remainingTime = 500 - elapsedTime
+
+                if (remainingTime > 0) {
+                    delay(remainingTime)
                 }
 
-                Log.d("Problem", "✅ refresh 결과 = ${newToken?.accessToken}")
-
-                if (newToken != null) {
-                    tokenManager.saveTokens(newToken.accessToken, newToken.refreshToken)
-                    _uiState.value = UiState.GoMain //  자동 로그인 성공
-                } else {  // 3 refreshToken 만료·위조 등
-                    tokenManager.clearTokens()
-                    _uiState.value = UiState.GoLogin
-                }
+                _uiState.value = result
 
             } catch (e: Exception) {
-                Log.e("SplashViewModel", "자동로그인 error: ${e.message}")
+
+                // 예외 발생 시에도 최소 2초 유지
+                val elapsedTime = System.currentTimeMillis() - startTime
+                val remainingTime = 500 - elapsedTime
+
+                if (remainingTime > 0) {
+                    delay(remainingTime)
+                }
+
                 tokenManager.clearTokens()
                 _uiState.value = UiState.GoLogin
             }

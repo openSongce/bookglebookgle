@@ -90,7 +90,6 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
-    implementation(libs.androidx.core.splashscreen)
 
     implementation ("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("androidx.datastore:datastore-preferences:1.1.1")
@@ -107,6 +106,10 @@ dependencies {
 
     // Navigation Compose
     implementation("androidx.navigation:navigation-compose:2.7.6")
+
+    // 스플래시 화면 관련 의존성 추가
+    implementation("androidx.compose.animation:animation:1.7.8")
+    implementation("androidx.core:core-splashscreen:1.0.1")
 
     // Lifecycle Compose
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
