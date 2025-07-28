@@ -21,6 +21,7 @@ import com.ssafy.bookglebookgle.pdf.ui.screen.AddPdfScreen
 import com.ssafy.bookglebookgle.pdf.ui.screen.BookmarkListScreen
 import com.ssafy.bookglebookgle.pdf.ui.screen.CommentsListScreen
 import com.ssafy.bookglebookgle.pdf.ui.screen.HighlightListScreen
+import com.ssafy.bookglebookgle.ui.screen.GroupRegisterScreen
 import com.ssafy.bookglebookgle.ui.screen.LoginScreen
 import com.ssafy.bookglebookgle.ui.screen.MainScreen
 import com.ssafy.bookglebookgle.ui.screen.RegisterScreen
@@ -119,6 +120,10 @@ fun MainNavigation(
                         }
                     }
                 )
+            }
+
+            composable(Screen.GroupRegisterScreen.route){
+                GroupRegisterScreen(navController)
             }
 
             composable(Screen.AddPdfScreen.route) {

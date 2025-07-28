@@ -3,11 +3,11 @@
 
     <style name="Theme.BookgleBookgle" parent="android:Theme.Material.Light.NoActionBar">
         <!-- Status bar -->
-        <item name="android:statusBarColor">@color/grayscale_white</item>
+        <item name="android:statusBarColor">@android:color/white</item>
         <item name="android:windowLightStatusBar">true</item>
 
         <!-- Navigation bar -->
-        <item name="android:navigationBarColor">@color/grayscale_white</item>
+        <item name="android:navigationBarColor">@android:color/white</item>
     </style>
 
     <!-- 투명 스플래시 테마 - 시스템 스플래시를 거의 보이지 않게 -->

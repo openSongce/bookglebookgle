@@ -4,6 +4,7 @@ import com.ssafy.bookglebookgle.network.api.AuthApi
 import com.ssafy.bookglebookgle.network.AuthInterceptor
 import com.ssafy.bookglebookgle.network.api.LoginApi
 import com.ssafy.bookglebookgle.network.TokenAuthenticator
+import com.ssafy.bookglebookgle.network.api.GroupApi
 import com.ssafy.bookglebookgle.network.api.PdfApi
 import com.ssafy.bookglebookgle.util.TokenManager
 import dagger.Module
@@ -40,6 +41,11 @@ object NetworkModule {
     @Singleton
     fun providePdfApi(retrofit: Retrofit): PdfApi =
         retrofit.create(PdfApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideGroupApi(retrofit: Retrofit): GroupApi =
+        retrofit.create(GroupApi::class.java)
 
     @Provides
     @Singleton

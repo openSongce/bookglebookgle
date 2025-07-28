@@ -1,5 +1,6 @@
 package com.ssafy.bookglebookgle.ui.component
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,12 +21,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.navigation.NavHostController
 import com.ssafy.bookglebookgle.R
+import com.ssafy.bookglebookgle.navigation.Screen
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CustomTopAppBar(
     title: String,
+    navController : NavHostController,
     onBackPressed: (() -> Unit)? = null, // 뒤로가기 버튼 클릭 콜백
 ) {
     TopAppBar(
@@ -43,7 +47,12 @@ fun CustomTopAppBar(
             else if(title == "create_group") {
                 Text(
                     text = "모임 개설",
+                    textAlign = TextAlign.Center,
                     fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp)
                 )
             }
             else if(title == "chat"){
@@ -84,7 +93,11 @@ fun CustomTopAppBar(
                     Icon(
                         painter = painterResource(id = R.drawable.main_meetingplus),
                         contentDescription = "모임 추가",
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier
+                            .size(20.dp)
+                            .clickable{
+                                navController.navigate(Screen.GroupRegisterScreen.route)
+                            },
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Icon(
@@ -99,6 +112,16 @@ fun CustomTopAppBar(
                         modifier = Modifier.size(20.dp)
                     )
                 }
+            }
+            else if(title == "create_group") {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_cancel),
+                    contentDescription = "취소",
+                    modifier = Modifier
+                        .size(36.dp)
+                        .padding(end = 16.dp)
+                        .clickable { onBackPressed?.invoke() }
+                )
             }
         },
         colors = TopAppBarDefaults.topAppBarColors(

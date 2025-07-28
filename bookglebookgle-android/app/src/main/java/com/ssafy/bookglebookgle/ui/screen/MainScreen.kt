@@ -23,17 +23,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.view.WindowCompat
-import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.navigation.NavController
-import com.ssafy.bookglebookgle.navigation.BottomNavigationBar
-import com.ssafy.bookglebookgle.viewmodel.LoginViewModel
-import dagger.hilt.android.lifecycle.HiltViewModel
+import androidx.navigation.NavHostController
 import com.ssafy.bookglebookgle.ui.component.CustomTopAppBar
 
-
 @Composable
-fun MainScreen(navController: NavController) {
+fun MainScreen(navController: NavHostController) {
     val tabs = listOf("독서", "학습", "첨삭")
     var selectedTab by remember { mutableStateOf("독서") }
     var selectedIndex by remember { mutableStateOf(0) }
@@ -54,6 +48,7 @@ fun MainScreen(navController: NavController) {
         // 상단 앱바
         CustomTopAppBar(
             title = "main_home",
+            navController = navController,
         )
 
         // 카테고리 추천
