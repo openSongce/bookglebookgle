@@ -32,12 +32,21 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String uri = request.getRequestURI();
         System.out.println("[JWT 필터] 요청 URI: " + uri);
 
+        // ✅ Swagger 관련 경로는 JWT 필터 무시 (여기 추가!)
+        if (uri.startsWith("/swagger-ui") || uri.startsWith("/v3/api-docs")
+                || uri.startsWith("/swagger-resources") || uri.startsWith("/webjars")) {
+            System.out.println("[JWT 필터] Swagger 요청 -> 필터 스킵");
+            filterChain.doFilter(request, response);
+            return;
+        }
+
         if (uri.startsWith("/auth")) {
             System.out.println("[JWT 필터] 인증 예외 경로로 필터 스킵");
             filterChain.doFilter(request, response);
             return;
         }
 
+        // 이하 기존 로직 유지
         String authHeader = request.getHeader("Authorization");
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             System.out.println("[JWT 필터] Authorization 헤더 없음 또는 형식 불일치");
@@ -72,5 +81,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         filterChain.doFilter(request, response);
     }
+
 
 }
