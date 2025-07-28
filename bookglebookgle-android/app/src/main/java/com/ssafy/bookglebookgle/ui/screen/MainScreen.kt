@@ -1,6 +1,5 @@
 package com.ssafy.bookglebookgle.ui.screen
 
-import android.app.Activity
 import com.ssafy.bookglebookgle.R
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -19,15 +18,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.view.WindowCompat
 import androidx.navigation.NavController
-import com.ssafy.bookglebookgle.navigation.BottomNavigationBar
+import com.ssafy.bookglebookgle.ui.component.CustomTopAppBar
 
 
 @Composable
@@ -43,141 +40,109 @@ fun MainScreen(navController: NavController) {
     val verticalPadding = screenHeight * 0.01f
     val cardWidth = screenWidth * 0.8f
     val cardHeight = screenHeight * 0.22f
-    val iconSize = screenHeight * 0.025f
-    val iconSpacing = screenWidth * 0.02f
-    val boxHeight = screenHeight * 0.08f
 
-    val window = (LocalView.current.context as Activity).window
-    SideEffect {
-        WindowCompat.getInsetsController(window, window.decorView)?.isAppearanceLightStatusBars = true
-    }
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .imePadding()
+    ) {
+        // 상단 앱바
+        CustomTopAppBar(
+            title = "main_home",
+        )
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            Column(modifier = Modifier.weight(1f)) {
-                // 앱 이름
+        // 카테고리 추천
+        Text(
+            text = "카테고리",
+            fontSize = screenWidth.value.times(0.06f).sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(start = horizontalPadding, top = verticalPadding)
+        )
 
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(boxHeight)
-                        .padding(horizontal = horizontalPadding, vertical = verticalPadding)
-                ) {
-                    // 가운데 "북글북글"
+        LazyRow(
+            contentPadding = PaddingValues(
+                horizontal = horizontalPadding,
+                vertical = verticalPadding
+            )
+        ) {
+            items(meetingCard) { card ->
+                RecommendCard(
+                    title = card.first,
+                    description = card.second,
+                    imageRes = card.third,
+                    width = cardWidth,
+                    height = cardHeight,
+                    rightMargin = horizontalPadding
+                )
+            }
+        }
+
+        Text(
+            text = "카테고리별 모임",
+            fontSize = screenWidth.value.times(0.06f).sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(
+                horizontal = horizontalPadding,
+                vertical = verticalPadding
+            )
+        )
+
+        // 탭 선택
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = screenWidth * 0.02f),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            tabs.forEach { tab ->
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        text = "북글북글",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = screenWidth.value.times(0.05f).sp,
-                        modifier = Modifier.align(Alignment.Center)
-                    )
-
-                    // 오른쪽 아이콘 3개
-                    Row(
-                        modifier = Modifier.align(Alignment.CenterEnd),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            painter = painterResource(id = R.drawable.main_meetingplus),
-                            contentDescription = "모임 추가",
-                            modifier = Modifier.size(iconSize)
-                        )
-                        Spacer(modifier = Modifier.width(iconSpacing))
-                        Icon(
-                            painter = painterResource(id = R.drawable.main_alarm),
-                            contentDescription = "알람",
-                            modifier = Modifier.size(iconSize)
-                        )
-                        Spacer(modifier = Modifier.width(iconSpacing))
-                        Icon(
-                            painter = painterResource(id = R.drawable.main_search),
-                            contentDescription = "검색",
-                            modifier = Modifier.size(iconSize)
-                        )
-                    }
-                }
-
-
-                // 카테고리 추천
-                Text(
-                    text = "카테고리",
-                    fontSize = screenWidth.value.times(0.06f).sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(start = horizontalPadding, top = verticalPadding)
-                )
-
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = horizontalPadding, vertical = verticalPadding)
-                ) {
-                    items(meetingCard) { card ->
-                        RecommendCard(
-                            title = card.first,
-                            description = card.second,
-                            imageRes = card.third,
-                            width = cardWidth,
-                            height = cardHeight,
-                            rightMargin = horizontalPadding
-                        )
-                    }
-                }
-
-                Text(
-                    text = "카테고리별 모임",
-                    fontSize = screenWidth.value.times(0.06f).sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(
-                        horizontal = horizontalPadding,
-                        vertical = verticalPadding
-                    )
-                )
-
-                // 탭 선택
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(top = screenWidth * 0.02f),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    tabs.forEach { tab ->
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                text = tab,
-                                fontWeight = if (selectedTab == tab) FontWeight.Bold else FontWeight.Normal,
-                                color = if (selectedTab == tab) Color.Black else Color.Gray,
-                                modifier = Modifier.clickable(
-                                    indication = null,
-                                    interactionSource = remember { MutableInteractionSource() }
-                                ) {
-                                    selectedTab = tab
-                                }
-                            )
-                            Spacer(modifier = Modifier.height(screenHeight * 0.005f))
-                            Box(
-                                modifier = Modifier
-                                    .height(screenHeight * 0.0015f)
-                                    .width(screenWidth * 0.05f)
-                                    .background(if (selectedTab == tab) Color.Black else Color.Transparent)
-                            )
+                        text = tab,
+                        fontWeight = if (selectedTab == tab) FontWeight.Bold else FontWeight.Normal,
+                        color = if (selectedTab == tab) Color.Black else Color.Gray,
+                        modifier = Modifier.clickable(
+                            indication = null,
+                            interactionSource = remember { MutableInteractionSource() }
+                        ) {
+                            selectedTab = tab
                         }
-                    }
+                    )
+                    Spacer(modifier = Modifier.height(screenHeight * 0.005f))
+                    Box(
+                        modifier = Modifier
+                            .height(screenHeight * 0.0015f)
+                            .width(screenWidth * 0.05f)
+                            .background(if (selectedTab == tab) Color.Black else Color.Transparent)
+                    )
                 }
+            }
+        }
 
-                HorizontalDivider(color = Color.LightGray, thickness = 1.dp)
+        HorizontalDivider(color = Color.LightGray, thickness = 1.dp)
 
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = horizontalPadding),
-                    contentPadding = PaddingValues(vertical = verticalPadding)
-                ) {
-                    items(getMeetingsForTab(selectedTab)) { item ->
-                        MeetingCard(item)
-                    }
-                }
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = horizontalPadding),
+            contentPadding = PaddingValues(vertical = verticalPadding)
+        ) {
+            items(getMeetingsForTab(selectedTab)) { item ->
+                MeetingCard(item)
             }
         }
     }
 }
 
+
 @Composable
-fun RecommendCard(title: String, description: String, imageRes: Int, width: Dp, height: Dp, rightMargin: Dp) {
+fun RecommendCard(
+    title: String,
+    description: String,
+    imageRes: Int,
+    width: Dp,
+    height: Dp,
+    rightMargin: Dp
+) {
     Card(
         modifier = Modifier
             .width(width)
@@ -198,9 +163,10 @@ fun RecommendCard(title: String, description: String, imageRes: Int, width: Dp, 
                 )
             }
 
-            Column(modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = width * 0.05f, vertical = height * 0.04f)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = width * 0.05f, vertical = height * 0.04f)
             ) {
                 Text(title, fontWeight = FontWeight.Bold)
                 Text(description, fontSize = width.value.times(0.03f).sp, color = Color.Gray)
@@ -226,9 +192,10 @@ fun MeetingCard(title: String) {
             .padding(vertical = screenHeight * 0.01f),
         colors = CardDefaults.cardColors(containerColor = Color.White)
     ) {
-        Row(modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = innerPadding, vertical = screenHeight * 0.01f)
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = innerPadding, vertical = screenHeight * 0.01f)
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text("독서", fontSize = screenWidth.value.times(0.03f).sp, color = Color.Gray)

@@ -1,6 +1,13 @@
 package com.example.pdfnotemate.ui.activity.home
 
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import android.util.Log
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -21,6 +28,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.ssafy.bookglebookgle.R
 import com.ssafy.bookglebookgle.pdf.response.PdfNoteListModel
@@ -55,6 +63,11 @@ fun PdfScreen(
 
     val context = LocalContext.current
 
+    // 권한 요청 대기 중인 PDF
+    var pendingAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+    var showPermissionDialog by remember { mutableStateOf(false) }
+    var hasRequestedPermissionOnce by remember { mutableStateOf(false) }
+
     // States
     var searchText by remember { mutableStateOf("") }
     var showAddOptions by remember { mutableStateOf(false) }
@@ -62,6 +75,112 @@ fun PdfScreen(
     var filteredPdfList by remember { mutableStateOf<List<PdfNoteListModel>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    // 권한 확인 함수
+    fun checkStoragePermissions(): Boolean {
+        return if (Build.VERSION.SDK_INT >= 33) {
+            // Android 13 이상: 새로운 미디어 권한들 중 하나라도 있으면 됨
+            ContextCompat.checkSelfPermission(context, "android.permission.READ_MEDIA_IMAGES") == PackageManager.PERMISSION_GRANTED
+        } else {
+            // Android 12 이하: READ_EXTERNAL_STORAGE 권한 확인
+            ContextCompat.checkSelfPermission(context, "android.permission.READ_EXTERNAL_STORAGE") == PackageManager.PERMISSION_GRANTED
+        }
+    }
+
+    // 실제 PDF 업로드 수행 함수
+    fun performPdfUpload(pdf: PdfNoteListModel, uploadViewModel: PdfUploadViewModel) {
+        val file = File(pdf.filePath)
+        Log.d("PdfUpload", "파일 경로: ${pdf.filePath}")
+        Log.d("PdfUpload", "파일 존재: ${file.exists()}")
+        Log.d("PdfUpload", "파일 읽기 가능: ${file.canRead()}")
+        Log.d("PdfUpload", "파일 크기: ${file.length()} bytes")
+
+        when {
+            !file.exists() -> {
+                uploadViewModel.setUploadMessage("파일이 존재하지 않습니다: ${pdf.filePath}")
+            }
+            !file.canRead() -> {
+                uploadViewModel.setUploadMessage("파일에 접근할 수 없습니다")
+            }
+            file.length() == 0L -> {
+                uploadViewModel.setUploadMessage("파일이 비어있습니다")
+            }
+            file.length() > 50 * 1024 * 1024 -> { // 50MB 제한
+                uploadViewModel.setUploadMessage("파일 크기가 너무 큽니다 (최대 50MB)")
+            }
+            else -> {
+                uploadViewModel.uploadPdf(pdf, file)
+            }
+        }
+    }
+
+    // 권한 요청 런처
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        hasRequestedPermissionOnce = true // 권한 요청했음을 표시
+
+        if (granted) {
+            Log.d("PdfUpload", "저장소 권한이 승인되었습니다")
+            pendingAction?.invoke()
+            pendingAction = null
+        } else {
+            Log.e("PdfUpload", "저장소 권한이 거부되었습니다")
+            pdfUploadViewModel.setUploadMessage("PDF 파일 접근 권한이 필요합니다.")
+            pendingAction = null
+        }
+    }
+
+    // 설정으로 이동하는 런처
+    val settingsLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) {
+        // 설정에서 돌아왔을 때 권한 다시 확인
+        if (checkStoragePermissions()) {
+            showAddOptions = true
+        }
+    }
+
+    // 권한 요청 함수
+    fun requestStoragePermissions() {
+        val permission = if (Build.VERSION.SDK_INT >= 33) {
+            "android.permission.READ_MEDIA_IMAGES"
+        } else {
+            "android.permission.READ_EXTERNAL_STORAGE"
+        }
+
+        Log.d("PdfUpload", "권한 요청: $permission")
+        permissionLauncher.launch(permission)
+    }
+
+    // PDF 업로드 메인 함수
+    fun uploadPdfToServer(pdf: PdfNoteListModel) {
+        Log.d("PdfUpload", "업로드 시도 - PDF: ${pdf.title}")
+        performPdfUpload(pdf, pdfUploadViewModel)
+    }
+
+    // + 버튼 클릭 시 권한 체크 함수
+    fun handleAddPdfClick() {
+        Log.d("PdfUpload", "PDF 추가 버튼 클릭")
+
+        if (!checkStoragePermissions()) {
+            Log.d("PdfUpload", "권한이 없음")
+
+            if (hasRequestedPermissionOnce) {
+                // 이미 한 번 권한을 요청했었다면 → 설정으로 이동 다이얼로그
+                Log.d("PdfUpload", "이미 권한 요청했음 - 설정 다이얼로그 표시")
+                showPermissionDialog = true
+            } else {
+                // 처음 권한 요청 → 시스템 권한 다이얼로그
+                Log.d("PdfUpload", "첫 권한 요청 - 시스템 다이얼로그 표시")
+                pendingAction = { showAddOptions = true }
+                requestStoragePermissions()
+            }
+        } else {
+            Log.d("PdfUpload", "권한 확인됨 - 옵션 표시")
+            showAddOptions = true
+        }
+    }
 
     // Handle PDF added/deleted callbacks
     LaunchedEffect(onPdfAdded) {
@@ -133,17 +252,6 @@ fun PdfScreen(
         viewModel.getAllPdfs()
     }
 
-    // PDF 업로드 함수
-    fun uploadPdfToServer(pdf: PdfNoteListModel) {
-        val file = File(pdf.filePath)
-
-        if (file.exists()) {
-            pdfUploadViewModel.uploadPdf(pdf, file)
-        } else {
-            pdfUploadViewModel.setUploadMessage("파일이 존재하지 않습니다: ${pdf.filePath}")
-        }
-    }
-
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -157,7 +265,7 @@ fun PdfScreen(
                 searchText = searchText,
                 onSearchTextChange = { searchText = it },
                 onBackPressed = onBackPressed,
-                onAddPdfClicked = { showAddOptions = true },
+                onAddPdfClicked = { handleAddPdfClick() },
             )
         }
 
@@ -231,7 +339,7 @@ fun PdfScreen(
         OptionPickBottomSheet(
             title = "PDF 추가",
             options = listOf(
-                MoreOptionModel(1, "갤러리에서 선택"),
+                MoreOptionModel(1, "저장소에서 선택"),
                 MoreOptionModel(2, "다운로드 PDF")
             ),
             onOptionSelected = { option ->
@@ -245,9 +353,56 @@ fun PdfScreen(
             onDismiss = { showAddOptions = false }
         )
     }
+
+    // 권한 설정 다이얼로그
+    if (showPermissionDialog) {
+        AlertDialog(
+            onDismissRequest = { showPermissionDialog = false },
+            title = {
+                Text(
+                    text = "권한 필요",
+                    fontFamily = JakartaSansSemiBold
+                )
+            },
+            text = {
+                Text(
+                    text = "PDF 파일에 접근하려면 저장소 권한이 필요합니다.\n설정에서 권한을 허용해주세요.",
+                    fontFamily = JakartaSansRegular
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showPermissionDialog = false
+                        // 앱 설정으로 이동
+                        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                            data = Uri.fromParts("package", context.packageName, null)
+                        }
+                        settingsLauncher.launch(intent)
+                    }
+                ) {
+                    Text(
+                        text = "설정으로 이동",
+                        fontFamily = JakartaSansMedium,
+                        color = Color.Black
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showPermissionDialog = false }
+                ) {
+                    Text(
+                        text = "취소",
+                        fontFamily = JakartaSansMedium,
+                        color = Color.Gray
+                    )
+                }
+            }
+        )
+    }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TopAppBar(
     searchText: String,

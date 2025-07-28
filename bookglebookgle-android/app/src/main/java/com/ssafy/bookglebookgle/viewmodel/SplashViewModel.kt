@@ -10,6 +10,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.time.withTimeoutOrNull
+import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 
 @HiltViewModel
@@ -27,23 +29,32 @@ class SplashViewModel @Inject constructor(
 
     fun autoLogin() {
         viewModelScope.launch {
-            val refresh = tokenManager.getRefreshToken()
+            try {
+                val refresh = tokenManager.getRefreshToken()
 
-            if (refresh.isNullOrBlank()) {          // 1 refreshToken 자체가 없음
-                _uiState.value = UiState.GoLogin
-                return@launch
-            }
+                if (refresh.isNullOrBlank()) {
+                    _uiState.value = UiState.GoLogin
+                    return@launch
+                }
+                // 2 서버에 refresh 요청
+                val newToken = withTimeoutOrNull(5000) {
+                    loginRepository.refreshToken(refresh)
+                }
 
-            try {                                   // 2 서버에 refresh 요청
-                val newToken = loginRepository.refreshToken(
-                    refresh)
-                tokenManager.saveTokens(newToken.accessToken, newToken.refreshToken)
-                _uiState.value = UiState.GoMain      //  자동 로그인 성공
+                if (newToken != null) {
+                    tokenManager.saveTokens(newToken.accessToken, newToken.refreshToken)
+                    _uiState.value = UiState.GoMain //  자동 로그인 성공
+                } else {  // 3 refreshToken 만료·위조 등
+                    tokenManager.clearTokens()
+                    _uiState.value = UiState.GoLogin
+                }
 
-            } catch (e: Exception) {                // 3 refreshToken 만료·위조 등
+            } catch (e: Exception) {
+                Log.e("SplashViewModel", "자동로그인 error: ${e.message}")
                 tokenManager.clearTokens()
                 _uiState.value = UiState.GoLogin
             }
         }
     }
+
 }

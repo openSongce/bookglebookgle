@@ -1,6 +1,5 @@
 package com.ssafy.bookglebookgle.network.api
 
-import com.ssafy.bookglebookgle.entity.UploadPdfResponse
 import okhttp3.MultipartBody
 import retrofit2.Response
 import retrofit2.http.Multipart
@@ -12,5 +11,5 @@ interface PdfApi {
     @POST("pdf/upload")
     suspend fun uploadPdf(
         @Part file: MultipartBody.Part,
-    ): Response<UploadPdfResponse>
+    ): Response<Unit>
 }

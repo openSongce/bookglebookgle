@@ -24,19 +24,18 @@ class PdfUploadViewModel @Inject constructor(
 
     fun uploadPdf(pdf: PdfNoteListModel, localFile: File) {
         val pdfId = pdf.id
-        _uploading.value = _uploading.value + (pdfId to true)
+        _uploading.value += (pdfId to true)
 
         viewModelScope.launch {
-            val response = pdfRepository.uploadPdf(localFile)
-            if (response != null) {
-                _uploadMessage.value = "PDF 업로드 완료 (id: ${response.pdfId})"
+            val success = pdfRepository.uploadPdf(localFile)
+            _uploadMessage.value = if (success) {
+                "PDF 업로드 완료"
             } else {
-                _uploadMessage.value = "PDF 업로드 실패"
+                "PDF 업로드 실패"
             }
 
             _uploading.value = _uploading.value - pdfId
 
-            // 메시지 잠시 후 제거
             kotlinx.coroutines.delay(2000)
             _uploadMessage.value = null
         }

@@ -4,9 +4,13 @@ import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.ui.Modifier
 import com.ssafy.bookglebookgle.ui.theme.BookgleBookgleTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -23,10 +27,13 @@ class MainActivity : ComponentActivity() {
             installSplashScreen().setKeepOnScreenCondition { false }
         }
 
+        enableEdgeToEdge()
         setContent {
             BookgleBookgleTheme {
                 Surface(
-                    modifier = Modifier.fillMaxWidth( ),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .windowInsetsPadding(WindowInsets.systemBars),
                     color = MaterialTheme.colorScheme.background
                 ) {
                     MainNavigation()

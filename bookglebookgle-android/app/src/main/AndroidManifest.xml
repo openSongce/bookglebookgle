@@ -11,6 +11,8 @@
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
 
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+
     <application
         android:name=".BookgleApplication"
         android:allowBackup="true"

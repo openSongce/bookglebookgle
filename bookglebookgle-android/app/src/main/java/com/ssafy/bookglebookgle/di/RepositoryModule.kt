@@ -2,8 +2,10 @@ package com.ssafy.bookglebookgle.di
 
 import com.ssafy.bookglebookgle.network.api.AuthApi
 import com.ssafy.bookglebookgle.network.api.LoginApi
+import com.ssafy.bookglebookgle.network.api.PdfApi
 import com.ssafy.bookglebookgle.repository.AuthRepository
 import com.ssafy.bookglebookgle.repository.LoginRepository
+import com.ssafy.bookglebookgle.repository.PdfRepository
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -24,5 +26,11 @@ object RepositoryModule {
     @Singleton
     fun provideAuthRepository(authApi: AuthApi): AuthRepository {
         return AuthRepository(authApi)
+    }
+
+    @Provides
+    @Singleton
+    fun procidePdfRepository(pdfApi: PdfApi): PdfRepository {
+        return PdfRepository(pdfApi)
     }
 }
