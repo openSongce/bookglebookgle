@@ -2,6 +2,8 @@ package com.example.bookglebookgleserver.group.service;
 
 import com.bgbg.ai.grpc.ProcessPdfResponse;
 import com.bgbg.ai.grpc.TextBlock;
+import com.example.bookglebookgleserver.global.exception.BadRequestException;
+import com.example.bookglebookgleserver.global.exception.NotFoundException;
 import com.example.bookglebookgleserver.global.util.AuthUtil;
 import com.example.bookglebookgleserver.group.dto.GroupCreateRequestDto;
 import com.example.bookglebookgleserver.group.entity.Group;
@@ -20,6 +22,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 
 @Slf4j
 @Service
@@ -35,10 +38,10 @@ public class GroupServiceImpl implements GroupService {
     @Override
     @Transactional
     public void createGroup(GroupCreateRequestDto dto, MultipartFile pdfFile, String token) {
-        // ✅ 1. 사용자 인증 유틸 사용
+        // 1. 사용자 인증
         String email = AuthUtil.getCurrentUserEmail();
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다."));
+                .orElseThrow(() -> new NotFoundException("사용자를 찾을 수 없습니다."));
 
         // 2. PDF 저장
         PdfFile pdf = PdfFile.builder()
@@ -50,39 +53,47 @@ public class GroupServiceImpl implements GroupService {
 
         PdfFile savedPdf = pdfRepository.save(pdf);
 
-        // 3. OCR 필요 시 gRPC 요청 및 결과 저장
+        // 3. OCR 필요 시 요청
         if (dto.isImageBased()) {
             log.info("🟡 OCR 요청 시작 - PDF ID: {}, 파일명: {}", savedPdf.getPdfId(), pdfFile.getOriginalFilename());
 
-            ProcessPdfResponse response = grpcOcrClient.sendPdf(savedPdf.getPdfId(), pdfFile);
+            ProcessPdfResponse response;
+            try {
+                response = grpcOcrClient.sendPdf(savedPdf.getPdfId(), pdfFile);
+            } catch (Exception e) {
+                log.error("🔴 OCR 서버 통신 오류", e);
+                throw new BadRequestException("OCR 서버와의 통신 중 오류가 발생했습니다.");
+            }
 
-            // ✅ 여기서부터 로그 추가
-            log.info("🟢 OCR 응답 수신 완료");
-            log.info(" - 성공 여부: {}", response.getSuccess());
-            log.info(" - 메시지: {}", response.getMessage());
-            log.info(" - 문서 ID: {}", response.getDocumentId());
-            log.info(" - 전체 페이지 수: {}", response.getTotalPages());
-            log.info(" - OCR 인식 블록 수: {}", response.getTextBlocksCount());
+            if (!response.getSuccess()) {
+                log.error("🔴 OCR 실패 응답 수신: {}", response.getMessage());
+                throw new BadRequestException("OCR 처리 실패: " + response.getMessage());
+            }
 
+            log.info("🟢 OCR 응답 수신 완료 - 블록 수: {}", response.getTextBlocksCount());
             if (response.getTextBlocksCount() > 0) {
                 TextBlock block = response.getTextBlocks(0);
                 log.info(" - 첫 번째 블럭 내용: [{}] (페이지: {})", block.getText(), block.getPageNumber());
             }
 
-            // OCR 결과 저장
             ocrService.saveOcrResults(savedPdf, response);
         }
 
-
-
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
+        // 4. 그룹 생성
+        LocalDateTime schedule;
+        try {
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
+            schedule = LocalDateTime.parse(dto.getSchedule(), formatter);
+        } catch (DateTimeParseException e) {
+            throw new BadRequestException("잘못된 일정 포맷입니다. (yyyy-MM-dd'T'HH:mm:ss)");
+        }
 
         Group group = Group.builder()
                 .roomTitle(dto.getRoomTitle())
                 .description(dto.getDescription())
                 .category(Group.Category.valueOf(dto.getCategory().toUpperCase()))
                 .minRequiredRating(dto.getMinRequiredRating())
-                .schedule(LocalDateTime.parse(dto.getSchedule(), formatter)) // ← 여기!
+                .schedule(schedule)
                 .groupMaxNum(dto.getGroupMaxNum())
                 .readingMode(Group.ReadingMode.valueOf(dto.getReadingMode().toUpperCase()))
                 .hostUser(user)
@@ -101,3 +112,4 @@ public class GroupServiceImpl implements GroupService {
         createGroup(dto, pdfFile, token);
     }
 }
+
