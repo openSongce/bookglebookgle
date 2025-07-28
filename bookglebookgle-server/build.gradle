@@ -72,6 +72,9 @@ dependencies {
     implementation "com.google.protobuf:protobuf-java:${protobufVersion}"
 
     implementation 'javax.annotation:javax.annotation-api:1.3.2'
+
+    //google auth추가
+
 }
 
 tasks.named('test') {
