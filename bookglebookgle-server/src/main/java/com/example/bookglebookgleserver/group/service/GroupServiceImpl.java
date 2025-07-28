@@ -1,9 +1,12 @@
 package com.example.bookglebookgleserver.group.service;
 
-import com.example.bookglebookgleserver.common.util.MultipartInputStreamFileResource;
+import com.bgbg.ai.grpc.ProcessPdfResponse;
+import com.example.bookglebookgleserver.global.util.AuthUtil;
 import com.example.bookglebookgleserver.group.dto.GroupCreateRequestDto;
 import com.example.bookglebookgleserver.group.entity.Group;
 import com.example.bookglebookgleserver.group.repository.GroupRepository;
+import com.example.bookglebookgleserver.ocr.grpc.GrpcOcrClient;
+import com.example.bookglebookgleserver.ocr.service.OcrService;
 import com.example.bookglebookgleserver.pdf.entity.PdfFile;
 import com.example.bookglebookgleserver.pdf.repository.PdfFileRepository;
 import com.example.bookglebookgleserver.user.entity.User;
@@ -11,21 +14,11 @@ import com.example.bookglebookgleserver.user.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
-import org.springframework.util.LinkedMultiValueMap;
-import org.springframework.util.MultiValueMap;
-import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 @Slf4j
 @Service
@@ -35,17 +28,14 @@ public class GroupServiceImpl implements GroupService {
     private final GroupRepository groupRepository;
     private final PdfFileRepository pdfRepository;
     private final UserRepository userRepository;
-
-    @Value("${ocr.server.url}")
-    private String ocrServerUrl;
+    private final GrpcOcrClient grpcOcrClient;
+    private final OcrService ocrService;
 
     @Override
     @Transactional
     public void createGroup(GroupCreateRequestDto dto, MultipartFile pdfFile, String token) {
-        // 1. 사용자 인증
-        String email = ((UserDetails) SecurityContextHolder.getContext()
-                .getAuthentication().getPrincipal()).getUsername();
-
+        // ✅ 1. 사용자 인증 유틸 사용
+        String email = AuthUtil.getCurrentUserEmail();
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다."));
 
@@ -59,18 +49,20 @@ public class GroupServiceImpl implements GroupService {
 
         PdfFile savedPdf = pdfRepository.save(pdf);
 
-        // 3. OCR 필요 시 전송
+        // 3. OCR 필요 시 gRPC 요청 및 결과 저장
         if (dto.isImageBased()) {
-            sendToOcrServer(savedPdf.getPdfId(), pdfFile);
+            ProcessPdfResponse response = grpcOcrClient.sendPdf(savedPdf.getPdfId(), pdfFile);
+            ocrService.saveOcrResults(savedPdf, response);
         }
 
-        // 4. 그룹 생성
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
+
         Group group = Group.builder()
                 .roomTitle(dto.getRoomTitle())
                 .description(dto.getDescription())
                 .category(Group.Category.valueOf(dto.getCategory().toUpperCase()))
                 .minRequiredRating(dto.getMinRequiredRating())
-                .schedule(dto.getSchedule())
+                .schedule(LocalDateTime.parse(dto.getSchedule(), formatter)) // ← 여기!
                 .groupMaxNum(dto.getGroupMaxNum())
                 .readingMode(Group.ReadingMode.valueOf(dto.getReadingMode().toUpperCase()))
                 .hostUser(user)
@@ -88,27 +80,4 @@ public class GroupServiceImpl implements GroupService {
         dto.setImageBased(false); // 강제 비활성화
         createGroup(dto, pdfFile, token);
     }
-
-    private void sendToOcrServer(Long pdfId, MultipartFile file) {
-        try {
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.MULTIPART_FORM_DATA);
-
-            MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
-            body.add("pdfId", pdfId);
-            body.add("file", new MultipartInputStreamFileResource(file.getInputStream(), file.getOriginalFilename()));
-
-            HttpEntity<MultiValueMap<String, Object>> request = new HttpEntity<>(body, headers);
-
-            RestTemplate restTemplate = new RestTemplate();
-            ResponseEntity<String> response = restTemplate.postForEntity(ocrServerUrl, request, String.class);
-
-            log.info("📤 OCR 서버 응답: {}", response.getBody());
-        } catch (IOException e) {
-            throw new RuntimeException("OCR 서버로 전송 중 오류 발생", e);
-        }
-    }
 }
-
-
-
