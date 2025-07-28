@@ -1,4 +1,7 @@
 package com.example.bookglebookgleserver.group.repository;
 
-public class GroupRepository {
+import com.example.bookglebookgleserver.group.entity.Group;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+public interface GroupRepository extends JpaRepository<Group, Long> {
 }
