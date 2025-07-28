@@ -114,6 +114,28 @@ public class AuthController {
         return ResponseEntity.ok("인증 코드가 이메일로 발송되었습니다.");
     }
 
+    @Operation(summary = "닉네임 중복 확인", description = "입력한 닉네임이 이미 존재하는지 확인합니다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "닉네임 사용 가능"),
+            @ApiResponse(responseCode = "409", description = "이미 사용 중인 닉네임")
+    })
+    @GetMapping("/check/nickname")
+    public ResponseEntity<String> checkNickname(@RequestParam String nickname) {
+        boolean exists = authService.isNicknameDuplicated(nickname);
+        if (exists) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body("이미 사용 중인 닉네임입니다.");
+        }
+        return ResponseEntity.ok("사용 가능한 닉네임입니다.");
+    }
+
+
+
+
+
+
+
+
+
     @PostMapping("/signup")
     public ResponseEntity<String> signup(@RequestBody SignupRequest request) {
         System.out.println("signup 요청 도달");

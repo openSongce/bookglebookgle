@@ -135,6 +135,11 @@ public class AuthService {
 
     }
 
+    public boolean isNicknameDuplicated(String nickname) {
+        return userRepository.existsByNickname(nickname);
+    }
+
+
     public String generateUniqueNickname(String base) {
         String nickname = base;
         int suffix = 1;
