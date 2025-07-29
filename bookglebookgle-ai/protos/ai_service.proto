@@ -1,0 +1,238 @@
+syntax = "proto3";
+
+package bgbg.ai;
+
+option java_package = "com.bgbg.ai.grpc";
+option java_outer_classname = "AIServiceProto";
+
+// AI Service Definition
+service AIService {
+  // Quiz Generation
+  rpc GenerateQuiz(QuizRequest) returns (QuizResponse);
+  
+  // Text Proofreading
+  rpc ProofreadText(ProofreadRequest) returns (ProofreadResponse);
+  
+  // Discussion Moderation
+  rpc InitializeDiscussion(DiscussionInitRequest) returns (DiscussionInitResponse);
+  rpc ProcessChatMessage(stream ChatMessageRequest) returns (stream ChatMessageResponse);
+  rpc GenerateDiscussionTopic(TopicRequest) returns (TopicResponse);
+  
+  // Document Processing
+  rpc ProcessDocument(DocumentRequest) returns (DocumentResponse);
+  
+  // User Analytics
+  rpc AnalyzeUserActivity(UserActivityRequest) returns (UserActivityResponse);
+  rpc ExtractUserInterests(InterestExtractionRequest) returns (InterestExtractionResponse);
+  
+  // PDF OCR Processing
+  rpc ProcessPdf(stream ProcessPdfRequest) returns (ProcessPdfResponse);
+}
+
+// Common Messages
+message TextContent {
+  string text = 1;
+  string language = 2; // e.g., "ko", "en"
+  optional string context = 3;
+}
+
+message User {
+  string user_id = 1;
+  string nickname = 2;
+  optional string email = 3;
+}
+
+// Quiz Generation Messages
+message QuizRequest {
+  string document_id = 1;
+  TextContent content = 2;
+  int32 progress_percentage = 3; // 50 or 100
+  int32 question_count = 4; // default: 5
+  string difficulty_level = 5; // easy, medium, hard
+}
+
+message Question {
+  string question_text = 1;
+  repeated string options = 2; // Multiple choice options
+  int32 correct_answer_index = 3; // 0-based index
+  string explanation = 4;
+  string category = 5; // topic category
+}
+
+message QuizResponse {
+  bool success = 1;
+  string message = 2;
+  repeated Question questions = 3;
+  string quiz_id = 4;
+}
+
+// Proofreading Messages
+message ProofreadRequest {
+  TextContent original_text = 1;
+  TextContent context_text = 2; // Page content for context
+  User user = 3;
+}
+
+message TextCorrection {
+  string original = 1;
+  string corrected = 2;
+  string correction_type = 3; // grammar, spelling, style, etc.
+  string explanation = 4;
+  int32 start_position = 5;
+  int32 end_position = 6;
+}
+
+message ProofreadResponse {
+  bool success = 1;
+  string message = 2;
+  string corrected_text = 3;
+  repeated TextCorrection corrections = 4;
+  double confidence_score = 5;
+}
+
+// Discussion Messages
+message DiscussionInitRequest {
+  string document_id = 1;
+  string meeting_id = 2;
+  TextContent full_document = 3;
+  repeated User participants = 4;
+}
+
+message DiscussionInitResponse {
+  bool success = 1;
+  string message = 2;
+  string discussion_session_id = 3;
+}
+
+message ChatMessageRequest {
+  string discussion_session_id = 1;
+  User sender = 2;
+  string message = 3;
+  int64 timestamp = 4;
+}
+
+message ChatMessageResponse {
+  bool success = 1;
+  string message = 2;
+  optional string ai_response = 3; // AI moderator response
+  repeated string suggested_topics = 4;
+  bool requires_moderation = 5;
+}
+
+message TopicRequest {
+  string document_id = 1;
+  TextContent document_content = 2;
+  repeated string previous_topics = 3;
+}
+
+message TopicResponse {
+  bool success = 1;
+  string message = 2;
+  repeated string discussion_topics = 3;
+  string recommended_topic = 4;
+  string topic_rationale = 5;
+}
+
+// Document Processing Messages
+message DocumentRequest {
+  string document_id = 1;
+  TextContent content = 2;
+  string processing_type = 3; // embedding, analysis, summarization
+}
+
+message DocumentChunk {
+  string chunk_id = 1;
+  string text = 2;
+  int32 start_position = 3;
+  int32 end_position = 4;
+  repeated double embedding = 5; // Vector embedding
+  map<string, string> metadata = 6;
+}
+
+message DocumentResponse {
+  bool success = 1;
+  string message = 2;
+  repeated DocumentChunk chunks = 3;
+  map<string, string> analysis_results = 4;
+}
+
+// User Analytics Messages
+message UserActivityData {
+  string user_id = 1;
+  repeated string document_ids = 2;
+  repeated int32 reading_times = 3; // minutes per document
+  repeated string meeting_participations = 4;
+  repeated double quiz_scores = 5;
+  int64 total_reading_time = 6;
+  map<string, int32> category_preferences = 7;
+}
+
+message UserActivityRequest {
+  string user_id = 1;
+  int64 start_date = 2; // Unix timestamp
+  int64 end_date = 3; // Unix timestamp
+}
+
+message UserActivityResponse {
+  bool success = 1;
+  string message = 2;
+  UserActivityData activity_data = 3;
+  repeated string insights = 4;
+  map<string, double> metrics = 5; // key-value metrics
+}
+
+message InterestExtractionRequest {
+  string user_id = 1;
+  UserActivityData activity_data = 2;
+  repeated string recent_searches = 3;
+  repeated string bookmarked_topics = 4;
+}
+
+message InterestExtractionResponse {
+  bool success = 1;
+  string message = 2;
+  repeated string primary_interests = 3;
+  repeated string emerging_interests = 4;
+  map<string, double> interest_scores = 5; // topic -> confidence score
+  repeated string recommended_categories = 6;
+}
+
+// PDF Processing Messages
+message ProcessPdfRequest {
+  oneof data {
+    PdfInfo info = 1;
+    bytes chunk = 2;
+  }
+}
+
+message PdfInfo {
+  string document_id = 1;
+  string file_name = 2;
+  map<string, string> metadata = 3;
+}
+
+message TextBlock {
+  string text = 1;
+  int32 page_number = 2;
+  double x0 = 3;
+  double y0 = 4;
+  double x1 = 5;
+  double y1 = 6;
+  string block_type = 7; // e.g., "text", "image"
+}
+
+message ProcessPdfResponse {
+  bool success = 1;
+  string message = 2;
+  string document_id = 3;
+  int32 total_pages = 4;
+  repeated TextBlock text_blocks = 5;
+}
+
+// Error Handling
+message ErrorDetails {
+  string error_code = 1;
+  string error_message = 2;
+  string error_category = 3; // client_error, server_error, ai_error
+  map<string, string> additional_info = 4;
+}
