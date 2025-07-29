@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import androidx.navigation.NavHostController
 import com.ssafy.bookglebookgle.R
 import com.ssafy.bookglebookgle.navigation.Screen
 import com.ssafy.bookglebookgle.ui.theme.BookgleBookgleTheme
@@ -32,7 +33,7 @@ import com.ssafy.bookglebookgle.util.ScreenSize
 import com.ssafy.bookglebookgle.viewmodel.ProfileViewModel
 
 @Composable
-fun ProfileScreen(navController: NavController, viewModel: ProfileViewModel = hiltViewModel()) {
+fun ProfileScreen(navController: NavHostController, viewModel: ProfileViewModel = hiltViewModel()) {
     val profileImageSize = ScreenSize.width * 0.3f
     val iconSize = profileImageSize * 0.25f
 
@@ -52,7 +53,7 @@ fun ProfileScreen(navController: NavController, viewModel: ProfileViewModel = hi
         }
 
 
-        CustomTopAppBar(title = "my_page")
+        CustomTopAppBar(title = "my_page", navController)
 
         Spacer(modifier = Modifier.height(ScreenSize.height * 0.03f))
 
