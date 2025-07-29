@@ -669,7 +669,14 @@ fun GroupRegisterScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable {
-                        pdfPickerLauncher.launch(arrayOf("application/pdf"))
+                        handleAddPdfClick()
+                        if (checkStoragePermissions()) {
+                            pdfPickerLauncher.launch(arrayOf("application/pdf"))
+                        } else {
+                            pendingAction = {
+                                pdfPickerLauncher.launch(arrayOf("application/pdf"))
+                            }
+                        }
                     }
                     .border(
                         width = 1.dp,
