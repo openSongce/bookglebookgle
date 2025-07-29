@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.border
@@ -538,10 +539,10 @@ fun GroupRegisterScreen(
                 // 1. ViewModel 폼 초기화
                 viewModel.resetForm()
 
-                // 3. UI 상태 초기화 (성공 플래그 리셋)
+                // 2. UI 상태 초기화 (성공 플래그 리셋)
                 viewModel.resetState()
 
-                // 4. 화면 이동
+                // 3. 화면 이동
                 navController.popBackStack()
 
                 Log.d(TAG, "모든 상태가 초기화되었습니다")
@@ -570,7 +571,7 @@ fun GroupRegisterScreen(
         }
     }
 
-    // Activity result launcher for PDF picking
+    // PDF 선택 런처
     val pdfPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
@@ -639,6 +640,11 @@ fun GroupRegisterScreen(
     ) {
         // 설정에서 돌아왔을 때 권한 다시 확인
         if (checkStoragePermissions()) {
+            pendingAction?.invoke()
+            pendingAction = null
+        }
+        else{
+            Toast.makeText(context, "저장소 권한이 필요합니다.", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -656,13 +662,10 @@ fun GroupRegisterScreen(
 
     // PDF 업로드 클릭 시 권한 체크 함수
     fun handleAddPdfClick() {
-        Log.d(TAG, "PDF 추가 버튼 클릭")
-
         if (!checkStoragePermissions()) {
             Log.d(TAG, "권한이 없음")
 
             if (hasRequestedPermissionOnce) {
-                // 이미 한 번 권한을 요청했었다면 → 설정으로 이동 다이얼로그
                 Log.d(TAG, "이미 권한 요청했음 - 설정 다이얼로그 표시")
                 showPermissionDialog = true
             } else {
@@ -702,13 +705,16 @@ fun GroupRegisterScreen(
                     .fillMaxWidth()
                     .clickable {
                         handleAddPdfClick()
-                        if (checkStoragePermissions()) {
+
+                        pendingAction = {
                             pdfPickerLauncher.launch(arrayOf("application/pdf"))
-                        } else {
-                            pendingAction = {
-                                pdfPickerLauncher.launch(arrayOf("application/pdf"))
-                            }
                         }
+
+                        if(checkStoragePermissions()){
+                            pendingAction?.invoke()
+                            pendingAction = null
+                        }
+
                     }
                     .border(
                         width = 1.dp,
