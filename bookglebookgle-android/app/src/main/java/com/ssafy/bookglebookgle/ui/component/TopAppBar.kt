@@ -1,5 +1,6 @@
 package com.ssafy.bookglebookgle.ui.component
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -70,7 +71,12 @@ fun CustomTopAppBar(
             else if(title == "my_group"){
                 Text(
                     text = "내 모임",
+                    textAlign = TextAlign.Center,
                     fontWeight = FontWeight.Bold,
+                    fontSize = 20.sp,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(end = 16.dp)
                 )
             }
             else { // 모임 상세, PDF 뷰어, AI 퀴즈 등에서 사용 될 TopAppBar Text
@@ -81,8 +87,7 @@ fun CustomTopAppBar(
                 )
             }
         },
-        navigationIcon = {
-        },
+        navigationIcon = { },
         actions = {
             if(title == "main_home"){
                 Row(

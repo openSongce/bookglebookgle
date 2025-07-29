@@ -24,6 +24,7 @@ import com.ssafy.bookglebookgle.pdf.ui.screen.HighlightListScreen
 import com.ssafy.bookglebookgle.ui.screen.GroupRegisterScreen
 import com.ssafy.bookglebookgle.ui.screen.LoginScreen
 import com.ssafy.bookglebookgle.ui.screen.MainScreen
+import com.ssafy.bookglebookgle.ui.screen.MyGroupScreen
 import com.ssafy.bookglebookgle.ui.screen.RegisterScreen
 import com.ssafy.bookglebookgle.ui.screen.SplashScreen
 
@@ -88,8 +89,8 @@ fun MainNavigation(
                 // ChatScreen(navController)
             }
 
-            composable(BottomNavItem.Meeting.route) {
-                // MeetingScreen(navController)
+            composable(BottomNavItem.MyGroup.route) {
+                MyGroupScreen(navController)
             }
 
             composable(BottomNavItem.Profile.route) {
