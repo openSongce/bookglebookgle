@@ -28,9 +28,12 @@ public class EmailSender {
 
             mailSender.send(message);
             System.out.println("이메일 전송 완료");
-        } catch (MessagingException e) {
-            System.err.println(" 이메일 전송 실패: " + e.getMessage());
-            e.printStackTrace();
+        } catch (Exception e) {
+            System.out.println("❌ 이메일 전송 실패 (확장 캐치): " + e.getClass().getName());
+            System.out.println("❌ 예외 메시지: " + e.getMessage());
+
+            // 강제 출력 추가
+            e.printStackTrace(System.out);
         }
     }
 
