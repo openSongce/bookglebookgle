@@ -65,16 +65,17 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import com.ssafy.bookglebookgle.R
-import com.ssafy.bookglebookgle.pdf.response.PdfNoteListModel
 import com.ssafy.bookglebookgle.pdf.tools.AppFileManager
 import com.ssafy.bookglebookgle.ui.component.CustomTopAppBar
+import com.ssafy.bookglebookgle.util.PdfAnalysisResult
+import com.ssafy.bookglebookgle.util.PdfOcrChecker
 import com.ssafy.bookglebookgle.viewmodel.GroupRegisterViewModel
-import com.ssafy.bookglebookgle.viewmodel.PdfUploadViewModel
 import java.io.File
 import java.io.FileOutputStream
 import java.util.Calendar
 
 private const val TAG = "싸피_GroupRegisterScreen"
+
 @Composable
 fun DateTimePickerDialog(
     onDateTimeSelected: (String) -> Unit,
@@ -520,19 +521,52 @@ fun GroupRegisterScreen(
     var selectedPdfFile by remember { mutableStateOf<File?>(null) }
     var selectedPdfFileName by remember { mutableStateOf("") }
     var isPdfImported by remember { mutableStateOf(false) }
+    var isOcrRequired by remember { mutableStateOf<Boolean?>(null) } // OCR 필요 여부
+    var isAnalyzing by remember { mutableStateOf(false) } // 분석 중 상태
+    var pdfAnalysisResult by remember { mutableStateOf<PdfAnalysisResult?>(null) } // 분석 결과
 
     val displayFileName = if (selectedPdfFileName.length > 25) {
         selectedPdfFileName.take(22) + "..."
     } else selectedPdfFileName
 
+    // 성공/실패 처리
+    LaunchedEffect(uiState) {
+        when {
+            uiState.isSuccess -> {
+                Log.d(TAG, "모임 생성 성공!")
+
+                // 1. ViewModel 폼 초기화
+                viewModel.resetForm()
+
+                // 3. UI 상태 초기화 (성공 플래그 리셋)
+                viewModel.resetState()
+
+                // 4. 화면 이동
+                navController.popBackStack()
+
+                Log.d(TAG, "모든 상태가 초기화되었습니다")
+            }
+
+            uiState.errorMessage != null -> {
+                Log.e(TAG, "모임 생성 실패: ${uiState.errorMessage}")
+            }
+        }
+    }
+
     // 권한 확인 함수
     fun checkStoragePermissions(): Boolean {
         return if (Build.VERSION.SDK_INT >= 33) {
             // Android 13 이상: 새로운 미디어 권한들 중 하나라도 있으면 됨
-            ContextCompat.checkSelfPermission(context, "android.permission.READ_MEDIA_IMAGES") == PackageManager.PERMISSION_GRANTED
+            ContextCompat.checkSelfPermission(
+                context,
+                "android.permission.READ_MEDIA_IMAGES"
+            ) == PackageManager.PERMISSION_GRANTED
         } else {
             // Android 12 이하: READ_EXTERNAL_STORAGE 권한 확인
-            ContextCompat.checkSelfPermission(context, "android.permission.READ_EXTERNAL_STORAGE") == PackageManager.PERMISSION_GRANTED
+            ContextCompat.checkSelfPermission(
+                context,
+                "android.permission.READ_EXTERNAL_STORAGE"
+            ) == PackageManager.PERMISSION_GRANTED
         }
     }
 
@@ -542,45 +576,43 @@ fun GroupRegisterScreen(
     ) { uri ->
         uri?.let {
             try {
+                isAnalyzing = true // 분석 시작
+
                 context.contentResolver?.openInputStream(it)?.use { input ->
                     val saveFile = AppFileManager.getNewPdfFile(context)
                     FileOutputStream(saveFile).use { output ->
                         input.copyTo(output)
                     }
-                    viewModel.pdfFile = saveFile
+                    viewModel.updatePdfFile(saveFile)
                     selectedPdfFile = saveFile
                     selectedPdfFileName = saveFile.name
                     isPdfImported = true
+
+                    // PDF OCR 필요 여부 확인 (백그라운드에서 실행)
+                    kotlin.concurrent.thread {
+                        try {
+                            val analysisResult = PdfOcrChecker.analyzePdf(context, saveFile)
+
+                            // UI 스레드에서 상태 업데이트
+                            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                pdfAnalysisResult = analysisResult
+                                isOcrRequired = analysisResult.isOcrRequired
+                                isAnalyzing = false
+
+                                Log.d(TAG, "PDF 분석 완료 - OCR 필요: ${analysisResult.isOcrRequired}")
+                                Log.d(TAG, "분석 결과: $analysisResult")
+                            }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "PDF 분석 중 오류", e)
+                            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                isOcrRequired = true // 오류 시 OCR 필요로 설정
+                                isAnalyzing = false
+                            }
+                        }
+                    }
                 }
             } catch (e: Exception) {
                 // Handle error
-            }
-        }
-    }
-
-    // 실제 PDF 업로드 수행 함수
-    fun performPdfUpload(pdf: PdfNoteListModel, uploadViewModel: PdfUploadViewModel) {
-        val file = File(pdf.filePath)
-        Log.d("PdfUpload", "파일 경로: ${pdf.filePath}")
-        Log.d("PdfUpload", "파일 존재: ${file.exists()}")
-        Log.d("PdfUpload", "파일 읽기 가능: ${file.canRead()}")
-        Log.d("PdfUpload", "파일 크기: ${file.length()} bytes")
-
-        when {
-            !file.exists() -> {
-                uploadViewModel.setUploadMessage("파일이 존재하지 않습니다: ${pdf.filePath}")
-            }
-            !file.canRead() -> {
-                uploadViewModel.setUploadMessage("파일에 접근할 수 없습니다")
-            }
-            file.length() == 0L -> {
-                uploadViewModel.setUploadMessage("파일이 비어있습니다")
-            }
-            file.length() > 50 * 1024 * 1024 -> { // 50MB 제한
-                uploadViewModel.setUploadMessage("파일 크기가 너무 큽니다 (최대 50MB)")
-            }
-            else -> {
-                uploadViewModel.uploadPdf(pdf, file)
             }
         }
     }
@@ -702,7 +734,7 @@ fun GroupRegisterScreen(
                     Spacer(modifier = Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = if (selectedPdfFileName.isNotEmpty()) displayFileName  else "PDF 업로드",
+                            text = if (selectedPdfFileName.isNotEmpty()) displayFileName else "PDF 업로드",
                             color = if (selectedPdfFile != null) Color.Black else Color.Gray,
                             fontSize = 16.sp,
                             fontWeight = if (selectedPdfFile != null) FontWeight.Medium else FontWeight.Normal
@@ -733,6 +765,12 @@ fun GroupRegisterScreen(
                                     selectedPdfFile?.delete()
                                     selectedPdfFile = null
                                     selectedPdfFileName = ""
+                                    isOcrRequired = null
+                                    pdfAnalysisResult = null
+                                    isAnalyzing = false
+                                    isPdfImported = false
+
+                                    viewModel.resetPdfFile()
                                 },
                             tint = Color.Gray
                         )
@@ -791,6 +829,7 @@ fun GroupRegisterScreen(
                 fontSize = 16.sp,
                 color = Color.Black
             )
+
             Spacer(modifier = Modifier.height(8.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -906,15 +945,194 @@ fun GroupRegisterScreen(
                 }
             }
 
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // 최소 평점 요구사항 설정
+            Text(
+                text = "최소 요구 평점",
+                fontWeight = FontWeight.Medium,
+                fontSize = 16.sp,
+                color = Color.Black
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "설정한 평점 이상의 사용자만 모임에 참여할 수 있습니다",
+                fontSize = 12.sp,
+                color = Color.Gray
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // 평점 선택 카드
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color(0xFFF8FAFC)
+                ),
+                shape = RoundedCornerShape(12.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    // 현재 선택된 평점 표시
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_star),
+                                contentDescription = "평점",
+                                tint = Color(0xFFFFD700),
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "최소 평점",
+                                fontSize = 14.sp,
+                                color = Color(0xFF4A5568),
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                        Text(
+                            text = "${viewModel.minRequiredRating}점 이상",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF81C4E8)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // 평점 선택 그리드 (0 ~ 5, 1점 단위)
+                    LazyVerticalGrid(
+                        columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(6),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.height(80.dp)
+                    ) {
+                        items((0..5).toList()) { rating ->
+                            Card(
+                                modifier = Modifier
+                                    .aspectRatio(1f)
+                                    .clickable { viewModel.updateMinRequiredRating(rating) },
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (viewModel.minRequiredRating == rating)
+                                        Color(0xFF81C4E8) else Color.White
+                                ),
+                                shape = RoundedCornerShape(8.dp),
+                                border = if (viewModel.minRequiredRating != rating)
+                                    androidx.compose.foundation.BorderStroke(
+                                        1.dp,
+                                        Color(0xFFE2E8F0)
+                                    )
+                                else null
+                            ) {
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Text(
+                                            text = rating.toString(),
+                                            fontSize = 14.sp,
+                                            fontWeight = if (viewModel.minRequiredRating == rating)
+                                                FontWeight.Bold else FontWeight.Normal,
+                                            color = if (viewModel.minRequiredRating == rating)
+                                                Color.White else Color(0xFF4A5568)
+                                        )
+
+                                        // 별 아이콘 표시 (선택된 경우에만)
+                                        if (viewModel.minRequiredRating == rating) {
+                                            Icon(
+                                                painter = painterResource(id = R.drawable.ic_star),
+                                                contentDescription = null,
+                                                tint = Color.White,
+                                                modifier = Modifier.size(10.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // 평점 설명
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = "💡 0점: 모든 사용자 참여 가능, 높은 점수일수록 더 신뢰할 수 있는 사용자들과 모임할 수 있어요",
+                            fontSize = 11.sp,
+                            color = Color(0xFF64748B),
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            }
+
+
+
             Spacer(modifier = Modifier.height(32.dp))
 
             // 모임 개설 버튼
             Button(
                 onClick = {
-                    // TODO: PDF 파일 처리 로직 추가 필요
+                    // 현재 상태 로깅
+                    viewModel.logCurrentState()
+
+                    // PDF 파일 확인
+                    val currentPdfFile = selectedPdfFile
+                    if (currentPdfFile == null || !currentPdfFile.exists()) {
+                        Log.e(TAG, "PDF 파일이 선택되지 않았거나 존재하지 않습니다")
+                        // 에러 처리 (토스트 메시지 등)
+                        return@Button
+                    }
+
+                    // OCR 분석이 완료되었는지 확인
+                    if (isAnalyzing) {
+                        Log.w(TAG, "PDF 분석이 아직 진행 중입니다")
+                        return@Button
+                    }
+
+                    // OCR 필요 여부 확인 (null인 경우 안전하게 true로 설정)
+                    val ocrRequired = isOcrRequired ?: true
+
                     Log.d(
-                        "GroupRegisterScreen",
-                        "모임 개설 - 제목: ${viewModel.groupName}, 카테고리: ${viewModel.selectedCategory}, 인원: ${viewModel.maxMembers}, 시간: ${viewModel.selectedDateTime}"
+                        TAG, """
+            모임 개설 시작:
+            - 제목: ${viewModel.groupName}
+            - 카테고리: ${viewModel.selectedCategory}
+            - 인원: ${viewModel.maxMembers}명
+            - 시간: ${viewModel.selectedDateTime}
+            - PDF 파일: ${currentPdfFile.name}
+            - 파일 크기: ${currentPdfFile.length()} bytes
+            - OCR 필요: $ocrRequired
+        """.trimIndent()
+                    )
+
+                    // 분석 결과 로깅
+                    pdfAnalysisResult?.let { result ->
+                        Log.d(
+                            TAG, """
+                PDF 분석 결과:
+                - 총 페이지: ${result.totalPages}
+                - 분석된 페이지: ${result.analyzedPages}
+                - 텍스트 페이지: ${result.textPages}
+                - 이미지 페이지: ${result.imagePages}
+                - 텍스트 비율: ${(result.textPageRatio * 100).toInt()}%
+                - 평균 텍스트 길이: ${result.avgTextPerPage.toInt()}자
+                - OCR 필요: ${result.isOcrRequired}
+            """.trimIndent()
+                        )
+                    }
+                    // 그룹 생성 실행
+                    viewModel.createGroupWithPdf(
+                        isOcrRequired = ocrRequired
                     )
                 },
                 modifier = Modifier
@@ -924,7 +1142,17 @@ fun GroupRegisterScreen(
                     containerColor = selectedColor
                 ),
                 shape = RoundedCornerShape(12.dp),
-                enabled = viewModel.isFormValid()
+                enabled = run {
+                    val isValid = viewModel.isFormValid() && !isAnalyzing
+                    Log.d(TAG, """
+            버튼 활성화 조건:
+            - viewModel.isFormValid(): ${viewModel.isFormValid()}
+            - !isAnalyzing: ${!isAnalyzing}
+            - selectedPdfFile != null: ${selectedPdfFile != null}
+            - 최종 결과: $isValid
+        """.trimIndent())
+                    isValid
+                }
             ) {
                 Text(
                     text = if (uiState.isLoading) "생성 중..." else "모임 개설하기",
