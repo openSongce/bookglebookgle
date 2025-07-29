@@ -1,16 +1,13 @@
 package com.example.bookglebookgleserver.ocr.grpc;
 
-import com.bgbg.ai.grpc.AIServiceGrpc;
-import com.bgbg.ai.grpc.PdfInfo;
-import com.bgbg.ai.grpc.ProcessPdfRequest;
-import com.bgbg.ai.grpc.ProcessPdfResponse;
-
+import com.bgbg.ai.grpc.*;
 import com.google.protobuf.ByteString;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.stub.StreamObserver;
-import lombok.RequiredArgsConstructor;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -21,20 +18,24 @@ import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class GrpcOcrClient {
 
-    private final String host = "localhost"; // OCR 서버 주소 (필요 시 외부 주입 가능)
-    private final int port = 50051;          // OCR 서버 포트
+    private AIServiceGrpc.AIServiceStub stub;
 
-    public ProcessPdfResponse sendPdf(Long pdfId, MultipartFile file) {
+    @Value("${ocr.server.url}")
+    private String ocrServerUrl;
+
+    @PostConstruct
+    public void init() {
         ManagedChannel channel = ManagedChannelBuilder
-                .forAddress(host, port)
+                .forTarget(ocrServerUrl)
                 .usePlaintext()
                 .build();
+        this.stub = AIServiceGrpc.newStub(channel);
+        log.info("✅ gRPC 클라이언트 초기화 완료 - URL: {}", ocrServerUrl);
+    }
 
-        AIServiceGrpc.AIServiceStub stub = AIServiceGrpc.newStub(channel);
-
+    public ProcessPdfResponse sendPdf(Long pdfId, MultipartFile file) {
         final CountDownLatch finishLatch = new CountDownLatch(1);
         final ProcessPdfResponse[] responseHolder = new ProcessPdfResponse[1];
 
@@ -57,17 +58,15 @@ public class GrpcOcrClient {
             }
         });
 
-        try {
+        try (InputStream inputStream = file.getInputStream()) {
             // 1. PDF Info 전송
             PdfInfo info = PdfInfo.newBuilder()
                     .setDocumentId(String.valueOf(pdfId))
                     .setFileName(file.getOriginalFilename())
                     .build();
-
             requestObserver.onNext(ProcessPdfRequest.newBuilder().setInfo(info).build());
 
-            // 2. PDF 파일을 chunk로 전송
-            InputStream inputStream = file.getInputStream();
+            // 2. Chunk 전송
             byte[] buffer = new byte[4096];
             int bytesRead;
             while ((bytesRead = inputStream.read(buffer)) != -1) {
@@ -76,7 +75,7 @@ public class GrpcOcrClient {
                         .setChunk(ByteString.copyFrom(chunk)).build());
             }
 
-            // 3. 완료 신호
+            // 3. 완료 전송
             requestObserver.onCompleted();
 
             // 4. 응답 대기
@@ -85,8 +84,6 @@ public class GrpcOcrClient {
         } catch (Exception e) {
             log.error("❌ 파일 전송 중 예외 발생", e);
             throw new RuntimeException(e);
-        } finally {
-            channel.shutdown();
         }
 
         return responseHolder[0];
