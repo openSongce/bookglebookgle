@@ -14,13 +14,13 @@ interface AuthApi {
     suspend fun sendAuthCode(@Body request: SendCodeRequest): Response<Unit>
 
     @POST("auth/email/verify")
-    suspend fun verifyAuthCode(@Body request: VerifyCodeRequest): Response<Unit>
+    suspend fun verifyAuthCode(@Body request: VerifyCodeRequest): Response<Boolean>
 
-    @POST("auth/signup")
+    @POST("auth/signup/email")
     suspend fun register(@Body request: RegisterRequest): Response<Unit>
 
-    @GET("auth/check-nickname")
-    suspend fun checkNickname(@Query("nickname") nickname: String)
+    @GET("auth/check/nickname")
+    suspend fun checkNickname(@Query("nickname") nickname: String): Response<Boolean>
 
 
 }

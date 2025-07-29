@@ -1,36 +1,35 @@
 package com.ssafy.bookglebookgle.di
 
-import com.ssafy.bookglebookgle.network.api.AuthApi
-import com.ssafy.bookglebookgle.network.api.LoginApi
-import com.ssafy.bookglebookgle.network.api.PdfApi
 import com.ssafy.bookglebookgle.repository.AuthRepository
+import com.ssafy.bookglebookgle.repository.AuthRepositoryImpl
+import com.ssafy.bookglebookgle.repository.LoginRepositoryImpl
 import com.ssafy.bookglebookgle.repository.LoginRepository
 import com.ssafy.bookglebookgle.repository.PdfRepository
+import com.ssafy.bookglebookgle.repository.PdfRepositoryImpl
+import dagger.Binds
 import dagger.Module
-import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
 @Module
 @InstallIn(SingletonComponent::class)
-object RepositoryModule {
+abstract class RepositoryModule {
 
-    @Provides
+    @Binds
     @Singleton
-    fun provideLoginRepository(loginApi: LoginApi): LoginRepository {
-        return LoginRepository(loginApi)
-    }
+    abstract fun bindLoginRepository(
+        impl: LoginRepositoryImpl
+    ): LoginRepository
 
-    @Provides
-    @Singleton
-    fun provideAuthRepository(authApi: AuthApi): AuthRepository {
-        return AuthRepository(authApi)
-    }
+    @Binds
+    abstract fun bindAuthRepository(
+        impl: AuthRepositoryImpl
+    ): AuthRepository
 
-    @Provides
-    @Singleton
-    fun procidePdfRepository(pdfApi: PdfApi): PdfRepository {
-        return PdfRepository(pdfApi)
-    }
+    @Binds
+    abstract fun bindPdfRepository(
+        impl: PdfRepositoryImpl
+    ): PdfRepository
+
 }

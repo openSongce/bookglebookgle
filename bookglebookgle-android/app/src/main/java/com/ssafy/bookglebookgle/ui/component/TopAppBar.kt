@@ -21,9 +21,11 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.max
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.ssafy.bookglebookgle.R
+import com.ssafy.bookglebookgle.util.ScreenSize
 import com.ssafy.bookglebookgle.navigation.Screen
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -66,6 +68,8 @@ fun CustomTopAppBar(
                 Text(
                     text = "내 프로필",
                     fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(start = 24.dp).fillMaxWidth()
                 )
             }
             else if(title == "my_group"){
@@ -117,6 +121,15 @@ fun CustomTopAppBar(
                         modifier = Modifier.size(20.dp)
                     )
                 }
+            }else if(title == "my_page"){
+                    Icon(
+                        painter = painterResource(id = R.drawable.my_profile_setting), // 톱니바퀴 아이콘
+                        contentDescription = "설정",
+                        modifier = Modifier
+                            .padding(end = 16.dp)
+                            .size(24.dp)
+                            .clickable { /* TODO: 설정 클릭 동작 */ }
+                    )
             }
             else if(title == "create_group") {
                 Icon(
