@@ -3,7 +3,7 @@ server:
 
 ocr:
   server:
-    url: http://bgbg-container:50052/ocr
+    url: bgbg-container:50052
 
 spring:
   config:
