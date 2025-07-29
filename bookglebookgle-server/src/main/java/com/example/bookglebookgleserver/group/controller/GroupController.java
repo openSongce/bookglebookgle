@@ -1,6 +1,7 @@
 package com.example.bookglebookgleserver.group.controller;
 
 import com.example.bookglebookgleserver.group.dto.GroupCreateRequestDto;
+import com.example.bookglebookgleserver.group.dto.GroupListResponseDto;
 import com.example.bookglebookgleserver.group.service.GroupService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -12,6 +13,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.util.List;
+
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/group")
@@ -61,5 +65,11 @@ public class GroupController {
     ) {
         groupService.createGroupWithoutOcr(groupDto, pdfFile, token);
         return ResponseEntity.ok("OCR 없이 그룹 생성 완료");
+    }
+
+    @GetMapping("/list")
+    public ResponseEntity<List<GroupListResponseDto>> getGroupList() {
+        List<GroupListResponseDto> groupList = groupService.getGroupList();
+        return ResponseEntity.ok(groupList);
     }
 }

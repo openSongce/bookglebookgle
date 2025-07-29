@@ -41,6 +41,8 @@ public class Group {
 
     private LocalDateTime schedule;
 
+    private float progressPercent;  // 그룹 전체의 현재 진도율
+
     private int groupMaxNum;
 
     @Enumerated(EnumType.STRING)

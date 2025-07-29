@@ -6,7 +6,9 @@ import com.example.bookglebookgleserver.global.exception.BadRequestException;
 import com.example.bookglebookgleserver.global.exception.NotFoundException;
 import com.example.bookglebookgleserver.global.util.AuthUtil;
 import com.example.bookglebookgleserver.group.dto.GroupCreateRequestDto;
+import com.example.bookglebookgleserver.group.dto.GroupListResponseDto;
 import com.example.bookglebookgleserver.group.entity.Group;
+import com.example.bookglebookgleserver.group.repository.GroupMemberRepository;
 import com.example.bookglebookgleserver.group.repository.GroupRepository;
 import com.example.bookglebookgleserver.ocr.grpc.GrpcOcrClient;
 import com.example.bookglebookgleserver.ocr.service.OcrService;
@@ -23,6 +25,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.List;
 
 @Slf4j
 @Service
@@ -30,6 +33,7 @@ import java.time.format.DateTimeParseException;
 public class GroupServiceImpl implements GroupService {
 
     private final GroupRepository groupRepository;
+    private final GroupMemberRepository groupMemberRepository;
     private final PdfFileRepository pdfRepository;
     private final UserRepository userRepository;
     private final GrpcOcrClient grpcOcrClient;
@@ -111,5 +115,26 @@ public class GroupServiceImpl implements GroupService {
         dto.setImageBased(false); // 강제 비활성화
         createGroup(dto, pdfFile, token);
     }
+
+    @Override
+    public List<GroupListResponseDto> getGroupList() {
+        List<Group> groups = groupRepository.findAll();
+        return groups.stream()
+                .map(group -> {
+                    int currentNum = groupMemberRepository.countByGroup(group);
+                    return GroupListResponseDto.builder()
+                            .groupId(group.getId())
+                            .roomTitle(group.getRoomTitle())
+                            .description(group.getDescription())
+                            .category(group.getCategory().name())
+                            .groupMaxNum(group.getGroupMaxNum())
+                            .currentNum(currentNum)
+                            .minimumRating(group.getMinRequiredRating())
+                            .build();
+                })
+                .toList();
+    }
+
+
 }
 
