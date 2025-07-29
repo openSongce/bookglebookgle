@@ -34,7 +34,7 @@ public class KakaoAuthController {
             @ApiResponse(responseCode = "400", description = "인증 코드가 유효하지 않음"),
             @ApiResponse(responseCode = "500", description = "서버 오류")
     })
-    @PostMapping("/kakao/callback")
+    @PostMapping("/oauth/kakao")
     public ResponseEntity<?> kakaoCallback(@RequestBody String code) {
         String accessToken = kakaoOAuthService.getAccessToken(code);
         JsonNode userInfo = kakaoOAuthService.getUserInfo(accessToken);

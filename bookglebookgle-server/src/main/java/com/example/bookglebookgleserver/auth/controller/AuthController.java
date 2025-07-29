@@ -136,7 +136,7 @@ public class AuthController {
 
 
 
-    @PostMapping("/signup")
+    @PostMapping("/signup/email")
     public ResponseEntity<String> signup(@RequestBody SignupRequest request) {
         System.out.println("signup 요청 도달");
 
@@ -171,7 +171,7 @@ public class AuthController {
             @ApiResponse(responseCode = "400", description = "ID Token이 유효하지 않음"),
             @ApiResponse(responseCode = "500", description = "서버 오류")
     })
-    @PostMapping("/google")
+    @PostMapping("/oauth/google")
     public ResponseEntity<?> loginWithGoogle(@RequestBody Map<String, String> body) {
         String idToken = body.get("idToken");
 
