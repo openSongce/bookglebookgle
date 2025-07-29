@@ -3,7 +3,7 @@ server:
 
 ocr:
   server:
-    url: bgbg-container:50052
+    url: host.docker.internal:50052
 
 spring:
   config:
