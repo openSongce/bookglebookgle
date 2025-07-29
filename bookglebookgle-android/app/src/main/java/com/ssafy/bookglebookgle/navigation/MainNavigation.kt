@@ -23,6 +23,7 @@ import com.ssafy.bookglebookgle.pdf.ui.screen.CommentsListScreen
 import com.ssafy.bookglebookgle.pdf.ui.screen.HighlightListScreen
 import com.ssafy.bookglebookgle.ui.screen.LoginScreen
 import com.ssafy.bookglebookgle.ui.screen.MainScreen
+import com.ssafy.bookglebookgle.ui.screen.ProfileScreen
 import com.ssafy.bookglebookgle.ui.screen.RegisterScreen
 import com.ssafy.bookglebookgle.ui.screen.SplashScreen
 
@@ -92,33 +93,7 @@ fun MainNavigation(
             }
 
             composable(BottomNavItem.Profile.route) {
-                val currentEntry = navController.currentBackStackEntry
-                val pdfDeleted = currentEntry?.savedStateHandle?.get<Boolean>(NavKeys.PDF_DELETED) ?: false
-                val pdfAdded = currentEntry?.savedStateHandle?.get<Boolean>(NavKeys.PDF_ADDED) ?: false
-
-                PdfScreen(
-                    onBackPressed = {
-                        // 바텀 네비게이션에서는 뒤로가기 불필요
-                    },
-                    onNavigateToAddPdf = { pageType ->
-                        navController.currentBackStackEntry?.savedStateHandle?.set(NavKeys.PAGE_TYPE, pageType)
-                        navController.navigate(Screen.AddPdfScreen.route)
-                    },
-                    onNavigateToPdfReader = { pdfDetails ->
-                        navController.currentBackStackEntry?.savedStateHandle?.set(NavKeys.PDF_DETAILS, pdfDetails)
-                        navController.navigate(Screen.PdfReaderScreen.route)
-                    },
-                    onPdfAdded = {
-                        if (pdfAdded) {
-                            navController.currentBackStackEntry?.savedStateHandle?.remove<Boolean>(NavKeys.PDF_ADDED)
-                        }
-                    },
-                    onPdfDeleted = {
-                        if (pdfDeleted) {
-                            navController.currentBackStackEntry?.savedStateHandle?.remove<Boolean>(NavKeys.PDF_DELETED)
-                        }
-                    }
-                )
+                ProfileScreen(navController)
             }
 
             composable(Screen.AddPdfScreen.route) {

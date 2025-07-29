@@ -1,35 +1,11 @@
 package com.ssafy.bookglebookgle.repository
 
-// LoginRepository.kt
+import com.ssafy.bookglebookgle.entity.*
 
-
-import com.ssafy.bookglebookgle.entity.GoogleLoginRequest
-import com.ssafy.bookglebookgle.entity.KakaoLoginRequest
-import com.ssafy.bookglebookgle.network.api.LoginApi
-import com.ssafy.bookglebookgle.entity.LoginRequest
-import com.ssafy.bookglebookgle.entity.LoginResponse
-import com.ssafy.bookglebookgle.entity.RefreshRequest
-import javax.inject.Inject
-
-class LoginRepository @Inject constructor(
-    private val loginApi: LoginApi
-) {
-    suspend fun login(id: String, password: String): LoginResponse {
-        val request = LoginRequest(id, password)
-        return loginApi.login(request)
-    }
-
-    suspend fun refreshToken(refreshToken: String) =
-        loginApi.refreshToken(RefreshRequest(refreshToken))
-
-    suspend fun loginWithGoogle(idToken: String): LoginResponse {
-        return loginApi.googleLogin(GoogleLoginRequest(idToken))
-    }
-
-    suspend fun loginWithKakao(accessToken: String): LoginResponse {
-        return loginApi.kakaoLogin(KakaoLoginRequest(accessToken))
-    }
-
-
+interface LoginRepository {
+    suspend fun login(id: String, password: String): LoginResponse
+    suspend fun refreshToken(refreshToken: String): LoginResponse
+    suspend fun loginWithGoogle(idToken: String): LoginResponse
+    suspend fun loginWithKakao(accessToken: String): LoginResponse
+    suspend fun logout(refreshToken: String)
 }
-

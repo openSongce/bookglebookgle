@@ -1,5 +1,6 @@
 package com.ssafy.bookglebookgle.ui.component
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,8 +20,10 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.max
 import androidx.compose.ui.unit.sp
 import com.ssafy.bookglebookgle.R
+import com.ssafy.bookglebookgle.util.ScreenSize
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,6 +59,8 @@ fun CustomTopAppBar(
                 Text(
                     text = "내 프로필",
                     fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(start = 24.dp).fillMaxWidth()
                 )
             }
             else if(title == "my_group"){
@@ -75,32 +80,45 @@ fun CustomTopAppBar(
         navigationIcon = {
         },
         actions = {
-            if(title == "main_home"){
-                Row(
-                    modifier = Modifier
-                        .padding(end = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+            when (title) {
+                "main_home" -> {
+                    Row(
+                        modifier = Modifier.padding(end = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.main_meetingplus),
+                            contentDescription = "모임 추가",
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Icon(
+                            painter = painterResource(id = R.drawable.main_alarm),
+                            contentDescription = "알람",
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Icon(
+                            painter = painterResource(id = R.drawable.main_search),
+                            contentDescription = "검색",
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+
+                "my_page" -> {
                     Icon(
-                        painter = painterResource(id = R.drawable.main_meetingplus),
-                        contentDescription = "모임 추가",
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Icon(
-                        painter = painterResource(id = R.drawable.main_alarm),
-                        contentDescription = "알람",
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Icon(
-                        painter = painterResource(id = R.drawable.main_search),
-                        contentDescription = "검색",
-                        modifier = Modifier.size(20.dp)
+                        painter = painterResource(id = R.drawable.my_profile_setting), // 톱니바퀴 아이콘
+                        contentDescription = "설정",
+                        modifier = Modifier
+                            .padding(end = 16.dp)
+                            .size(24.dp)
+                            .clickable { /* TODO: 설정 클릭 동작 */ }
                     )
                 }
             }
-        },
+        }
+        ,
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = Color.White,
         )

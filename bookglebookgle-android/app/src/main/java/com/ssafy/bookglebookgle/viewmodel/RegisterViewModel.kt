@@ -90,7 +90,7 @@ class RegisterViewModel @Inject constructor(
     private fun startResendTimer() {
         resendTimerJob?.cancel()
         resendTimerJob = viewModelScope.launch {
-            delay(60000) // 60초
+            delay(300000) // 5분
             isRequestButtonEnabled = true
         }
     }
