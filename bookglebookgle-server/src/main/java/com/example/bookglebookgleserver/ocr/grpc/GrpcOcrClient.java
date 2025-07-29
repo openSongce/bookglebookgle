@@ -27,10 +27,12 @@ public class GrpcOcrClient {
 
     @PostConstruct
     public void init() {
+        String[] parts = ocrServerUrl.split(":");
         ManagedChannel channel = ManagedChannelBuilder
-                .forTarget(ocrServerUrl)
+                .forAddress(parts[0], Integer.parseInt(parts[1]))
                 .usePlaintext()
                 .build();
+
         this.stub = AIServiceGrpc.newStub(channel);
         log.info("✅ gRPC 클라이언트 초기화 완료 - URL: {}", ocrServerUrl);
     }
