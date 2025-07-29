@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.PdfFile
 import com.ssafy.bookglebookgle.repository.GroupRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -74,6 +75,10 @@ class GroupRegisterViewModel @Inject constructor(
     var selectedPdfFileName by mutableStateOf("")
         private set
 
+    // 최소 요구 평점 추가
+    var minRequiredRating by mutableStateOf(0)
+        private set
+
     // UI 업데이트 함수들
     fun updateCategory(category: String) {
         selectedCategory = if (selectedCategory == category) "" else category
@@ -108,12 +113,17 @@ class GroupRegisterViewModel @Inject constructor(
         selectedPdfFileName = fileName
     }
 
+    // 최소 요구 평점 업데이트 함수
+    fun updateMinRequiredRating(rating: Int) {
+        minRequiredRating = rating
+    }
+
     // 입력 검증
     fun isFormValid(): Boolean {
         return groupName.isNotEmpty() &&
                 selectedCategory.isNotEmpty() &&
                 selectedDateTime.isNotEmpty() &&
-                selectedPdfUri != null
+                PdfFile != null
     }
 
     // 카테고리를 서버 형식으로 변환
@@ -137,7 +147,7 @@ class GroupRegisterViewModel @Inject constructor(
     }
 
     // JSON 생성
-    private fun createGroupInfoJson(): String {
+    private fun createGroupInfoJson(isOcrRequired: Boolean): String {
         val json = JSONObject().apply {
             put("roomTitle", groupName)
             put("description", groupDescription)
@@ -145,8 +155,8 @@ class GroupRegisterViewModel @Inject constructor(
             put("schedule", formatDateTimeForServer(selectedDateTime))
             put("groupMaxNum", maxMembers)
             put("readingMode", ReadingMode.FOLLOW.value)
-            put("minRequiredRating", 4)
-            put("imageBased", true)
+            put("minRequiredRating", minRequiredRating)
+            put("imageBased", if (isOcrRequired) "true" else "false")
         }
         return json.toString()
     }
@@ -157,22 +167,50 @@ class GroupRegisterViewModel @Inject constructor(
         return MultipartBody.Part.createFormData("file", file.name, requestFile)
     }
 
-    // 그룹 생성 (OCR 포함)
-    fun createGroup(pdfFile: File) {
+    /**
+     * OCR 필요 여부에 따라 적절한 API를 호출하는 통합 메서드
+     * @param isOcrRequired OCR이 필요한지 여부
+     */
+    fun createGroupWithPdf(
+        isOcrRequired: Boolean
+    ) {
+        val currentPdfFile = pdfFile
+        if (currentPdfFile == null || !currentPdfFile.exists()) {
+            _uiState.value = _uiState.value.copy(
+                errorMessage = "PDF 파일이 선택되지 않았습니다."
+            )
+            return
+        }
+
         viewModelScope.launch {
             try {
                 _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
 
-                val groupInfoJson = createGroupInfoJson()
+                val groupInfoJson = createGroupInfoJson(isOcrRequired)
                 val groupInfoRequestBody = groupInfoJson.toRequestBody("application/json".toMediaTypeOrNull())
-                val filePart = createPdfMultipart(pdfFile)
+                val filePart = createPdfMultipart(currentPdfFile)
 
-                Log.d(TAG, "Creating group with OCR: $groupInfoJson")
+                Log.d(TAG, "Creating group - OCR Required: $isOcrRequired")
+                Log.d(TAG, "Min Required Rating: $minRequiredRating")
+                Log.d(TAG, "ImageBased field will be set to: ${if (isOcrRequired) "true" else "false"}")
+                Log.d(TAG, "PDF File: ${currentPdfFile.name}, Size: ${currentPdfFile.length()} bytes")
+                Log.d(TAG, "Group Info JSON: $groupInfoJson")
 
-                val response = groupRepository.createGroup(
-                    groupInfo = groupInfoRequestBody,
-                    file = filePart,
-                )
+                val response = if (isOcrRequired) {
+                    // OCR이 필요한 경우 (이미지 기반 PDF)
+                    Log.d(TAG, "Calling createGroup API (with OCR)")
+                    groupRepository.createGroup(
+                        groupInfo = groupInfoRequestBody,
+                        file = filePart,
+                    )
+                } else {
+                    // OCR이 불필요한 경우 (텍스트 추출 가능 PDF)
+                    Log.d(TAG, "Calling createGroupWithoutOcr API")
+                    groupRepository.createGroupWithoutOcr(
+                        groupInfo = groupInfoRequestBody,
+                        file = filePart,
+                    )
+                }
 
                 if (response.isSuccessful) {
                     _uiState.value = _uiState.value.copy(
@@ -181,60 +219,45 @@ class GroupRegisterViewModel @Inject constructor(
                     )
                     Log.d(TAG, "Group created successfully")
                 } else {
+                    val errorBody = response.errorBody()?.string()
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        errorMessage = "그룹 생성에 실패했습니다. (${response.code()})"
+                        errorMessage = "그룹 생성에 실패했습니다. (${response.code()}) $errorBody"
                     )
-                    Log.d(TAG, "Group creation failed: ${response.code()}")
+                    Log.e(TAG, "Group creation failed: ${response.code()}, Error: $errorBody")
                 }
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     errorMessage = "네트워크 오류가 발생했습니다: ${e.message}"
                 )
-                Log.d(TAG, "Group creation error", e)
+                Log.e(TAG, "Group creation error", e)
             }
         }
     }
 
-    // 그룹 생성 (OCR 없음)
+    fun updatePdfFile(file: File) {
+        pdfFile = file
+        selectedPdfFileName = file.name
+        Log.d(TAG, "PDF file updated: ${file.name}, Size: ${file.length()} bytes")
+        Log.d(TAG, "Form valid after PDF update: ${isFormValid()}")
+    }
+
+    fun resetPdfFile() {
+        pdfFile = null
+        selectedPdfFileName = ""
+        Log.d(TAG, "PDF file reset, Form valid: ${isFormValid()}")
+    }
+
+    // 그룹 생성 (OCR 포함)
+    fun createGroup(pdfFile: File) {
+        this.pdfFile = pdfFile
+        createGroupWithPdf(isOcrRequired = true)
+    }
+
     fun createGroupWithoutOcr(pdfFile: File) {
-        viewModelScope.launch {
-            try {
-                _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
-
-                val groupInfoJson = createGroupInfoJson()
-                val groupInfoRequestBody = groupInfoJson.toRequestBody("application/json".toMediaTypeOrNull())
-                val filePart = createPdfMultipart(pdfFile)
-
-                Log.d(TAG, "Creating group without OCR: $groupInfoJson")
-
-                val response = groupRepository.createGroupWithoutOcr(
-                    groupInfo = groupInfoRequestBody,
-                    file = filePart,
-                )
-
-                if (response.isSuccessful) {
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        isSuccess = true
-                    )
-                    Log.d(TAG, "Group created successfully without OCR")
-                } else {
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        errorMessage = "그룹 생성에 실패했습니다. (${response.code()})"
-                    )
-                    Log.d(TAG, "Group creation failed: ${response.code()}")
-                }
-            } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    errorMessage = "네트워크 오류가 발생했습니다: ${e.message}"
-                )
-                Log.d(TAG, "Group creation error", e)
-            }
-        }
+        this.pdfFile = pdfFile
+        createGroupWithPdf(isOcrRequired = false)
     }
 
     // 상태 초기화
@@ -252,5 +275,23 @@ class GroupRegisterViewModel @Inject constructor(
         showDateTimePicker = false
         selectedPdfUri = null
         selectedPdfFileName = ""
+        pdfFile = null
+        minRequiredRating = 0
+    }
+
+    /**
+     * 현재 선택된 PDF 파일 정보 로깅
+     */
+    fun logCurrentState() {
+        Log.d(TAG, """
+            현재 상태:
+            - 그룹명: $groupName
+            - 카테고리: $selectedCategory
+            - 최대 인원: $maxMembers
+            - 일정: $selectedDateTime
+             최소 요구 평점: $minRequiredRating
+            - PDF 파일: ${pdfFile?.name ?: "없음"}
+            - 폼 유효성: ${isFormValid()}
+        """.trimIndent())
     }
 }
