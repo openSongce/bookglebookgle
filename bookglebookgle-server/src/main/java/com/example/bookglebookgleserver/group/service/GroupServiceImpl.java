@@ -118,21 +118,34 @@ public class GroupServiceImpl implements GroupService {
 
     @Override
     public List<GroupListResponseDto> getGroupList() {
+        log.info("📌 [GroupService] 그룹 목록 조회 시작");
+
         List<Group> groups = groupRepository.findAll();
+        log.info("📌 [GroupService] 조회된 그룹 수: {}", groups.size());
+
         return groups.stream()
                 .map(group -> {
-                    int currentNum = groupMemberRepository.countByGroup(group);
-                    return GroupListResponseDto.builder()
-                            .groupId(group.getId())
-                            .roomTitle(group.getRoomTitle())
-                            .description(group.getDescription())
-                            .category(group.getCategory().name())
-                            .groupMaxNum(group.getGroupMaxNum())
-                            .currentNum(currentNum)
-                            .minimumRating(group.getMinRequiredRating())
-                            .build();
+                    try {
+                        log.info("📌 그룹 ID: {}, 제목: {}", group.getId(), group.getRoomTitle());
+
+                        int currentNum = groupMemberRepository.countByGroup(group);  // 💥 예외 가능성
+                        log.info("📌 currentNum 조회 완료: {}", currentNum);
+
+                        return GroupListResponseDto.builder()
+                                .groupId(group.getId())
+                                .roomTitle(group.getRoomTitle())
+                                .description(group.getDescription())
+                                .category(group.getCategory().name())
+                                .groupMaxNum(group.getGroupMaxNum())
+                                .currentNum(currentNum)
+                                .minimumRating(group.getMinRequiredRating())
+                                .build();
+                    } catch (Exception e) {
+                        log.error("❌ 그룹 ID {} 의 currentNum 조회 중 예외 발생", group.getId(), e);
+                        throw new RuntimeException("그룹 정보 처리 중 오류 발생");
+                    }
                 })
-                .toList();
+                .collect(java.util.stream.Collectors.toList()); // ✅ Java 11 이하 대응
     }
 
 
