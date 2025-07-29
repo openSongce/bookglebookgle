@@ -49,7 +49,6 @@ import java.io.File
 // Font families
 private val JakartaSansSemiBold = FontFamily(Font(R.font.jakarta_sans_semibold_600, FontWeight.SemiBold))
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PdfReaderScreen(
     pdfDetails: PdfNoteListModel,
@@ -561,7 +560,7 @@ private fun TopAppBar(
     onBackPressed: () -> Unit,
     onMoreOptionsClick: () -> Unit
 ) {
-    androidx.compose.material3.TopAppBar(
+    TopAppBar(
         title = {
             Text(
                 text = title,
