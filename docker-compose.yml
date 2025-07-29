@@ -29,8 +29,6 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       MAIL_USERNAME: ${MAIL_USERNAME}
       MAIL_PASSWORD: ${MAIL_PASSWORD}
-    networks:
-      - app-net
 
   bgbg-container:
     image: bgbg-ai-server
