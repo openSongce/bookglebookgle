@@ -2,6 +2,7 @@ package com.ssafy.bookglebookgle.viewmodel
 
 // LoginViewModel.kt
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -34,7 +35,8 @@ class LoginViewModel @Inject constructor(
 
             } catch (e: Exception) {
                 e.printStackTrace()
-                errorMessage.value = "로그인에 실패했습니다: ${e.message}"
+                Log.d("login", "login: ${e.message}")
+                errorMessage.value = "아이디 또는 비밀번호를 확인해주세요."
                 loginSuccess.value = false
             }
         }
