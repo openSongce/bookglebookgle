@@ -8,13 +8,13 @@ import com.google.api.client.json.gson.GsonFactory;
 import java.util.Collections;
 
 public class GoogleTokenVerifier {
-    private static final String CLIENT_ID = "YOUR-WEB-CLIENT-ID"; // Google Cloud Console에서 받은 웹 클라이언트 ID
+    private static final String GOOGLE_CLIENT_ID = "506257640023-8t29bfk4cqp6pjkcgf6bb48ptj9go5pl.apps.googleusercontent.com"; // Google Cloud Console에서 받은 웹 클라이언트 ID
 
     public static GoogleIdToken.Payload verify(String idTokenString) {
         try {
             GoogleIdTokenVerifier verifier = new GoogleIdTokenVerifier.Builder(
                     new NetHttpTransport(), new GsonFactory())
-                    .setAudience(Collections.singletonList(CLIENT_ID))
+                    .setAudience(Collections.singletonList(GOOGLE_CLIENT_ID))
                     .build();
 
             GoogleIdToken idToken = verifier.verify(idTokenString);
