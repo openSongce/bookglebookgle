@@ -37,6 +37,15 @@ fun RegisterScreen(navController: NavController, registerViewModel: RegisterView
         }
     }
 
+    LaunchedEffect(registerViewModel.loginFailed) {
+        if (registerViewModel.loginFailed) {
+            navController.navigate("login") {
+                popUpTo("register") { inclusive = true }
+            }
+            registerViewModel.resetLoginFailed() // 여기서 다시 false로 바꾸기
+        }
+    }
+
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val maxW = maxWidth

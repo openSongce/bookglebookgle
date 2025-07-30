@@ -17,12 +17,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.ssafy.bookglebookgle.R
 import com.ssafy.bookglebookgle.navigation.Screen
 import com.ssafy.bookglebookgle.ui.component.CustomTopAppBar
@@ -58,15 +61,22 @@ fun ProfileScreen(navController: NavHostController, viewModel: ProfileViewModel 
             modifier = Modifier.size(profileImageSize),
             contentAlignment = Alignment.BottomEnd
         ) {
-            Image(
-                painter = painterResource(id = R.drawable.profile_example), // 사용자 프로필 이미지
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(viewModel.profileImageUrl)
+                    .crossfade(true)
+                    .build(),
                 contentDescription = "프로필 이미지",
                 contentScale = ContentScale.Crop,
+                placeholder = painterResource(R.drawable.profile_example), // 로딩 중 기본 이미지
+                error = painterResource(R.drawable.profile_example),       // 로딩 실패 시
+                fallback = painterResource(R.drawable.profile_example),    // null일 경우
                 modifier = Modifier
                     .fillMaxSize()
                     .clip(CircleShape)
                     .background(Color.LightGray)
             )
+
 
             Box(
                 modifier = Modifier
@@ -92,8 +102,16 @@ fun ProfileScreen(navController: NavHostController, viewModel: ProfileViewModel 
 
         Spacer(modifier = Modifier.height(ScreenSize.height * 0.015f))
 
-        Text("송진우", fontSize = ScreenSize.width.value.times(0.05f).sp, fontWeight = FontWeight.Bold)
-        Text("gews30025@naver.com", fontSize = ScreenSize.width.value.times(0.035f).sp, color = Color(0xFF8D7E6E))
+        Text(
+            viewModel.nickname ?: "닉네임 없음",
+            fontSize = ScreenSize.width.value.times(0.05f).sp,
+            fontWeight = FontWeight.Bold
+        )
+        Text(
+            viewModel.email ?: "이메일 없음",
+            fontSize = ScreenSize.width.value.times(0.035f).sp,
+            color = Color(0xFF8D7E6E)
+        )
         Spacer(modifier = Modifier.height(ScreenSize.height * 0.03f))
         // 구분선
         Box(

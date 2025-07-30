@@ -8,6 +8,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import com.ssafy.bookglebookgle.entity.RegisterStep
 import com.ssafy.bookglebookgle.ui.screen.isValidEmail
+import com.ssafy.bookglebookgle.usecase.LoginUseCase
 import com.ssafy.bookglebookgle.usecase.RegisterUseCase
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -15,13 +16,17 @@ import kotlinx.coroutines.launch
 
 @HiltViewModel
 class RegisterViewModel @Inject constructor(
-    private val registerUseCase: RegisterUseCase
+    private val registerUseCase: RegisterUseCase,
+    private val loginUseCase: LoginUseCase
 ) : ViewModel() {
 
     var step by mutableStateOf(RegisterStep.EMAIL)
         private set
 
     var registerSuccess by mutableStateOf(false)
+        private set
+
+    var loginFailed by mutableStateOf(false)
         private set
 
 
@@ -131,8 +136,14 @@ class RegisterViewModel @Inject constructor(
                 viewModelScope.launch {
                     val success = registerUseCase.registerUser(email, nickname, password)
                     if (success) {
-                        errorMessage = null
-                        registerSuccess = true
+                        val loginSuccess = loginUseCase(email, password)
+                        if (loginSuccess) {
+                            registerSuccess = true
+                            errorMessage = null
+                        } else {
+                            loginFailed = true
+                            errorMessage = "자동 로그인에 실패했습니다. 다시 로그인해주세요."
+                        }
                     } else {
                         errorMessage = "회원가입에 실패했습니다."
                     }
@@ -155,6 +166,10 @@ class RegisterViewModel @Inject constructor(
                 errorMessage = "이미 사용 중인 닉네임입니다."
             }
         }
+    }
+
+    fun resetLoginFailed() {
+        loginFailed = false
     }
 
 }
