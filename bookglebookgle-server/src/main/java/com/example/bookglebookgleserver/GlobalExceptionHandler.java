@@ -15,7 +15,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<?> handleAll(Exception e) {
-        log.error("🔥 전역 예외 발생", e); // 로그 파일에 기록
+        log.info("🔥 전역 예외 발생", e); // 로그 파일에 기록
         e.printStackTrace();              // 콘솔에도 출력
         return ResponseEntity
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
