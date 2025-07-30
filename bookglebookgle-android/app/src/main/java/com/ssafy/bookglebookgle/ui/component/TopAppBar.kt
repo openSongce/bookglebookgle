@@ -43,6 +43,7 @@ fun CustomTopAppBar(
                     text = "북글북글",
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
+                    fontSize = 20.sp,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(start = 68.dp)
@@ -53,7 +54,7 @@ fun CustomTopAppBar(
                     text = "모임 개설",
                     textAlign = TextAlign.Center,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp,
+                    fontSize = 20.sp,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(start = 16.dp)
@@ -70,6 +71,7 @@ fun CustomTopAppBar(
                     text = "내 프로필",
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
+                    fontSize = 20.sp,
                     modifier = Modifier.padding(start = 24.dp).fillMaxWidth()
                 )
             }
@@ -140,11 +142,11 @@ fun CustomTopAppBar(
                 }
             }else if(title == "my_page"){
                     Icon(
-                        painter = painterResource(id = R.drawable.my_profile_setting), // 톱니바퀴 아이콘
+                        painter = painterResource(id = R.drawable.my_profile_setting),
                         contentDescription = "설정",
                         modifier = Modifier
                             .padding(end = 16.dp)
-                            .size(24.dp)
+                            .size(20.dp)
                             .clickable { /* TODO: 설정 클릭 동작 */ }
                     )
             }

@@ -67,9 +67,15 @@ import kotlinx.coroutines.launch
 import androidx.credentials.*
 import com.google.android.libraries.identity.googleid.*
 import android.util.Log
+import androidx.compose.foundation.text.input.InputTransformation.Companion.keyboardOptions
+import androidx.compose.foundation.text.selection.LocalTextSelectionColors
+import androidx.compose.foundation.text.selection.TextSelectionColors
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.credentials.exceptions.GetCredentialException
 import com.kakao.sdk.user.UserApiClient
 import com.ssafy.bookglebookgle.BuildConfig
+import com.ssafy.bookglebookgle.ui.theme.MainColor
 
 
 @Composable
@@ -91,7 +97,8 @@ fun LoginScreen(navController: NavController, loginViewModel: LoginViewModel = h
     val clientId = BuildConfig.GOOGLE_CLIENT_ID
 
     SideEffect {
-        WindowCompat.getInsetsController(window, window.decorView)?.isAppearanceLightStatusBars = true
+        WindowCompat.getInsetsController(window, window.decorView)?.isAppearanceLightStatusBars =
+            true
     }
 
     // 로그인 성공 시 화면 전환
@@ -102,10 +109,11 @@ fun LoginScreen(navController: NavController, loginViewModel: LoginViewModel = h
                     popUpTo("login") { inclusive = true }
                 }
             }
+
             false -> {
-                Toast.makeText(context, "로그인 실패", Toast.LENGTH_SHORT).show()
                 loginViewModel.loginSuccess.value = null // ✅ 다시 초기화
             }
+
             null -> {} // 아무것도 안함
         }
     }
@@ -145,7 +153,8 @@ fun LoginScreen(navController: NavController, loginViewModel: LoginViewModel = h
                     credential is CustomCredential &&
                     credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
                 ) {
-                    val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
+                    val googleIdTokenCredential =
+                        GoogleIdTokenCredential.createFrom(credential.data)
                     val idToken = googleIdTokenCredential.idToken
                     loginViewModel.googleLogin(idToken)
                 }
@@ -182,7 +191,7 @@ fun LoginScreen(navController: NavController, loginViewModel: LoginViewModel = h
                 .fillMaxSize()
                 .padding(horizontal = maxW * 0.08f)// 전체 가로 패딩을 화면의 8%로
                 .padding(WindowInsets.systemBars.asPaddingValues()),
-                horizontalAlignment = Alignment.CenterHorizontally
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Spacer(modifier = Modifier.weight(1f))
 
@@ -209,44 +218,68 @@ fun LoginScreen(navController: NavController, loginViewModel: LoginViewModel = h
 
             Spacer(modifier = Modifier.weight(0.5f))
 
-            OutlinedTextField(
-                value = id,
-                onValueChange = { loginViewModel.id.value = it },
-                placeholder = { Text("아이디를 입력해주세요.") },
-                shape = RoundedCornerShape(maxW * 0.02f),
-                modifier = Modifier.fillMaxWidth(),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(
-                    onDone = {
-                        focusManager.clearFocus()
-                        keyboardController?.hide()  // 👈 키보드 내려감
-                    }
+            CompositionLocalProvider(
+                LocalTextSelectionColors provides TextSelectionColors(
+                    handleColor = Color(0xFF4A90E2), // 드래그 핸들(물방울) 색상
+                    backgroundColor = Color(0xFF0064FF).copy(alpha = 0.3f) // 선택 영역 배경색 (투명도 적용)
                 )
-            )
+            ) {
+                OutlinedTextField(
+                    value = id,
+                    onValueChange = { loginViewModel.id.value = it },
+                    placeholder = { Text("아이디를 입력해주세요.") },
+                    shape = RoundedCornerShape(maxW * 0.02f),
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(
+                        onDone = {
+                            focusManager.clearFocus()
+                            keyboardController?.hide()
+                        }
+                    ),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Color(0xFF4A90E2),
+                        cursorColor = Color(0xFF4A90E2),
+                    )
+                )
+            }
 
             Spacer(modifier = Modifier.weight(0.25f))
 
-            OutlinedTextField(
-                value = password,
-                onValueChange = { loginViewModel.password.value = it },
-                placeholder = { Text("비밀번호를 입력해주세요.") },
-                visualTransformation = PasswordVisualTransformation(),
-                shape = RoundedCornerShape(maxW * 0.02f),
-                modifier = Modifier.fillMaxWidth(),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(
-                    onDone = {
-                        focusManager.clearFocus()
-                        keyboardController?.hide()  // 👈 키보드 내려감
-                    }
+            CompositionLocalProvider(
+                LocalTextSelectionColors provides TextSelectionColors(
+                    handleColor = Color(0xFF4A90E2), // 드래그 핸들(물방울) 색상
+                    backgroundColor = Color(0xFF0064FF).copy(alpha = 0.3f) // 선택 영역 배경색 (투명도 적용)
                 )
-            )
+            ) {
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { loginViewModel.password.value = it },
+                    placeholder = { Text("비밀번호를 입력해주세요.") },
+                    visualTransformation = PasswordVisualTransformation(),
+                    shape = RoundedCornerShape(maxW * 0.02f),
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(
+                        onDone = {
+                            focusManager.clearFocus()
+                            keyboardController?.hide()  // 👈 키보드 내려감
+                        }
+                    ),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Color(0xFF4A90E2), // 포커스 시 테두리 색상
+                        cursorColor = Color(0xFF4A90E2)
+                    )
+                )
+            }
 
             Spacer(modifier = Modifier.weight(0.25f))
 
             // 로그인 버튼
             Button(
-                onClick = { loginViewModel.login() },
+                onClick = {
+                    loginViewModel.login()
+                    loginViewModel.clearFields() },
                 colors = ButtonDefaults.buttonColors(
                     containerColor = if (id.isNotBlank() && password.isNotBlank())
                         Color(0xFFDED0BB) else Color(0xFFCCC7C0)
@@ -325,7 +358,9 @@ fun LoginScreen(navController: NavController, loginViewModel: LoginViewModel = h
             Spacer(modifier = Modifier.weight(1f))
 
             Button(
-                onClick = { navController.navigate("register") },
+                onClick = {
+                    loginViewModel.clearFields()
+                    navController.navigate("register") },
                 colors = ButtonDefaults.outlinedButtonColors(containerColor = Color(0xFFDED0BB)),
                 shape = RoundedCornerShape(maxW * 0.02f),
                 modifier = Modifier
@@ -338,8 +373,6 @@ fun LoginScreen(navController: NavController, loginViewModel: LoginViewModel = h
             Spacer(modifier = Modifier.weight(0.5f))
         }
     }
-
-
 
 
 }
