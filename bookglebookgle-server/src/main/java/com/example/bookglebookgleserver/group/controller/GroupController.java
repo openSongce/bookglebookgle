@@ -1,6 +1,7 @@
 package com.example.bookglebookgleserver.group.controller;
 
 import com.example.bookglebookgleserver.group.dto.GroupCreateRequestDto;
+import com.example.bookglebookgleserver.group.dto.GroupDetailResponse;
 import com.example.bookglebookgleserver.group.dto.GroupListResponseDto;
 import com.example.bookglebookgleserver.group.service.GroupService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -71,5 +72,19 @@ public class GroupController {
     public ResponseEntity<List<GroupListResponseDto>> getGroupList() {
         List<GroupListResponseDto> groupList = groupService.getGroupList();
         return ResponseEntity.ok(groupList);
+    }
+
+    @Operation(
+            summary = "스터디 그룹 상세 조회",
+            description = "groupId를 기반으로 해당 스터디 그룹의 상세 정보를 조회합니다.",
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "조회 성공",
+                            content = @Content(schema = @Schema(implementation = GroupDetailResponse.class))),
+                    @ApiResponse(responseCode = "404", description = "해당 그룹이 존재하지 않음")
+            }
+    )
+    @GetMapping("/{groupId}")
+    public ResponseEntity<GroupDetailResponse> getGroupDetail(@PathVariable("groupId") Long groupId) {
+        return ResponseEntity.ok(groupService.getGroupDetail(groupId));
     }
 }

@@ -6,6 +6,7 @@ import com.example.bookglebookgleserver.global.exception.BadRequestException;
 import com.example.bookglebookgleserver.global.exception.NotFoundException;
 import com.example.bookglebookgleserver.global.util.AuthUtil;
 import com.example.bookglebookgleserver.group.dto.GroupCreateRequestDto;
+import com.example.bookglebookgleserver.group.dto.GroupDetailResponse;
 import com.example.bookglebookgleserver.group.dto.GroupListResponseDto;
 import com.example.bookglebookgleserver.group.entity.Group;
 import com.example.bookglebookgleserver.group.entity.GroupMember;
@@ -172,6 +173,25 @@ public class GroupServiceImpl implements GroupService {
                     }
                 })
                 .collect(java.util.stream.Collectors.toList()); // ✅ Java 11 이하 대응
+    }
+
+    @Override
+    public GroupDetailResponse getGroupDetail(Long groupId) {
+        Group group = groupRepository.findById(groupId)
+                .orElseThrow(() -> new NotFoundException("해당 모임이 존재하지 않습니다."));
+
+        int memberCount = groupMemberRepository.countByGroup(group);
+
+        return new GroupDetailResponse(
+                group.getRoomTitle(),
+                group.getCategory().name(),
+                group.getSchedule(),
+                memberCount,
+                group.getGroupMaxNum(),
+                group.getDescription(),
+                null
+        );
+
     }
 
 
