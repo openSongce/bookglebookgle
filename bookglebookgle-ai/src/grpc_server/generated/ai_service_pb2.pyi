@@ -6,7 +6,7 @@ from typing import ClassVar as _ClassVar, Iterable as _Iterable, Mapping as _Map
 DESCRIPTOR: _descriptor.FileDescriptor
 
 class TextContent(_message.Message):
-    __slots__ = ["text", "language", "context"]
+    __slots__ = ("text", "language", "context")
     TEXT_FIELD_NUMBER: _ClassVar[int]
     LANGUAGE_FIELD_NUMBER: _ClassVar[int]
     CONTEXT_FIELD_NUMBER: _ClassVar[int]
@@ -16,45 +16,37 @@ class TextContent(_message.Message):
     def __init__(self, text: _Optional[str] = ..., language: _Optional[str] = ..., context: _Optional[str] = ...) -> None: ...
 
 class User(_message.Message):
-    __slots__ = ["user_id", "nickname", "email"]
+    __slots__ = ("user_id", "nickname")
     USER_ID_FIELD_NUMBER: _ClassVar[int]
     NICKNAME_FIELD_NUMBER: _ClassVar[int]
-    EMAIL_FIELD_NUMBER: _ClassVar[int]
     user_id: str
     nickname: str
-    email: str
-    def __init__(self, user_id: _Optional[str] = ..., nickname: _Optional[str] = ..., email: _Optional[str] = ...) -> None: ...
+    def __init__(self, user_id: _Optional[str] = ..., nickname: _Optional[str] = ...) -> None: ...
 
 class QuizRequest(_message.Message):
-    __slots__ = ["document_id", "content", "progress_percentage", "question_count", "difficulty_level"]
+    __slots__ = ("document_id", "meeting_id", "content", "progress_percentage")
     DOCUMENT_ID_FIELD_NUMBER: _ClassVar[int]
+    MEETING_ID_FIELD_NUMBER: _ClassVar[int]
     CONTENT_FIELD_NUMBER: _ClassVar[int]
     PROGRESS_PERCENTAGE_FIELD_NUMBER: _ClassVar[int]
-    QUESTION_COUNT_FIELD_NUMBER: _ClassVar[int]
-    DIFFICULTY_LEVEL_FIELD_NUMBER: _ClassVar[int]
     document_id: str
+    meeting_id: str
     content: TextContent
     progress_percentage: int
-    question_count: int
-    difficulty_level: str
-    def __init__(self, document_id: _Optional[str] = ..., content: _Optional[_Union[TextContent, _Mapping]] = ..., progress_percentage: _Optional[int] = ..., question_count: _Optional[int] = ..., difficulty_level: _Optional[str] = ...) -> None: ...
+    def __init__(self, document_id: _Optional[str] = ..., meeting_id: _Optional[str] = ..., content: _Optional[_Union[TextContent, _Mapping]] = ..., progress_percentage: _Optional[int] = ...) -> None: ...
 
 class Question(_message.Message):
-    __slots__ = ["question_text", "options", "correct_answer_index", "explanation", "category"]
+    __slots__ = ("question_text", "options", "correct_answer_index")
     QUESTION_TEXT_FIELD_NUMBER: _ClassVar[int]
     OPTIONS_FIELD_NUMBER: _ClassVar[int]
     CORRECT_ANSWER_INDEX_FIELD_NUMBER: _ClassVar[int]
-    EXPLANATION_FIELD_NUMBER: _ClassVar[int]
-    CATEGORY_FIELD_NUMBER: _ClassVar[int]
     question_text: str
     options: _containers.RepeatedScalarFieldContainer[str]
     correct_answer_index: int
-    explanation: str
-    category: str
-    def __init__(self, question_text: _Optional[str] = ..., options: _Optional[_Iterable[str]] = ..., correct_answer_index: _Optional[int] = ..., explanation: _Optional[str] = ..., category: _Optional[str] = ...) -> None: ...
+    def __init__(self, question_text: _Optional[str] = ..., options: _Optional[_Iterable[str]] = ..., correct_answer_index: _Optional[int] = ...) -> None: ...
 
 class QuizResponse(_message.Message):
-    __slots__ = ["success", "message", "questions", "quiz_id"]
+    __slots__ = ("success", "message", "questions", "quiz_id")
     SUCCESS_FIELD_NUMBER: _ClassVar[int]
     MESSAGE_FIELD_NUMBER: _ClassVar[int]
     QUESTIONS_FIELD_NUMBER: _ClassVar[int]
@@ -66,7 +58,7 @@ class QuizResponse(_message.Message):
     def __init__(self, success: bool = ..., message: _Optional[str] = ..., questions: _Optional[_Iterable[_Union[Question, _Mapping]]] = ..., quiz_id: _Optional[str] = ...) -> None: ...
 
 class ProofreadRequest(_message.Message):
-    __slots__ = ["original_text", "context_text", "user"]
+    __slots__ = ("original_text", "context_text", "user")
     ORIGINAL_TEXT_FIELD_NUMBER: _ClassVar[int]
     CONTEXT_TEXT_FIELD_NUMBER: _ClassVar[int]
     USER_FIELD_NUMBER: _ClassVar[int]
@@ -76,7 +68,7 @@ class ProofreadRequest(_message.Message):
     def __init__(self, original_text: _Optional[_Union[TextContent, _Mapping]] = ..., context_text: _Optional[_Union[TextContent, _Mapping]] = ..., user: _Optional[_Union[User, _Mapping]] = ...) -> None: ...
 
 class TextCorrection(_message.Message):
-    __slots__ = ["original", "corrected", "correction_type", "explanation", "start_position", "end_position"]
+    __slots__ = ("original", "corrected", "correction_type", "explanation", "start_position", "end_position")
     ORIGINAL_FIELD_NUMBER: _ClassVar[int]
     CORRECTED_FIELD_NUMBER: _ClassVar[int]
     CORRECTION_TYPE_FIELD_NUMBER: _ClassVar[int]
@@ -92,7 +84,7 @@ class TextCorrection(_message.Message):
     def __init__(self, original: _Optional[str] = ..., corrected: _Optional[str] = ..., correction_type: _Optional[str] = ..., explanation: _Optional[str] = ..., start_position: _Optional[int] = ..., end_position: _Optional[int] = ...) -> None: ...
 
 class ProofreadResponse(_message.Message):
-    __slots__ = ["success", "message", "corrected_text", "corrections", "confidence_score"]
+    __slots__ = ("success", "message", "corrected_text", "corrections", "confidence_score")
     SUCCESS_FIELD_NUMBER: _ClassVar[int]
     MESSAGE_FIELD_NUMBER: _ClassVar[int]
     CORRECTED_TEXT_FIELD_NUMBER: _ClassVar[int]
@@ -106,29 +98,51 @@ class ProofreadResponse(_message.Message):
     def __init__(self, success: bool = ..., message: _Optional[str] = ..., corrected_text: _Optional[str] = ..., corrections: _Optional[_Iterable[_Union[TextCorrection, _Mapping]]] = ..., confidence_score: _Optional[float] = ...) -> None: ...
 
 class DiscussionInitRequest(_message.Message):
-    __slots__ = ["document_id", "meeting_id", "full_document", "participants"]
+    __slots__ = ("document_id", "meeting_id", "session_id", "participants", "started_at")
     DOCUMENT_ID_FIELD_NUMBER: _ClassVar[int]
     MEETING_ID_FIELD_NUMBER: _ClassVar[int]
-    FULL_DOCUMENT_FIELD_NUMBER: _ClassVar[int]
+    SESSION_ID_FIELD_NUMBER: _ClassVar[int]
     PARTICIPANTS_FIELD_NUMBER: _ClassVar[int]
+    STARTED_AT_FIELD_NUMBER: _ClassVar[int]
     document_id: str
     meeting_id: str
-    full_document: TextContent
+    session_id: str
     participants: _containers.RepeatedCompositeFieldContainer[User]
-    def __init__(self, document_id: _Optional[str] = ..., meeting_id: _Optional[str] = ..., full_document: _Optional[_Union[TextContent, _Mapping]] = ..., participants: _Optional[_Iterable[_Union[User, _Mapping]]] = ...) -> None: ...
+    started_at: int
+    def __init__(self, document_id: _Optional[str] = ..., meeting_id: _Optional[str] = ..., session_id: _Optional[str] = ..., participants: _Optional[_Iterable[_Union[User, _Mapping]]] = ..., started_at: _Optional[int] = ...) -> None: ...
 
 class DiscussionInitResponse(_message.Message):
-    __slots__ = ["success", "message", "discussion_session_id"]
+    __slots__ = ("success", "message", "discussion_topics", "recommended_topic")
     SUCCESS_FIELD_NUMBER: _ClassVar[int]
     MESSAGE_FIELD_NUMBER: _ClassVar[int]
-    DISCUSSION_SESSION_ID_FIELD_NUMBER: _ClassVar[int]
+    DISCUSSION_TOPICS_FIELD_NUMBER: _ClassVar[int]
+    RECOMMENDED_TOPIC_FIELD_NUMBER: _ClassVar[int]
     success: bool
     message: str
-    discussion_session_id: str
-    def __init__(self, success: bool = ..., message: _Optional[str] = ..., discussion_session_id: _Optional[str] = ...) -> None: ...
+    discussion_topics: _containers.RepeatedScalarFieldContainer[str]
+    recommended_topic: str
+    def __init__(self, success: bool = ..., message: _Optional[str] = ..., discussion_topics: _Optional[_Iterable[str]] = ..., recommended_topic: _Optional[str] = ...) -> None: ...
+
+class DiscussionEndRequest(_message.Message):
+    __slots__ = ("meeting_id", "session_id", "ended_at")
+    MEETING_ID_FIELD_NUMBER: _ClassVar[int]
+    SESSION_ID_FIELD_NUMBER: _ClassVar[int]
+    ENDED_AT_FIELD_NUMBER: _ClassVar[int]
+    meeting_id: str
+    session_id: str
+    ended_at: int
+    def __init__(self, meeting_id: _Optional[str] = ..., session_id: _Optional[str] = ..., ended_at: _Optional[int] = ...) -> None: ...
+
+class DiscussionEndResponse(_message.Message):
+    __slots__ = ("success", "message")
+    SUCCESS_FIELD_NUMBER: _ClassVar[int]
+    MESSAGE_FIELD_NUMBER: _ClassVar[int]
+    success: bool
+    message: str
+    def __init__(self, success: bool = ..., message: _Optional[str] = ...) -> None: ...
 
 class ChatMessageRequest(_message.Message):
-    __slots__ = ["discussion_session_id", "sender", "message", "timestamp"]
+    __slots__ = ("discussion_session_id", "sender", "message", "timestamp")
     DISCUSSION_SESSION_ID_FIELD_NUMBER: _ClassVar[int]
     SENDER_FIELD_NUMBER: _ClassVar[int]
     MESSAGE_FIELD_NUMBER: _ClassVar[int]
@@ -140,7 +154,7 @@ class ChatMessageRequest(_message.Message):
     def __init__(self, discussion_session_id: _Optional[str] = ..., sender: _Optional[_Union[User, _Mapping]] = ..., message: _Optional[str] = ..., timestamp: _Optional[int] = ...) -> None: ...
 
 class ChatMessageResponse(_message.Message):
-    __slots__ = ["success", "message", "ai_response", "suggested_topics", "requires_moderation"]
+    __slots__ = ("success", "message", "ai_response", "suggested_topics", "requires_moderation")
     SUCCESS_FIELD_NUMBER: _ClassVar[int]
     MESSAGE_FIELD_NUMBER: _ClassVar[int]
     AI_RESPONSE_FIELD_NUMBER: _ClassVar[int]
@@ -153,44 +167,10 @@ class ChatMessageResponse(_message.Message):
     requires_moderation: bool
     def __init__(self, success: bool = ..., message: _Optional[str] = ..., ai_response: _Optional[str] = ..., suggested_topics: _Optional[_Iterable[str]] = ..., requires_moderation: bool = ...) -> None: ...
 
-class TopicRequest(_message.Message):
-    __slots__ = ["document_id", "document_content", "previous_topics"]
-    DOCUMENT_ID_FIELD_NUMBER: _ClassVar[int]
-    DOCUMENT_CONTENT_FIELD_NUMBER: _ClassVar[int]
-    PREVIOUS_TOPICS_FIELD_NUMBER: _ClassVar[int]
-    document_id: str
-    document_content: TextContent
-    previous_topics: _containers.RepeatedScalarFieldContainer[str]
-    def __init__(self, document_id: _Optional[str] = ..., document_content: _Optional[_Union[TextContent, _Mapping]] = ..., previous_topics: _Optional[_Iterable[str]] = ...) -> None: ...
-
-class TopicResponse(_message.Message):
-    __slots__ = ["success", "message", "discussion_topics", "recommended_topic", "topic_rationale"]
-    SUCCESS_FIELD_NUMBER: _ClassVar[int]
-    MESSAGE_FIELD_NUMBER: _ClassVar[int]
-    DISCUSSION_TOPICS_FIELD_NUMBER: _ClassVar[int]
-    RECOMMENDED_TOPIC_FIELD_NUMBER: _ClassVar[int]
-    TOPIC_RATIONALE_FIELD_NUMBER: _ClassVar[int]
-    success: bool
-    message: str
-    discussion_topics: _containers.RepeatedScalarFieldContainer[str]
-    recommended_topic: str
-    topic_rationale: str
-    def __init__(self, success: bool = ..., message: _Optional[str] = ..., discussion_topics: _Optional[_Iterable[str]] = ..., recommended_topic: _Optional[str] = ..., topic_rationale: _Optional[str] = ...) -> None: ...
-
-class DocumentRequest(_message.Message):
-    __slots__ = ["document_id", "content", "processing_type"]
-    DOCUMENT_ID_FIELD_NUMBER: _ClassVar[int]
-    CONTENT_FIELD_NUMBER: _ClassVar[int]
-    PROCESSING_TYPE_FIELD_NUMBER: _ClassVar[int]
-    document_id: str
-    content: TextContent
-    processing_type: str
-    def __init__(self, document_id: _Optional[str] = ..., content: _Optional[_Union[TextContent, _Mapping]] = ..., processing_type: _Optional[str] = ...) -> None: ...
-
 class DocumentChunk(_message.Message):
-    __slots__ = ["chunk_id", "text", "start_position", "end_position", "embedding", "metadata"]
+    __slots__ = ("chunk_id", "text", "start_position", "end_position", "embedding", "metadata")
     class MetadataEntry(_message.Message):
-        __slots__ = ["key", "value"]
+        __slots__ = ("key", "value")
         KEY_FIELD_NUMBER: _ClassVar[int]
         VALUE_FIELD_NUMBER: _ClassVar[int]
         key: str
@@ -210,10 +190,29 @@ class DocumentChunk(_message.Message):
     metadata: _containers.ScalarMap[str, str]
     def __init__(self, chunk_id: _Optional[str] = ..., text: _Optional[str] = ..., start_position: _Optional[int] = ..., end_position: _Optional[int] = ..., embedding: _Optional[_Iterable[float]] = ..., metadata: _Optional[_Mapping[str, str]] = ...) -> None: ...
 
+class ProcessDocumentRequest(_message.Message):
+    __slots__ = ("document_id", "ocr_results", "file_name", "metadata")
+    class MetadataEntry(_message.Message):
+        __slots__ = ("key", "value")
+        KEY_FIELD_NUMBER: _ClassVar[int]
+        VALUE_FIELD_NUMBER: _ClassVar[int]
+        key: str
+        value: str
+        def __init__(self, key: _Optional[str] = ..., value: _Optional[str] = ...) -> None: ...
+    DOCUMENT_ID_FIELD_NUMBER: _ClassVar[int]
+    OCR_RESULTS_FIELD_NUMBER: _ClassVar[int]
+    FILE_NAME_FIELD_NUMBER: _ClassVar[int]
+    METADATA_FIELD_NUMBER: _ClassVar[int]
+    document_id: str
+    ocr_results: _containers.RepeatedCompositeFieldContainer[TextBlock]
+    file_name: str
+    metadata: _containers.ScalarMap[str, str]
+    def __init__(self, document_id: _Optional[str] = ..., ocr_results: _Optional[_Iterable[_Union[TextBlock, _Mapping]]] = ..., file_name: _Optional[str] = ..., metadata: _Optional[_Mapping[str, str]] = ...) -> None: ...
+
 class DocumentResponse(_message.Message):
-    __slots__ = ["success", "message", "chunks", "analysis_results"]
+    __slots__ = ("success", "message", "chunks", "analysis_results")
     class AnalysisResultsEntry(_message.Message):
-        __slots__ = ["key", "value"]
+        __slots__ = ("key", "value")
         KEY_FIELD_NUMBER: _ClassVar[int]
         VALUE_FIELD_NUMBER: _ClassVar[int]
         key: str
@@ -229,112 +228,71 @@ class DocumentResponse(_message.Message):
     analysis_results: _containers.ScalarMap[str, str]
     def __init__(self, success: bool = ..., message: _Optional[str] = ..., chunks: _Optional[_Iterable[_Union[DocumentChunk, _Mapping]]] = ..., analysis_results: _Optional[_Mapping[str, str]] = ...) -> None: ...
 
-class UserActivityData(_message.Message):
-    __slots__ = ["user_id", "document_ids", "reading_times", "meeting_participations", "quiz_scores", "total_reading_time", "category_preferences"]
-    class CategoryPreferencesEntry(_message.Message):
-        __slots__ = ["key", "value"]
-        KEY_FIELD_NUMBER: _ClassVar[int]
-        VALUE_FIELD_NUMBER: _ClassVar[int]
-        key: str
-        value: int
-        def __init__(self, key: _Optional[str] = ..., value: _Optional[int] = ...) -> None: ...
-    USER_ID_FIELD_NUMBER: _ClassVar[int]
-    DOCUMENT_IDS_FIELD_NUMBER: _ClassVar[int]
-    READING_TIMES_FIELD_NUMBER: _ClassVar[int]
-    MEETING_PARTICIPATIONS_FIELD_NUMBER: _ClassVar[int]
-    QUIZ_SCORES_FIELD_NUMBER: _ClassVar[int]
-    TOTAL_READING_TIME_FIELD_NUMBER: _ClassVar[int]
-    CATEGORY_PREFERENCES_FIELD_NUMBER: _ClassVar[int]
-    user_id: str
-    document_ids: _containers.RepeatedScalarFieldContainer[str]
-    reading_times: _containers.RepeatedScalarFieldContainer[int]
-    meeting_participations: _containers.RepeatedScalarFieldContainer[str]
-    quiz_scores: _containers.RepeatedScalarFieldContainer[float]
-    total_reading_time: int
-    category_preferences: _containers.ScalarMap[str, int]
-    def __init__(self, user_id: _Optional[str] = ..., document_ids: _Optional[_Iterable[str]] = ..., reading_times: _Optional[_Iterable[int]] = ..., meeting_participations: _Optional[_Iterable[str]] = ..., quiz_scores: _Optional[_Iterable[float]] = ..., total_reading_time: _Optional[int] = ..., category_preferences: _Optional[_Mapping[str, int]] = ...) -> None: ...
+class ProcessPdfRequest(_message.Message):
+    __slots__ = ("info", "chunk")
+    INFO_FIELD_NUMBER: _ClassVar[int]
+    CHUNK_FIELD_NUMBER: _ClassVar[int]
+    info: PdfInfo
+    chunk: bytes
+    def __init__(self, info: _Optional[_Union[PdfInfo, _Mapping]] = ..., chunk: _Optional[bytes] = ...) -> None: ...
 
-class UserActivityRequest(_message.Message):
-    __slots__ = ["user_id", "start_date", "end_date"]
-    USER_ID_FIELD_NUMBER: _ClassVar[int]
-    START_DATE_FIELD_NUMBER: _ClassVar[int]
-    END_DATE_FIELD_NUMBER: _ClassVar[int]
-    user_id: str
-    start_date: int
-    end_date: int
-    def __init__(self, user_id: _Optional[str] = ..., start_date: _Optional[int] = ..., end_date: _Optional[int] = ...) -> None: ...
-
-class UserActivityResponse(_message.Message):
-    __slots__ = ["success", "message", "activity_data", "insights", "metrics"]
-    class MetricsEntry(_message.Message):
-        __slots__ = ["key", "value"]
-        KEY_FIELD_NUMBER: _ClassVar[int]
-        VALUE_FIELD_NUMBER: _ClassVar[int]
-        key: str
-        value: float
-        def __init__(self, key: _Optional[str] = ..., value: _Optional[float] = ...) -> None: ...
-    SUCCESS_FIELD_NUMBER: _ClassVar[int]
-    MESSAGE_FIELD_NUMBER: _ClassVar[int]
-    ACTIVITY_DATA_FIELD_NUMBER: _ClassVar[int]
-    INSIGHTS_FIELD_NUMBER: _ClassVar[int]
-    METRICS_FIELD_NUMBER: _ClassVar[int]
-    success: bool
-    message: str
-    activity_data: UserActivityData
-    insights: _containers.RepeatedScalarFieldContainer[str]
-    metrics: _containers.ScalarMap[str, float]
-    def __init__(self, success: bool = ..., message: _Optional[str] = ..., activity_data: _Optional[_Union[UserActivityData, _Mapping]] = ..., insights: _Optional[_Iterable[str]] = ..., metrics: _Optional[_Mapping[str, float]] = ...) -> None: ...
-
-class InterestExtractionRequest(_message.Message):
-    __slots__ = ["user_id", "activity_data", "recent_searches", "bookmarked_topics"]
-    USER_ID_FIELD_NUMBER: _ClassVar[int]
-    ACTIVITY_DATA_FIELD_NUMBER: _ClassVar[int]
-    RECENT_SEARCHES_FIELD_NUMBER: _ClassVar[int]
-    BOOKMARKED_TOPICS_FIELD_NUMBER: _ClassVar[int]
-    user_id: str
-    activity_data: UserActivityData
-    recent_searches: _containers.RepeatedScalarFieldContainer[str]
-    bookmarked_topics: _containers.RepeatedScalarFieldContainer[str]
-    def __init__(self, user_id: _Optional[str] = ..., activity_data: _Optional[_Union[UserActivityData, _Mapping]] = ..., recent_searches: _Optional[_Iterable[str]] = ..., bookmarked_topics: _Optional[_Iterable[str]] = ...) -> None: ...
-
-class InterestExtractionResponse(_message.Message):
-    __slots__ = ["success", "message", "primary_interests", "emerging_interests", "interest_scores", "recommended_categories"]
-    class InterestScoresEntry(_message.Message):
-        __slots__ = ["key", "value"]
-        KEY_FIELD_NUMBER: _ClassVar[int]
-        VALUE_FIELD_NUMBER: _ClassVar[int]
-        key: str
-        value: float
-        def __init__(self, key: _Optional[str] = ..., value: _Optional[float] = ...) -> None: ...
-    SUCCESS_FIELD_NUMBER: _ClassVar[int]
-    MESSAGE_FIELD_NUMBER: _ClassVar[int]
-    PRIMARY_INTERESTS_FIELD_NUMBER: _ClassVar[int]
-    EMERGING_INTERESTS_FIELD_NUMBER: _ClassVar[int]
-    INTEREST_SCORES_FIELD_NUMBER: _ClassVar[int]
-    RECOMMENDED_CATEGORIES_FIELD_NUMBER: _ClassVar[int]
-    success: bool
-    message: str
-    primary_interests: _containers.RepeatedScalarFieldContainer[str]
-    emerging_interests: _containers.RepeatedScalarFieldContainer[str]
-    interest_scores: _containers.ScalarMap[str, float]
-    recommended_categories: _containers.RepeatedScalarFieldContainer[str]
-    def __init__(self, success: bool = ..., message: _Optional[str] = ..., primary_interests: _Optional[_Iterable[str]] = ..., emerging_interests: _Optional[_Iterable[str]] = ..., interest_scores: _Optional[_Mapping[str, float]] = ..., recommended_categories: _Optional[_Iterable[str]] = ...) -> None: ...
-
-class ErrorDetails(_message.Message):
-    __slots__ = ["error_code", "error_message", "error_category", "additional_info"]
-    class AdditionalInfoEntry(_message.Message):
-        __slots__ = ["key", "value"]
+class PdfInfo(_message.Message):
+    __slots__ = ("document_id", "file_name", "metadata")
+    class MetadataEntry(_message.Message):
+        __slots__ = ("key", "value")
         KEY_FIELD_NUMBER: _ClassVar[int]
         VALUE_FIELD_NUMBER: _ClassVar[int]
         key: str
         value: str
         def __init__(self, key: _Optional[str] = ..., value: _Optional[str] = ...) -> None: ...
+    DOCUMENT_ID_FIELD_NUMBER: _ClassVar[int]
+    FILE_NAME_FIELD_NUMBER: _ClassVar[int]
+    METADATA_FIELD_NUMBER: _ClassVar[int]
+    document_id: str
+    file_name: str
+    metadata: _containers.ScalarMap[str, str]
+    def __init__(self, document_id: _Optional[str] = ..., file_name: _Optional[str] = ..., metadata: _Optional[_Mapping[str, str]] = ...) -> None: ...
+
+class TextBlock(_message.Message):
+    __slots__ = ("text", "page_number", "x0", "y0", "x1", "y1", "block_type", "confidence")
+    TEXT_FIELD_NUMBER: _ClassVar[int]
+    PAGE_NUMBER_FIELD_NUMBER: _ClassVar[int]
+    X0_FIELD_NUMBER: _ClassVar[int]
+    Y0_FIELD_NUMBER: _ClassVar[int]
+    X1_FIELD_NUMBER: _ClassVar[int]
+    Y1_FIELD_NUMBER: _ClassVar[int]
+    BLOCK_TYPE_FIELD_NUMBER: _ClassVar[int]
+    CONFIDENCE_FIELD_NUMBER: _ClassVar[int]
+    text: str
+    page_number: int
+    x0: float
+    y0: float
+    x1: float
+    y1: float
+    block_type: str
+    confidence: float
+    def __init__(self, text: _Optional[str] = ..., page_number: _Optional[int] = ..., x0: _Optional[float] = ..., y0: _Optional[float] = ..., x1: _Optional[float] = ..., y1: _Optional[float] = ..., block_type: _Optional[str] = ..., confidence: _Optional[float] = ...) -> None: ...
+
+class ProcessPdfResponse(_message.Message):
+    __slots__ = ("success", "message", "document_id", "total_pages", "text_blocks")
+    SUCCESS_FIELD_NUMBER: _ClassVar[int]
+    MESSAGE_FIELD_NUMBER: _ClassVar[int]
+    DOCUMENT_ID_FIELD_NUMBER: _ClassVar[int]
+    TOTAL_PAGES_FIELD_NUMBER: _ClassVar[int]
+    TEXT_BLOCKS_FIELD_NUMBER: _ClassVar[int]
+    success: bool
+    message: str
+    document_id: str
+    total_pages: int
+    text_blocks: _containers.RepeatedCompositeFieldContainer[TextBlock]
+    def __init__(self, success: bool = ..., message: _Optional[str] = ..., document_id: _Optional[str] = ..., total_pages: _Optional[int] = ..., text_blocks: _Optional[_Iterable[_Union[TextBlock, _Mapping]]] = ...) -> None: ...
+
+class ErrorDetails(_message.Message):
+    __slots__ = ("error_code", "error_message", "error_category")
     ERROR_CODE_FIELD_NUMBER: _ClassVar[int]
     ERROR_MESSAGE_FIELD_NUMBER: _ClassVar[int]
     ERROR_CATEGORY_FIELD_NUMBER: _ClassVar[int]
-    ADDITIONAL_INFO_FIELD_NUMBER: _ClassVar[int]
     error_code: str
     error_message: str
     error_category: str
-    additional_info: _containers.ScalarMap[str, str]
-    def __init__(self, error_code: _Optional[str] = ..., error_message: _Optional[str] = ..., error_category: _Optional[str] = ..., additional_info: _Optional[_Mapping[str, str]] = ...) -> None: ...
+    def __init__(self, error_code: _Optional[str] = ..., error_message: _Optional[str] = ..., error_category: _Optional[str] = ...) -> None: ...

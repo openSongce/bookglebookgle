@@ -5,7 +5,7 @@ Defines data structures for API requests and responses
 
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Optional, Any, Union
+from typing import Dict, List, Optional, Any, Union, Tuple
 
 from pydantic import BaseModel, Field, validator
 
@@ -343,3 +343,29 @@ class ValidationError(BaseModel):
     field: str = Field(..., description="Field with validation error")
     message: str = Field(..., description="Validation error message")
     value: Any = Field(..., description="Invalid value")
+
+
+class OcrBlock(BaseModel):
+    """개별 OCR 블록의 정보를 담는 모델 (gRPC TextBlock과 일치)"""
+    text: str = Field(..., description="추출된 텍스트")
+    page_number: int = Field(..., description="페이지 번호 (1부터 시작)")
+    x0: float = Field(..., description="좌상단 X 좌표")
+    y0: float = Field(..., description="좌상단 Y 좌표") 
+    x1: float = Field(..., description="우하단 X 좌표")
+    y1: float = Field(..., description="우하단 Y 좌표")
+    confidence: float = Field(default=0.0, description="OCR 신뢰도 (0.0-1.0)")
+    block_type: str = Field(default="text", description="블록 타입 (text, image, etc.)")
+
+    @property
+    def bbox(self) -> Tuple[float, float, float, float]:
+        """하위 호환성을 위한 bbox 속성"""
+        return (self.x0, self.y0, self.x1, self.y1)
+        
+
+        
+class ProcessDocumentRequest(BaseModel):
+    """위치 정보가 포함된 OCR 결과를 받는 요청 모델"""
+    document_id: str = Field(..., description="문서 식별자")
+    ocr_results: List[OcrBlock] = Field(..., description="OCR 추출 결과")
+    file_name: Optional[str] = Field(None, description="원본 파일명")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="추가 메타데이터")

@@ -23,7 +23,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # 6. 포트 노출
-EXPOSE 8000 50052
+EXPOSE 8789 50505
 
 # 7. 컨테이너 실행 명령어
 CMD ["python", "main.py"]

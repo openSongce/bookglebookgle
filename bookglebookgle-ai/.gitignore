@@ -280,7 +280,7 @@ $RECYCLE.BIN/
 *.lnk
 
 ec2_code/
-docs/
+
 test_springback/
 .superdesign
 

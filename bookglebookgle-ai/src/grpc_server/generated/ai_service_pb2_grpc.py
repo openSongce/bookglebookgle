@@ -2,10 +2,7 @@
 """Client and server classes corresponding to protobuf-defined services."""
 import grpc
 
-try:
-    from . import ai_service_pb2 as ai__service__pb2
-except ImportError:
-    import ai_service_pb2 as ai__service__pb2
+from . import ai_service_pb2 as ai__service__pb2
 
 
 class AIServiceStub(object):
@@ -38,25 +35,15 @@ class AIServiceStub(object):
                 request_serializer=ai__service__pb2.ChatMessageRequest.SerializeToString,
                 response_deserializer=ai__service__pb2.ChatMessageResponse.FromString,
                 )
-        self.GenerateDiscussionTopic = channel.unary_unary(
-                '/bgbg.ai.AIService/GenerateDiscussionTopic',
-                request_serializer=ai__service__pb2.TopicRequest.SerializeToString,
-                response_deserializer=ai__service__pb2.TopicResponse.FromString,
+        self.EndDiscussion = channel.unary_unary(
+                '/bgbg.ai.AIService/EndDiscussion',
+                request_serializer=ai__service__pb2.DiscussionEndRequest.SerializeToString,
+                response_deserializer=ai__service__pb2.DiscussionEndResponse.FromString,
                 )
-        self.ProcessDocument = channel.unary_unary(
-                '/bgbg.ai.AIService/ProcessDocument',
-                request_serializer=ai__service__pb2.DocumentRequest.SerializeToString,
+        self.ProcessStructuredDocument = channel.unary_unary(
+                '/bgbg.ai.AIService/ProcessStructuredDocument',
+                request_serializer=ai__service__pb2.ProcessDocumentRequest.SerializeToString,
                 response_deserializer=ai__service__pb2.DocumentResponse.FromString,
-                )
-        self.AnalyzeUserActivity = channel.unary_unary(
-                '/bgbg.ai.AIService/AnalyzeUserActivity',
-                request_serializer=ai__service__pb2.UserActivityRequest.SerializeToString,
-                response_deserializer=ai__service__pb2.UserActivityResponse.FromString,
-                )
-        self.ExtractUserInterests = channel.unary_unary(
-                '/bgbg.ai.AIService/ExtractUserInterests',
-                request_serializer=ai__service__pb2.InterestExtractionRequest.SerializeToString,
-                response_deserializer=ai__service__pb2.InterestExtractionResponse.FromString,
                 )
         self.ProcessPdf = channel.stream_unary(
                 '/bgbg.ai.AIService/ProcessPdf',
@@ -96,34 +83,21 @@ class AIServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def GenerateDiscussionTopic(self, request, context):
+    def EndDiscussion(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def ProcessDocument(self, request, context):
+    def ProcessStructuredDocument(self, request, context):
         """Document Processing
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def AnalyzeUserActivity(self, request, context):
-        """User Analytics
-        """
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def ExtractUserInterests(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
     def ProcessPdf(self, request_iterator, context):
-        """PDF OCR Processing
+        """PDF OCR Processing (includes vector DB storage)
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -152,25 +126,15 @@ def add_AIServiceServicer_to_server(servicer, server):
                     request_deserializer=ai__service__pb2.ChatMessageRequest.FromString,
                     response_serializer=ai__service__pb2.ChatMessageResponse.SerializeToString,
             ),
-            'GenerateDiscussionTopic': grpc.unary_unary_rpc_method_handler(
-                    servicer.GenerateDiscussionTopic,
-                    request_deserializer=ai__service__pb2.TopicRequest.FromString,
-                    response_serializer=ai__service__pb2.TopicResponse.SerializeToString,
+            'EndDiscussion': grpc.unary_unary_rpc_method_handler(
+                    servicer.EndDiscussion,
+                    request_deserializer=ai__service__pb2.DiscussionEndRequest.FromString,
+                    response_serializer=ai__service__pb2.DiscussionEndResponse.SerializeToString,
             ),
-            'ProcessDocument': grpc.unary_unary_rpc_method_handler(
-                    servicer.ProcessDocument,
-                    request_deserializer=ai__service__pb2.DocumentRequest.FromString,
+            'ProcessStructuredDocument': grpc.unary_unary_rpc_method_handler(
+                    servicer.ProcessStructuredDocument,
+                    request_deserializer=ai__service__pb2.ProcessDocumentRequest.FromString,
                     response_serializer=ai__service__pb2.DocumentResponse.SerializeToString,
-            ),
-            'AnalyzeUserActivity': grpc.unary_unary_rpc_method_handler(
-                    servicer.AnalyzeUserActivity,
-                    request_deserializer=ai__service__pb2.UserActivityRequest.FromString,
-                    response_serializer=ai__service__pb2.UserActivityResponse.SerializeToString,
-            ),
-            'ExtractUserInterests': grpc.unary_unary_rpc_method_handler(
-                    servicer.ExtractUserInterests,
-                    request_deserializer=ai__service__pb2.InterestExtractionRequest.FromString,
-                    response_serializer=ai__service__pb2.InterestExtractionResponse.SerializeToString,
             ),
             'ProcessPdf': grpc.stream_unary_rpc_method_handler(
                     servicer.ProcessPdf,
@@ -257,7 +221,7 @@ class AIService(object):
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 
     @staticmethod
-    def GenerateDiscussionTopic(request,
+    def EndDiscussion(request,
             target,
             options=(),
             channel_credentials=None,
@@ -267,14 +231,14 @@ class AIService(object):
             wait_for_ready=None,
             timeout=None,
             metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/bgbg.ai.AIService/GenerateDiscussionTopic',
-            ai__service__pb2.TopicRequest.SerializeToString,
-            ai__service__pb2.TopicResponse.FromString,
+        return grpc.experimental.unary_unary(request, target, '/bgbg.ai.AIService/EndDiscussion',
+            ai__service__pb2.DiscussionEndRequest.SerializeToString,
+            ai__service__pb2.DiscussionEndResponse.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 
     @staticmethod
-    def ProcessDocument(request,
+    def ProcessStructuredDocument(request,
             target,
             options=(),
             channel_credentials=None,
@@ -284,43 +248,9 @@ class AIService(object):
             wait_for_ready=None,
             timeout=None,
             metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/bgbg.ai.AIService/ProcessDocument',
-            ai__service__pb2.DocumentRequest.SerializeToString,
+        return grpc.experimental.unary_unary(request, target, '/bgbg.ai.AIService/ProcessStructuredDocument',
+            ai__service__pb2.ProcessDocumentRequest.SerializeToString,
             ai__service__pb2.DocumentResponse.FromString,
-            options, channel_credentials,
-            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
-
-    @staticmethod
-    def AnalyzeUserActivity(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/bgbg.ai.AIService/AnalyzeUserActivity',
-            ai__service__pb2.UserActivityRequest.SerializeToString,
-            ai__service__pb2.UserActivityResponse.FromString,
-            options, channel_credentials,
-            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
-
-    @staticmethod
-    def ExtractUserInterests(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/bgbg.ai.AIService/ExtractUserInterests',
-            ai__service__pb2.InterestExtractionRequest.SerializeToString,
-            ai__service__pb2.InterestExtractionResponse.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 

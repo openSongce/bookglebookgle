@@ -30,6 +30,11 @@ class AISettings(BaseModel):
     OPENROUTER_API_KEY: Optional[str] = Field(default=None, description="OpenRouter API key")
     OPENROUTER_BASE_URL: str = Field(default="https://openrouter.ai/api/v1", description="OpenRouter base URL")
     OPENROUTER_MODEL: str = Field(default="google/gemma-3n-e2b-it:free", description="Default OpenRouter model")
+    
+    # Gemini API settings
+    GEMINI_API_KEY: Optional[str] = Field(default=None, description="Google Gemini API key")
+    GEMINI_MODEL: str = Field(default="gemini-1.5-flash", description="Default Gemini model")
+    GEMINI_BASE_URL: str = Field(default="https://generativelanguage.googleapis.com/v1beta", description="Gemini base URL")
 
     # Feature flags
     ENABLE_QUIZ_GENERATION: bool = Field(default=True, description="Enable quiz generation")
@@ -61,17 +66,20 @@ class GRPCSettings(BaseModel):
 class Settings(BaseSettings):
     """Main application settings"""
     
-    # Server configuration
-    SERVER_HOST: str = Field(default="0.0.0.0", description="Server host")
-    SERVER_PORT: int = Field(default=50052, description="Server port")
-    DEBUG: bool = Field(default=False, description="Debug mode")
+    # Server settings
+    DEBUG: bool = True
+    SERVER_HOST: str = "0.0.0.0"
+    SERVER_PORT: int = 50505
+    SERVER_WORKERS: int = 10
+    SERVER_START_RETRIES: int = 3
+    SERVER_RETRY_DELAY: int = 2  # seconds
     LOG_LEVEL: str = Field(default="INFO", description="Log level")
     
     # Cache configuration
     CACHE_TTL: int = Field(default=3600, description="Cache TTL in seconds")
     
     # Monitoring
-    PROMETHEUS_PORT: int = Field(default=8000, description="Prometheus metrics port")
+    PROMETHEUS_PORT: int = Field(default=9090, description="Prometheus metrics port")
     ENABLE_METRICS: bool = Field(default=True, description="Enable Prometheus metrics")
     
     # Sub-configurations
