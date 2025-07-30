@@ -2,6 +2,7 @@ package com.example.bookglebookgleserver.auth.controller;
 
 
 import com.example.bookglebookgleserver.auth.dto.JwtResponse;
+import com.example.bookglebookgleserver.auth.dto.KakaoLoginRequest;
 import com.example.bookglebookgleserver.auth.service.AuthService;
 import com.example.bookglebookgleserver.auth.service.JwtService;
 import com.example.bookglebookgleserver.auth.service.KakaoOAuthService;
@@ -35,7 +36,8 @@ public class KakaoAuthController {
             @ApiResponse(responseCode = "500", description = "서버 오류")
     })
     @PostMapping("/oauth/kakao")
-    public ResponseEntity<?> kakaoLogin(@RequestBody String accessToken) {
+    public ResponseEntity<?> kakaoLogin(@RequestBody KakaoLoginRequest request) {
+        String accessToken = request.getAccessToken();
         JsonNode userInfo = kakaoOAuthService.getUserInfo(accessToken);
 
         String email = userInfo.get("kakao_account").get("email").asText();
