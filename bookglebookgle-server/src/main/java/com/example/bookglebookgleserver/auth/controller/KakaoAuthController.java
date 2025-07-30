@@ -35,7 +35,7 @@ public class KakaoAuthController {
             @ApiResponse(responseCode = "400", description = "accessToken이 유효하지 않음"),
             @ApiResponse(responseCode = "500", description = "서버 오류")
     })
-    @PostMapping("/auth/oauth/kakao")
+    @PostMapping("/oauth/kakao")
     public ResponseEntity<?> kakaoLogin(@RequestBody String body) {
         System.out.println("🔥 RAW 요청 본문 = " + body);
         return ResponseEntity.ok().build();
