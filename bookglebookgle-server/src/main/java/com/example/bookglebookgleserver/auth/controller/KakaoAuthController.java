@@ -40,21 +40,23 @@ public class KakaoAuthController {
         String accessToken = request.getAccessToken();
         JsonNode userInfo = kakaoOAuthService.getUserInfo(accessToken);
 
-        String email = userInfo.get("kakao_account").get("email").asText();
-        String nicknameRaw = userInfo.get("properties").get("nickname").asText();
+        String kakaoId = userInfo.path("id").asText(); // 고유 ID
+        String nicknameRaw = userInfo.path("properties").path("nickname").asText("카카오사용자");
+        String profileImage = userInfo.path("properties").path("profile_image").asText(null); // null 허용
+
         String nickname = authService.generateUniqueNickname(nicknameRaw);
 
-        // 회원가입 or 로그인
-        User user = userRepository.findByEmail(email)
+        User user = userRepository.findByKakaoId(kakaoId)
                 .orElseGet(() -> userRepository.save(User.builder()
-                        .email(email)
                         .nickname(nickname)
+                        .profileImageUrl(profileImage)
                         .provider("kakao")
                         .build()));
 
-        String jwtAccessToken = jwtService.createAccessToken(user.getEmail());
-        String jwtRefreshToken = jwtService.createRefreshToken(user.getEmail());
+        String jwtAccessToken = jwtService.createAccessToken(user.getEmailOrDefault());
+        String jwtRefreshToken = jwtService.createRefreshToken(user.getEmailOrDefault());
 
         return ResponseEntity.ok(new JwtResponse(jwtAccessToken, jwtRefreshToken));
     }
+
 }
