@@ -15,7 +15,7 @@ public class GroupCreateRequestDto {
     private String description;
     private String category;
     private int minRequiredRating;
-    private String schedule; // LocalDateTime으로 변경 가능
+    private String schedule;
     private int groupMaxNum;
     private String readingMode;
     private boolean imageBased;

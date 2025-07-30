@@ -5,7 +5,7 @@ import lombok.*;
 @Getter
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder // ✅ 이게 빠졌을 가능성이 높습니다
+@Builder
 public class GroupListResponseDto {
     private Long groupId;
     private String roomTitle;
