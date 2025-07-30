@@ -37,7 +37,11 @@ public class KakaoAuthController {
     })
     @PostMapping("/oauth/kakao")
     public ResponseEntity<?> kakaoLogin(@RequestBody KakaoLoginRequest request) {
+    	System.out.println("💥 컨트롤러 진입 성공!");
+
         try {
+        	System.out.println("try문 안쪽 💥 컨트롤러 진입 성공!");
+
             String accessToken = request.getAccessToken();
             JsonNode userInfo = kakaoOAuthService.getUserInfo(accessToken);
             System.out.println(" userInfo = " + userInfo);
