@@ -8,7 +8,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.PdfFile
-import com.ssafy.bookglebookgle.repository.GroupRepository
+import com.ssafy.bookglebookgle.repository.GroupRepositoryImpl
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -42,7 +42,7 @@ enum class ReadingMode(val value: String) {
 
 @HiltViewModel
 class GroupRegisterViewModel @Inject constructor(
-    private val groupRepository: GroupRepository
+    private val groupRepositoryImpl: GroupRepositoryImpl
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(GroupRegisterUiState())
@@ -201,14 +201,14 @@ class GroupRegisterViewModel @Inject constructor(
                 val response = if (isOcrRequired) {
                     // OCR이 필요한 경우 (이미지 기반 PDF)
                     Log.d(TAG, "Calling createGroup API (with OCR)")
-                    groupRepository.createGroup(
+                    groupRepositoryImpl.createGroup(
                         groupInfo = groupInfoRequestBody,
                         file = filePart,
                     )
                 } else {
                     // OCR이 불필요한 경우 (텍스트 추출 가능 PDF)
                     Log.d(TAG, "Calling createGroupWithoutOcr API")
-                    groupRepository.createGroupWithoutOcr(
+                    groupRepositoryImpl.createGroupWithoutOcr(
                         groupInfo = groupInfoRequestBody,
                         file = filePart,
                     )

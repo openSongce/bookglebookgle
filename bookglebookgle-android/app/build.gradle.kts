@@ -153,7 +153,6 @@ dependencies {
     //Kakao Login
     implementation("com.kakao.sdk:v2-user:2.21.6")
 
-
 }
 
 kapt {

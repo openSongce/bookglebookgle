@@ -2,6 +2,8 @@ package com.ssafy.bookglebookgle.di
 
 import com.ssafy.bookglebookgle.repository.AuthRepository
 import com.ssafy.bookglebookgle.repository.AuthRepositoryImpl
+import com.ssafy.bookglebookgle.repository.GroupRepository
+import com.ssafy.bookglebookgle.repository.GroupRepositoryImpl
 import com.ssafy.bookglebookgle.repository.LoginRepositoryImpl
 import com.ssafy.bookglebookgle.repository.LoginRepository
 import com.ssafy.bookglebookgle.repository.PdfRepository
@@ -31,5 +33,10 @@ abstract class RepositoryModule {
     abstract fun bindPdfRepository(
         impl: PdfRepositoryImpl
     ): PdfRepository
+
+    @Binds
+    abstract fun bindGroupRepository(
+        impl: GroupRepositoryImpl
+    ): GroupRepository
 
 }
