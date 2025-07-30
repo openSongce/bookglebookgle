@@ -33,6 +33,7 @@ import com.ssafy.bookglebookgle.navigation.Screen
 fun CustomTopAppBar(
     title: String,
     navController : NavHostController,
+    ismygroup : Boolean = false,
     onBackPressed: (() -> Unit)? = null, // 뒤로가기 버튼 클릭 콜백
 ) {
     TopAppBar(
@@ -83,6 +84,15 @@ fun CustomTopAppBar(
                         .padding(end = 16.dp)
                 )
             }
+            else if(ismygroup){
+                Text(
+                    text = title,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp)
+                )
+            }
             else { // 모임 상세, PDF 뷰어, AI 퀴즈 등에서 사용 될 TopAppBar Text
                 Text(
                     text = title,
@@ -91,7 +101,14 @@ fun CustomTopAppBar(
                 )
             }
         },
-        navigationIcon = { },
+        navigationIcon = {
+            if(ismygroup){
+                Icon(
+                    painter = painterResource(id = R.drawable.register_back),
+                    contentDescription = "뒤로가기",
+                    modifier = Modifier.size(40.dp).padding(start = 16.dp).clickable { navController.popBackStack() })
+            }
+        },
         actions = {
             if(title == "main_home"){
                 Row(

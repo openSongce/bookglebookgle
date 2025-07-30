@@ -23,6 +23,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
+import com.ssafy.bookglebookgle.navigation.Screen
 import com.ssafy.bookglebookgle.ui.component.CustomTopAppBar
 
 // 데이터 클래스
@@ -34,9 +35,9 @@ data class Group(
     val currentMembers: Int,
     val maxMembers: Int,
     val imageRes: Int? = null
-)
+): java.io.Serializable
 
-enum class GroupCategory(val displayName: String, val backgroundColor: Color) {
+enum class GroupCategory(val displayName: String, val backgroundColor: Color): java.io.Serializable {
     READING("독서", Color(0xFFB8C5B8)),
     STUDY("학습", Color(0xFFB8C5B8)),
     REVIEW("첨삭", Color(0xFFE8D5C4))
@@ -68,7 +69,9 @@ fun MyGroupScreen(
             items(groups) { group ->
                 GroupCard(
                     group = group,
-                    onClick = { onGroupClick(group) }
+                    onClick = { navController.currentBackStackEntry?.savedStateHandle?.set("group", group)
+                        navController.currentBackStackEntry?.savedStateHandle?.set("isMyGroup", true)
+                        navController.navigate(Screen.GroupDetailScreen.route) }
                 )
             }
         }

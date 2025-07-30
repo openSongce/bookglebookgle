@@ -13,6 +13,7 @@ sealed class Screen(val route: String) {
     object BookmarksListScreen : Screen("bookmarks_list")
     object PdfScreen : Screen("pdf")
     object GroupRegisterScreen : Screen("group_register")
+    object GroupDetailScreen : Screen("group_detail")
 }
 
 // 화면간에 데이터를 전달하기위한 키

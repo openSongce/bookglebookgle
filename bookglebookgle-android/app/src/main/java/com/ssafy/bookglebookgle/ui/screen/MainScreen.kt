@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
+import com.ssafy.bookglebookgle.navigation.Screen
 import com.ssafy.bookglebookgle.ui.component.CustomTopAppBar
 import com.ssafy.bookglebookgle.util.ScreenSize
 
@@ -124,10 +125,15 @@ fun MainScreen(navController: NavHostController) {
                 .padding(horizontal = horizontalPadding),
             contentPadding = PaddingValues(vertical = verticalPadding)
         ) {
-            items(getMeetingsForTab(selectedTab)) { item ->
-                MeetingCard(item)
+            items(getMeetingsForTab(selectedTab)) { group ->
+                MeetingCard(group = group) {
+                    navController.currentBackStackEntry?.savedStateHandle?.set("group", group)
+                    navController.currentBackStackEntry?.savedStateHandle?.set("isMyGroup", false)
+                    navController.navigate(Screen.GroupDetailScreen.route)
+                }
             }
         }
+
     }
 }
 
@@ -175,7 +181,7 @@ fun RecommendCard(
 
 
 @Composable
-fun MeetingCard(title: String) {
+fun MeetingCard(group: Group, onClick: () -> Unit) {
     val config = LocalConfiguration.current
     val screenWidth = config.screenWidthDp.dp
     val screenHeight = config.screenHeightDp.dp
@@ -187,7 +193,8 @@ fun MeetingCard(title: String) {
         modifier = Modifier
             .fillMaxWidth()
             .wrapContentHeight()
-            .padding(vertical = screenHeight * 0.01f),
+            .padding(vertical = screenHeight * 0.01f)
+            .clickable { onClick() }, // ✅ 클릭 이벤트
         colors = CardDefaults.cardColors(containerColor = Color.White)
     ) {
         Row(
@@ -196,10 +203,10 @@ fun MeetingCard(title: String) {
                 .padding(horizontal = innerPadding, vertical = screenHeight * 0.01f)
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text("독서", fontSize = screenWidth.value.times(0.03f).sp, color = Color.Gray)
-                Text(title, fontWeight = FontWeight.Bold)
+                Text(group.category.displayName, fontSize = screenWidth.value.times(0.03f).sp, color = Color.Gray)
+                Text(group.title, fontWeight = FontWeight.Bold)
                 Text(
-                    "이번 달의 독서는 인생을 변화시키는 독서입니다.",
+                    group.description,
                     fontSize = screenWidth.value.times(0.032f).sp,
                     color = Color.DarkGray
                 )
@@ -209,12 +216,11 @@ fun MeetingCard(title: String) {
                     color = Color(0xFFF1F1F1)
                 ) {
                     Text(
-                        "10명",
-                        modifier = Modifier
-                            .padding(
-                                horizontal = screenWidth * 0.03f,
-                                vertical = screenHeight * 0.005f
-                            ),
+                        "${group.currentMembers}명",
+                        modifier = Modifier.padding(
+                            horizontal = screenWidth * 0.03f,
+                            vertical = screenHeight * 0.005f
+                        ),
                         fontSize = screenWidth.value.times(0.03f).sp
                     )
                 }
@@ -232,16 +238,44 @@ fun MeetingCard(title: String) {
     }
 }
 
+
 val meetingCard = listOf(
     Triple("독서 모임", "이번 주제는 인생을 변화시키는 독서입니다.", R.drawable.main_reading),
     Triple("스터디 모임", "함께 공부하면 효과가 두 배입니다.", R.drawable.main_studying),
     Triple("첨삭 모임", "서류 피드백을 함께 나눠요.", R.drawable.main_editing)
 )
 
-fun getMeetingsForTab(tab: String): List<String> = when (tab) {
-    "독서" -> List(20) { "인생 독서 모임 #$it" }
-    "학습" -> List(20) { "코테 대비반 #$it" }
-    else -> List(20) { "자소서 첨삭반 #$it" }
+fun getMeetingsForTab(tab: String): List<Group> = when (tab) {
+    "독서" -> List(5) {
+        Group(
+            id = "reading_$it",
+            category = GroupCategory.READING,
+            title = "인생 독서 모임 #$it",
+            description = "이 달의 독서 주제를 함께 나눠요.",
+            currentMembers = 3 + it,
+            maxMembers = 6
+        )
+    }
+    "학습" -> List(5) {
+        Group(
+            id = "study_$it",
+            category = GroupCategory.STUDY,
+            title = "코테 대비반 #$it",
+            description = "함께 코딩 테스트를 대비해요.",
+            currentMembers = 2 + it,
+            maxMembers = 5
+        )
+    }
+    else -> List(5) {
+        Group(
+            id = "review_$it",
+            category = GroupCategory.REVIEW,
+            title = "자소서 첨삭반 #$it",
+            description = "서류를 같이 보고 피드백해요.",
+            currentMembers = 1 + it,
+            maxMembers = 4
+        )
+    }
 }
 
 

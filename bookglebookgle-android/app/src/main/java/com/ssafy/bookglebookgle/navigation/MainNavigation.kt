@@ -21,6 +21,7 @@ import com.ssafy.bookglebookgle.pdf.ui.screen.AddPdfScreen
 import com.ssafy.bookglebookgle.pdf.ui.screen.BookmarkListScreen
 import com.ssafy.bookglebookgle.pdf.ui.screen.CommentsListScreen
 import com.ssafy.bookglebookgle.pdf.ui.screen.HighlightListScreen
+import com.ssafy.bookglebookgle.ui.screen.Group
 import com.ssafy.bookglebookgle.ui.screen.GroupRegisterScreen
 import com.ssafy.bookglebookgle.ui.screen.LoginScreen
 import com.ssafy.bookglebookgle.ui.screen.MainScreen
@@ -28,6 +29,7 @@ import com.ssafy.bookglebookgle.ui.screen.MyGroupScreen
 import com.ssafy.bookglebookgle.ui.screen.ProfileScreen
 import com.ssafy.bookglebookgle.ui.screen.RegisterScreen
 import com.ssafy.bookglebookgle.ui.screen.SplashScreen
+import com.ssafy.bookglebookgle.ui.screen.GroupDetailScreen
 
 @Composable
 fun MainNavigation(
@@ -252,6 +254,17 @@ fun MainNavigation(
                     }
                 )
             }
+
+            composable(Screen.GroupDetailScreen.route) {
+                val group = navController.previousBackStackEntry
+                    ?.savedStateHandle?.get<Group>("group") ?: return@composable
+
+                val isMyGroup = navController.previousBackStackEntry
+                    ?.savedStateHandle?.get<Boolean>("isMyGroup") ?: false
+
+                GroupDetailScreen(navController, group, isMyGroup)
+            }
+
         }
     }
 }
