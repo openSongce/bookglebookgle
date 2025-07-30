@@ -92,13 +92,347 @@ class VectorDBManager:
             except Exception as e:
                 logger.error(f"Failed to create collection '{collection_name}': {e}")
     
+    async def get_bookclub_collection(self, meeting_id: str) -> chromadb.Collection:
+        """
+        Get or create book club specific collection
+        독서 모임별 전용 컬렉션 반환 (docs/toron.md 요구사항)
+        
+        Args:
+            meeting_id: 독서 모임 ID
+            
+        Returns:
+            chromadb.Collection: 독서 모임 전용 컬렉션
+        """
+        try:
+            collection_name = f"bookclub_{meeting_id}_documents"
+            
+            if collection_name not in self.collections:
+                collection = self.client.get_or_create_collection(
+                    name=collection_name,
+                    metadata={
+                        "hnsw:space": "cosine", 
+                        "meeting_id": meeting_id,
+                        "type": "bookclub_reading_material",
+                        "created_at": asyncio.get_event_loop().time()
+                    }
+                )
+                self.collections[collection_name] = collection
+                logger.info(f"Created book club collection: {collection_name}")
+            
+            return self.collections[collection_name]
+            
+        except Exception as e:
+            logger.error(f"Failed to get book club collection for {meeting_id}: {e}")
+            raise
+
+    async def process_bookclub_document(
+        self, 
+        meeting_id: str, 
+        document_id: str, 
+        text: str, 
+        section: str = None,
+        progress_range: Dict[str, int] = None,
+        metadata: Dict[str, Any] = None
+    ) -> List[str]:
+        """
+        모바일 앱 독서 모임용 문서 처리 - 진도율 기반 데이터 저장 포함
+        
+        Args:
+            meeting_id: 독서 모임 ID
+            document_id: 문서 ID
+            text: 문서 텍스트
+            section: 문서 섹션
+            progress_range: 진도율 범위 (사용되지 않음 - 자동으로 50%, 100% 생성)
+            metadata: 추가 메타데이터
+            
+        Returns:
+            List[str]: 생성된 청크 ID 목록 (일반 청크 + 진도율 청크 포함)
+        """
+        try:
+            logger.info(f"Processing book club document: {document_id} for meeting: {meeting_id}")
+            
+            # Get book club specific collection
+            collection = await self.get_bookclub_collection(meeting_id)
+            
+            # 1. 일반 청크 생성
+            chunks = await self._chunk_document(text)
+            
+            chunk_ids = []
+            documents = []
+            embeddings = []
+            metadatas = []
+            
+            # Initialize embedding model if needed
+            if self.embedding_model is None:
+                await self._initialize_embedding_model()
+            
+            # 2. 일반 청크 처리
+            for i, chunk in enumerate(chunks):
+                chunk_id = f"{meeting_id}_{document_id}_{section or 'main'}_{i}"
+                chunk_ids.append(chunk_id)
+                documents.append(chunk)
+                
+                embedding = self.embedding_model.encode(chunk).tolist()
+                embeddings.append(embedding)
+                
+                # Prepare metadata for regular chunks
+                chunk_metadata = {
+                    "document_id": document_id,
+                    "meeting_id": meeting_id,
+                    "section": section or "main",
+                    "chunk_index": i,
+                    "chunk_length": len(chunk),
+                    "chunk_type": "regular",
+                    "text_hash": hashlib.md5(chunk.encode()).hexdigest(),
+                    "timestamp": asyncio.get_event_loop().time()
+                }
+                
+                # Merge with additional metadata
+                if metadata:
+                    chunk_metadata.update(metadata)
+                
+                metadatas.append(chunk_metadata)
+            
+            # 3. 진도율 기반 청크 생성 (50%, 100%)
+            total_pages = metadata.get("total_pages", 1) if metadata else 1
+            
+            # 50% 진도율 청크
+            half_length = len(text) // 2
+            half_text = text[:half_length]
+            
+            half_chunk_id = f"{meeting_id}_{document_id}_progress_50"
+            chunk_ids.append(half_chunk_id)
+            documents.append(half_text)
+            
+            half_embedding = self.embedding_model.encode(half_text).tolist()
+            embeddings.append(half_embedding)
+            
+            half_metadata = {
+                "document_id": document_id,
+                "meeting_id": meeting_id,
+                "chunk_type": "progress",
+                "progress_percentage": 50,
+                "text_length": len(half_text),
+                "total_pages": total_pages,
+                "pages_included": max(1, total_pages // 2),
+                "timestamp": asyncio.get_event_loop().time()
+            }
+            if metadata:
+                half_metadata.update({k: v for k, v in metadata.items() if k not in ["total_pages"]})
+            metadatas.append(half_metadata)
+            
+            # 100% 진도율 청크 (전체 문서)
+            full_chunk_id = f"{meeting_id}_{document_id}_progress_100"
+            chunk_ids.append(full_chunk_id)
+            documents.append(text)
+            
+            full_embedding = self.embedding_model.encode(text).tolist()
+            embeddings.append(full_embedding)
+            
+            full_metadata = {
+                "document_id": document_id,
+                "meeting_id": meeting_id,
+                "chunk_type": "progress",
+                "progress_percentage": 100,
+                "text_length": len(text),
+                "total_pages": total_pages,
+                "pages_included": total_pages,
+                "timestamp": asyncio.get_event_loop().time()
+            }
+            if metadata:
+                full_metadata.update({k: v for k, v in metadata.items() if k not in ["total_pages"]})
+            metadatas.append(full_metadata)
+            
+            # Store in book club specific collection
+            collection.upsert(
+                ids=chunk_ids,
+                documents=documents,
+                embeddings=embeddings,
+                metadatas=metadatas
+            )
+            
+            logger.info(f"Stored {len(chunks)} chunks for book club document {document_id}")
+            return chunk_ids
+            
+        except Exception as e:
+            logger.error(f"Book club document processing failed: {e}")
+            raise
+
+    async def get_bookclub_context_for_discussion(
+        self, 
+        meeting_id: str,
+        query: str, 
+        max_chunks: int = 3
+    ) -> List[str]:
+        """
+        Get relevant context chunks for book club discussion AI
+        독서 모임별 토론 컨텍스트 검색 (토론 진행자 전용)
+        
+        NOTE: 토론 기능은 진도율 제한 없이 해당 문서의 모든 청크를 검색합니다.
+        (regular chunks + progress_50 + progress_100 모두 포함)
+        
+        Args:
+            meeting_id: 독서 모임 ID
+            query: 검색 쿼리 (사용자 메시지)
+            max_chunks: 최대 검색 결과 수
+            
+        Returns:
+            List[str]: 관련 독서 자료 텍스트 청크들 (진도율 제한 없음)
+        """
+        try:
+            # Get book club collection
+            collection = await self.get_bookclub_collection(meeting_id)
+            
+            # Generate query embedding
+            query_embedding = self.embedding_model.encode(query).tolist()
+            
+            # Search in book club collection - NO progress restriction for discussion
+            # 토론은 문서 전체를 대상으로 함 (퀴즈와 달리 진도율 제한 없음)
+            results = collection.query(
+                query_embeddings=[query_embedding],
+                n_results=max_chunks,
+                # where 조건 없음 = 모든 청크 타입(regular, progress_50, progress_100) 검색
+                include=["documents", "metadatas", "distances"]
+            )
+            
+            # Extract document text sorted by similarity
+            context_chunks = []
+            if results["documents"] and results["documents"][0]:
+                context_chunks = [doc for doc in results["documents"][0]]
+            
+            logger.info(f"Retrieved {len(context_chunks)} context chunks for book club discussion")
+            return context_chunks
+            
+        except Exception as e:
+            logger.error(f"Failed to get book club discussion context: {e}")
+            return []
+
+    # Removed store_progress_based_document - now handled in process_bookclub_document
+
+    async def search_by_progress(
+        self, 
+        meeting_id: str, 
+        document_id: str, 
+        progress_percentage: int,
+        max_chunks: int = 3
+    ) -> List[str]:
+        """
+        진도율에 따른 문서 내용 반환 (퀴즈 생성용)
+        
+        Args:
+            meeting_id: 독서 모임 ID
+            document_id: 문서 ID  
+            progress_percentage: 진도율 (50 또는 100)
+            max_chunks: 최대 반환할 청크 수
+            
+        Returns:
+            List[str]: 해당 진도율의 문서 내용 리스트
+        """
+        try:
+            collection = await self.get_bookclub_collection(meeting_id)
+            
+            # 진도율에 따른 청크 검색
+            progress_chunk_id = f"{meeting_id}_{document_id}_progress_{progress_percentage}"
+            
+            result = collection.get(
+                ids=[progress_chunk_id],
+                include=["documents", "metadatas"]
+            )
+            
+            context_chunks = []
+            if result["documents"] and result["documents"][0]:
+                context_chunks.append(result["documents"][0])
+                logger.info(f"📖 Retrieved {progress_percentage}% document content for quiz generation")
+            else:
+                logger.warning(f"No {progress_percentage}% document found for {document_id}, falling back to regular chunks")
+                
+                # Fallback: 일반 청크에서 검색
+                fallback_result = collection.query(
+                    query_texts=[f"document content for {document_id}"],
+                    n_results=max_chunks,
+                    where={
+                        "document_id": document_id,
+                        "meeting_id": meeting_id,
+                        "chunk_type": "regular"
+                    },
+                    include=["documents"]
+                )
+                
+                if fallback_result["documents"] and fallback_result["documents"][0]:
+                    context_chunks.extend(fallback_result["documents"][0])
+                    
+            return context_chunks[:max_chunks]
+                
+        except Exception as e:
+            logger.error(f"Failed to get progress-based context: {e}")
+            return []
+
+    async def search_by_progress_range(
+        self,
+        meeting_id: str,
+        query: str,
+        min_progress: int = 0,
+        max_progress: int = 100,
+        max_results: int = 3
+    ) -> List[Dict[str, Any]]:
+        """
+        진도율 범위별 검색 (모바일 앱 토론 기능용)
+        
+        Args:
+            meeting_id: 독서 모임 ID
+            query: 검색 쿼리
+            min_progress: 최소 진도율
+            max_progress: 최대 진도율  
+            max_results: 최대 결과 수
+            
+        Returns:
+            List[Dict]: 검색 결과
+        """
+        try:
+            collection = await self.get_bookclub_collection(meeting_id)
+            query_embedding = self.embedding_model.encode(query).tolist()
+            
+            # 진도율 범위에 따른 필터 조건
+            if max_progress <= 50:
+                doc_types = ["half_document"]
+            elif min_progress >= 100:
+                doc_types = ["full_document"] 
+            else:
+                doc_types = ["half_document", "full_document"]
+            
+            all_results = []
+            for doc_type in doc_types:
+                results = collection.query(
+                    query_embeddings=[query_embedding],
+                    n_results=max_results,
+                    where={"meeting_id": meeting_id, "type": doc_type},
+                    include=["documents", "metadatas", "distances"]
+                )
+                
+                if results["documents"] and results["documents"][0]:
+                    for i in range(len(results["documents"][0])):
+                        all_results.append({
+                            "document": results["documents"][0][i],
+                            "metadata": results["metadatas"][0][i],
+                            "similarity": 1 - results["distances"][0][i],
+                            "progress_target": results["metadatas"][0][i].get("progress_target", 0)
+                        })
+            
+            # 유사도순 정렬 후 상위 결과 반환
+            all_results.sort(key=lambda x: x["similarity"], reverse=True)
+            return all_results[:max_results]
+            
+        except Exception as e:
+            logger.error(f"Progress range search failed: {e}")
+            return []
+
     async def process_document(self, document_id: str, text: str, metadata: Dict[str, Any] = None) -> List[str]:
         """Process document into chunks and store embeddings"""
         try:
             logger.info(f"Processing document: {document_id}")
             
             # Chunk the document
-            chunks = await self._chunk_document(text)
+            chunks_with_positions = await self._chunk_document_with_positions(text)
             
             # Generate embeddings for chunks
             chunk_ids = []
@@ -106,24 +440,30 @@ class VectorDBManager:
             embeddings = []
             metadatas = []
             
-            for i, chunk in enumerate(chunks):
+            for i, chunk_data in enumerate(chunks_with_positions):
+                chunk_text = chunk_data["text"]
+                start_pos = chunk_data["start_position"]
+                end_pos = chunk_data["end_position"]
+                
                 chunk_id = f"{document_id}_chunk_{i}"
                 chunk_ids.append(chunk_id)
-                documents.append(chunk)
+                documents.append(chunk_text)
                 
                 # Generate embedding
                 if self.embedding_model is None:
                     await self._initialize_embedding_model()
                 
-                embedding = self.embedding_model.encode(chunk).tolist()
+                embedding = self.embedding_model.encode(chunk_text).tolist()
                 embeddings.append(embedding)
                 
-                # Prepare metadata
+                # Prepare metadata with position information
                 chunk_metadata = {
                     "document_id": document_id,
                     "chunk_index": i,
-                    "chunk_length": len(chunk),
-                    "text_hash": hashlib.md5(chunk.encode()).hexdigest()
+                    "chunk_length": len(chunk_text),
+                    "start_position": start_pos,
+                    "end_position": end_pos,
+                    "text_hash": hashlib.md5(chunk_text.encode()).hexdigest()
                 }
                 if metadata:
                     chunk_metadata.update(metadata)
@@ -139,7 +479,7 @@ class VectorDBManager:
                     metadatas=metadatas
                 )
                 
-                logger.info(f"Stored {len(chunks)} chunks for document {document_id}")
+                logger.info(f"Stored {len(chunks_with_positions)} chunks for document {document_id}")
             
             return chunk_ids
             
@@ -167,6 +507,49 @@ class VectorDBManager:
             start = end - overlap
         
         return chunks
+
+    async def _chunk_document_with_positions(self, text: str, chunk_size: int = 500, overlap: int = 50) -> List[Dict[str, Any]]:
+        """Split document into overlapping chunks with position information"""
+        chunks_with_positions = []
+        words = text.split()
+        
+        if len(words) <= chunk_size:
+            return [{
+                "text": text,
+                "start_position": 0,
+                "end_position": len(text)
+            }]
+        
+        start_word_idx = 0
+        char_position = 0
+        
+        while start_word_idx < len(words):
+            end_word_idx = min(start_word_idx + chunk_size, len(words))
+            chunk_words = words[start_word_idx:end_word_idx]
+            chunk_text = " ".join(chunk_words)
+            
+            # Calculate character positions
+            start_char = char_position
+            end_char = start_char + len(chunk_text)
+            
+            chunks_with_positions.append({
+                "text": chunk_text,
+                "start_position": start_char,
+                "end_position": end_char
+            })
+            
+            if end_word_idx >= len(words):
+                break
+                
+            # Update position for next chunk (considering overlap)
+            overlap_words = min(overlap, len(chunk_words))
+            start_word_idx = end_word_idx - overlap_words
+            
+            # Recalculate character position for overlapping chunks
+            if start_word_idx > 0:
+                char_position = start_char + len(" ".join(words[start_word_idx - (end_word_idx - start_word_idx):start_word_idx])) + 1
+        
+        return chunks_with_positions
     
     async def similarity_search(
         self, 
@@ -355,17 +738,18 @@ class VectorDBManager:
     async def get_document_summary(self, document_id: str) -> Optional[str]:
         """Get document summary for topic generation"""
         try:
-            # Get all chunks for the document
-            collection = self.collections.get("documents")
-            if not collection:
-                return None
+            # Get or create the collection to ensure it exists
+            collection = self.client.get_or_create_collection("documents")
+            self.collections["documents"] = collection # Update cache
             
+            logger.info(f"Searching for document summary with ID: '{document_id}'")
             results = collection.get(
                 where={"document_id": document_id},
                 include=["documents"]
             )
             
             if results["documents"]:
+                logger.info(f"Found {len(results['documents'])} chunks for document '{document_id}'.")
                 # Combine first few chunks for summary
                 chunks = results["documents"][:5]  # First 5 chunks
                 combined_text = " ".join(chunks)
@@ -376,11 +760,78 @@ class VectorDBManager:
                 
                 return combined_text
             
+            logger.warning(f"Could not find any document chunks for ID: '{document_id}'")
             return None
             
         except Exception as e:
             logger.error(f"Failed to get document summary: {e}")
             return None
+
+    async def store_text_with_metadata(self, document_id: str, text: str, metadata: Dict[str, Any]) -> None:
+        """Stores a single text with its metadata in the vector database."""
+        try:
+            collection = self.collections.get("documents")
+            if not collection:
+                logger.error("Collection 'documents' not found.")
+                return
+
+            embedding = self.embedding_model.encode(text).tolist()
+            collection.upsert(
+                ids=[document_id],
+                documents=[text],
+                embeddings=[embedding],
+                metadatas=[metadata]
+            )
+            logger.info(f"Stored text with metadata for document ID: {document_id}")
+        except Exception as e:
+            logger.error(f"Failed to store text with metadata: {e}")
+
+    async def store_document_with_positions(
+        self, 
+        document_id: str, 
+        ocr_blocks: List[Dict[str, Any]],
+        metadata: Dict[str, Any] = None
+    ) -> bool:
+        """위치 정보가 포함된 문서를 벡터 DB에 저장"""
+        try:
+            # 페이지별로 텍스트 그룹화
+            pages = {}
+            for block in ocr_blocks:
+                page_num = block.page_number
+                if page_num not in pages:
+                    pages[page_num] = []
+                pages[page_num].append(block)
+            
+            # 페이지별 임베딩 생성 및 저장
+            for page_num, blocks in pages.items():
+                page_text = " ".join([block.text for block in blocks])
+                
+                # 위치 정보를 메타데이터에 포함
+                page_metadata = {
+                    "document_id": document_id,
+                    "page_number": page_num,
+                    "blocks": [
+                        {
+                            "text": block.text,
+                            "x0": block.x0, "y0": block.y0,
+                            "x1": block.x1, "y1": block.y1,
+                            "confidence": block.confidence
+                        } for block in blocks
+                    ],
+                    **(metadata or {})
+                }
+                
+                # 임베딩 생성 및 저장
+                await self.store_text_with_metadata(
+                    document_id=f"{document_id}_page_{page_num}",
+                    text=page_text,
+                    metadata=page_metadata
+                )
+            
+            return True
+        except Exception as e:
+            logger.error(f"Failed to store document with positions: {e}")
+            return False
     
     async def cleanup(self):
         """Cleanup resources"""
@@ -631,6 +1082,32 @@ class VectorDBManager:
         except Exception as e:
             logger.error(f"Failed to get PDF document structure: {e}")
             return {}
+
+    async def get_page_content(self, document_id: str, page_number: int) -> Optional[str]:
+        """Get the text content of a specific page."""
+        try:
+            collection = self.collections.get("documents")
+            if not collection:
+                return None
+            results = collection.get(
+                where={
+                    "document_id": document_id,
+                    "page_number": page_number
+                },
+                include=["documents"]
+            )
+            if results["documents"]:
+                return " ".join(results["documents"])
+            return None
+        except Exception as e:
+            logger.error(f"Failed to get page content: {e}")
+            return None
+
+    async def get_section_content(self, document_id: str, section: Dict[str, float]) -> Optional[str]:
+        """Get the text content of a specific section (bbox)."""
+        # This is a simplified implementation. A real implementation would need
+        # to query blocks based on their bounding box coordinates.
+        return await self.get_document_summary(document_id)
     
     def is_initialized(self) -> bool:
         """Check if the vector DB is properly initialized"""

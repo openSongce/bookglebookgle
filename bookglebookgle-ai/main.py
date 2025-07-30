@@ -35,27 +35,23 @@ async def lifespan(app: FastAPI):
     
     # Check and prepare ports
     logger.info("🔍 Checking required ports...")
-    required_ports = [settings.SERVER_PORT, 8000]  # gRPC and FastAPI ports
+    required_ports = [settings.SERVER_PORT, 8789]  # gRPC and FastAPI ports
     print_ports_report(required_ports)
     
-    # Ensure gRPC port is free
-    logger.info(f"🛠️  Preparing gRPC port {settings.SERVER_PORT}...")
-    if not ensure_port_free(settings.SERVER_PORT, kill_if_needed=True):
-        logger.error(f"❌ Failed to free port {settings.SERVER_PORT}")
-        raise RuntimeError(f"Port {settings.SERVER_PORT} is not available")
-    
-    # Initialize services
+    # 1. Initialize services that need async operations
     logger.info("⚙️  Initializing services...")
     vector_db = VectorDBManager()
     await vector_db.initialize()
+    logger.info("✅ VectorDB Manager initialized.")
     
-    # Initialize LLM Client
+    # Initialize LLM Client (if it has async init)
     llm_client = LLMClient()
     await llm_client.initialize()
+    logger.info("✅ LLM Client initialized.")
     
-    # Start gRPC server with error handling
+    # 2. Start gRPC server, injecting the initialized vector_db
     logger.info("🚀 Starting gRPC server...")
-    grpc_server = GRPCServer()
+    grpc_server = GRPCServer(vector_db_manager=vector_db)
     try:
         await grpc_server.start()
     except Exception as e:
@@ -66,7 +62,7 @@ async def lifespan(app: FastAPI):
         await asyncio.sleep(2)  # Wait a bit
         await grpc_server.start()  # Retry
     
-    logger.info(f"✅ FastAPI Server will start on port 8000")
+    logger.info(f"✅ FastAPI Server will start on port 8789")
     logger.info(f"✅ gRPC Server started on port {settings.SERVER_PORT}")
     
     yield
@@ -98,9 +94,7 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"] if settings.DEBUG else [
-            "http://localhost:3000",
-            "https://your-frontend-domain.com",
-            "https://your-staging-domain.com"
+            "http://localhost:3000"
         ],
         allow_credentials=True,
         allow_methods=["*"],
@@ -131,11 +125,11 @@ def main():
     """Main function to run the server"""
     settings = get_settings()
     
-    # FastAPI를 다른 포트에서 실행 (gRPC는 50052, FastAPI는 8000)
+    # FastAPI를 다른 포트에서 실행 (gRPC는 50505, FastAPI는 8789)
     uvicorn.run(
         "main:app",
         host=settings.SERVER_HOST,
-        port=8000,  # FastAPI 전용 포트
+        port=8789,  # FastAPI 전용 포트
         log_level=settings.LOG_LEVEL.lower(),
         reload=settings.DEBUG,
         access_log=True

@@ -9,6 +9,7 @@ from enum import Enum
 
 import openai
 import anthropic
+import google.generativeai as genai
 from loguru import logger
 
 from src.config.settings import get_settings
@@ -17,6 +18,7 @@ from src.config.settings import get_settings
 class LLMProvider(Enum):
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
+    GEMINI = "gemini"
     OPENROUTER = "openrouter"
     MOCK = "mock"
 
@@ -28,6 +30,7 @@ class LLMClient:
         self.settings = get_settings()
         self.openai_client: Optional[openai.AsyncOpenAI] = None
         self.anthropic_client: Optional[anthropic.AsyncAnthropic] = None
+        self.gemini_client: Optional[genai.GenerativeModel] = None
         self.openrouter_client: Optional[openai.AsyncOpenAI] = None  
 
     async def initialize(self):
@@ -49,6 +52,12 @@ class LLMClient:
                     api_key=self.settings.ai.ANTHROPIC_API_KEY
                 )
                 logger.info("Anthropic client initialized")
+            
+            # Initialize Gemini client
+            if self.settings.ai.GEMINI_API_KEY:
+                genai.configure(api_key=self.settings.ai.GEMINI_API_KEY)
+                self.gemini_client = genai.GenerativeModel(self.settings.ai.GEMINI_MODEL)
+                logger.info(f"Gemini client initialized with model: {self.settings.ai.GEMINI_MODEL}")
 
             if self.settings.ai.OPENROUTER_API_KEY:
                 self.openrouter_client = openai.AsyncOpenAI(
@@ -57,7 +66,7 @@ class LLMClient:
             )
                 logger.info("OpenRouter client initialized")
             
-            if not any([self.openai_client, self.anthropic_client, self.openrouter_client]):
+            if not any([self.openai_client, self.anthropic_client, self.gemini_client, self.openrouter_client]):
                 logger.warning("No LLM clients initialized - using mock responses")
                 
         except Exception as e:
@@ -87,6 +96,8 @@ class LLMClient:
                 return await self._openai_completion(prompt, system_message, max_tokens, temperature)
             elif provider == LLMProvider.ANTHROPIC and self.anthropic_client:
                 return await self._anthropic_completion(prompt, system_message, max_tokens, temperature)
+            elif provider == LLMProvider.GEMINI and self.gemini_client:
+                return await self._gemini_completion(prompt, system_message, max_tokens, temperature)
             elif provider == LLMProvider.OPENROUTER and self.openrouter_client:
                 return await self._openrouter_completion(prompt, system_message, max_tokens, temperature, model)
             else:
@@ -151,6 +162,43 @@ class LLMClient:
             
         except Exception as e:
             logger.error(f"Anthropic completion failed: {e}")
+            raise
+    
+    async def _gemini_completion(
+        self,
+        prompt: str,
+        system_message: Optional[str],
+        max_tokens: int,
+        temperature: float
+    ) -> str:
+        """Generate completion using Google Gemini"""
+        try:
+            # Gemini API는 system message를 prompt 앞에 붙여서 처리
+            full_prompt = prompt
+            if system_message:
+                full_prompt = f"{system_message}\n\n{prompt}"
+            
+            # Gemini generation configuration
+            generation_config = genai.types.GenerationConfig(
+                max_output_tokens=max_tokens,
+                temperature=temperature,
+            )
+            
+            # Generate content asynchronously
+            response = await self.gemini_client.generate_content_async(
+                full_prompt,
+                generation_config=generation_config
+            )
+            
+            # Extract text from response
+            if response and response.text:
+                return response.text.strip()
+            else:
+                logger.warning("Gemini returned empty response")
+                return ""
+            
+        except Exception as e:
+            logger.error(f"Gemini completion failed: {e}")
             raise
     
     async def _openrouter_completion(
@@ -230,12 +278,14 @@ D) 소셜 네트워킹
     
     def _get_preferred_provider(self) -> LLMProvider:
         """Get preferred LLM provider based on availability"""
-        if self.openrouter_client:
-            return LLMProvider.OPENROUTER
+        if self.gemini_client:
+            return LLMProvider.GEMINI
         elif self.openai_client:
             return LLMProvider.OPENAI
         elif self.anthropic_client:
             return LLMProvider.ANTHROPIC
+        elif self.openrouter_client:
+            return LLMProvider.OPENROUTER
         else:
             return LLMProvider.MOCK
 
