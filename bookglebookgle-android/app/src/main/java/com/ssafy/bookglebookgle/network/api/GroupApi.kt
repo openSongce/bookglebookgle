@@ -13,7 +13,7 @@ interface GroupApi {
      * 그룹 생성 (OCR 포함)
      */
     @Multipart
-    @POST("/group/create")
+    @POST("group/create")
     suspend fun createGroup(
         @Part("groupInfo") groupInfo: RequestBody,
         @Part file: MultipartBody.Part,
@@ -23,7 +23,7 @@ interface GroupApi {
      * 그룹 생성 (OCR 없음)
      */
     @Multipart
-    @POST("/group/create/no-ocr")
+    @POST("group/create/no-ocr")
     suspend fun createGroupWithoutOcr(
         @Part("groupInfo") groupInfo: RequestBody,
         @Part file: MultipartBody.Part,

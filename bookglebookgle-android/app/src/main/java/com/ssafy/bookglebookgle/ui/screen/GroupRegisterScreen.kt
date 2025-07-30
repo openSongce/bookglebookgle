@@ -9,11 +9,16 @@ import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -22,6 +27,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -30,7 +36,9 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -48,14 +56,18 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -71,11 +83,23 @@ import com.ssafy.bookglebookgle.ui.component.CustomTopAppBar
 import com.ssafy.bookglebookgle.util.PdfAnalysisResult
 import com.ssafy.bookglebookgle.util.PdfOcrChecker
 import com.ssafy.bookglebookgle.viewmodel.GroupRegisterViewModel
+import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileOutputStream
+import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Locale
+import kotlin.math.roundToInt
 
 private const val TAG = "싸피_GroupRegisterScreen"
+
+// 요일 정보를 담는 데이터 클래스
+data class DayInfo(
+    val dayName: String,
+    val dayOfMonth: Int,
+    val month: Int,
+    val isToday: Boolean
+)
 
 @Composable
 fun DateTimePickerDialog(
@@ -83,35 +107,72 @@ fun DateTimePickerDialog(
     onDismiss: () -> Unit
 ) {
     val calendar = Calendar.getInstance()
-    val currentMonth = calendar.get(Calendar.MONTH) + 1
-    val currentDay = calendar.get(Calendar.DAY_OF_MONTH)
+    val currentDayOfWeek = calendar.get(Calendar.DAY_OF_WEEK)
 
-    var selectedMonth by remember { mutableIntStateOf(currentMonth) }
-    var selectedDay by remember { mutableIntStateOf(currentDay) }
+    // 오늘부터 7일간의 요일 정보 생성 (월~일 순으로 정렬)
+    val weekDays = remember {
+        val days = mutableListOf<DayInfo>()
+        val tempCalendar = Calendar.getInstance()
+
+        for (i in 0..6) {
+            val dayOfWeek = tempCalendar.get(Calendar.DAY_OF_WEEK)
+            val dayOfMonth = tempCalendar.get(Calendar.DAY_OF_MONTH)
+            val monthValue = tempCalendar.get(Calendar.MONTH)
+            val month = monthValue + 1
+
+            val dayName = when (dayOfWeek) {
+                Calendar.SUNDAY -> "일"
+                Calendar.MONDAY -> "월"
+                Calendar.TUESDAY -> "화"
+                Calendar.WEDNESDAY -> "수"
+                Calendar.THURSDAY -> "목"
+                Calendar.FRIDAY -> "금"
+                Calendar.SATURDAY -> "토"
+                else -> ""
+            }
+
+            days.add(
+                DayInfo(
+                    dayName = dayName,
+                    dayOfMonth = dayOfMonth,
+                    month = month,
+                    isToday = i == 0
+                )
+            )
+            tempCalendar.add(Calendar.DAY_OF_MONTH, 1)
+        }
+
+        // 월요일부터 시작하도록 정렬
+        val sortedDays = mutableListOf<DayInfo>()
+
+        // 오늘이 몇 번째 요일인지 확인 (월요일 = 0, 화요일 = 1, ..., 일요일 = 6)
+        val today = Calendar.getInstance()
+        val todayDayOfWeek = today.get(Calendar.DAY_OF_WEEK)
+        val mondayBasedToday = when (todayDayOfWeek) {
+            Calendar.MONDAY -> 0
+            Calendar.TUESDAY -> 1
+            Calendar.WEDNESDAY -> 2
+            Calendar.THURSDAY -> 3
+            Calendar.FRIDAY -> 4
+            Calendar.SATURDAY -> 5
+            Calendar.SUNDAY -> 6
+            else -> 0
+        }
+
+        // 월요일부터 일요일까지 순서대로 정렬
+        for (targetDay in 0..6) { // 0=월, 1=화, ..., 6=일
+            val daysFromToday = (targetDay - mondayBasedToday + 7) % 7
+            if (daysFromToday < days.size) {
+                sortedDays.add(days[daysFromToday])
+            }
+        }
+
+        sortedDays
+    }
+
+    var selectedDayIndex by remember { mutableIntStateOf(0) }
     var selectedHour by remember { mutableIntStateOf(9) }
     var selectedMinute by remember { mutableIntStateOf(0) }
-
-    // 현재 월부터 12월까지
-    val availableMonths = (currentMonth..12).toList()
-
-    // 선택된 월에 따른 일 계산
-    val availableDays = remember(selectedMonth) {
-        val startDay = if (selectedMonth == currentMonth) currentDay else 1
-        val daysInMonth = when (selectedMonth) {
-            1, 3, 5, 7, 8, 10, 12 -> 31
-            4, 6, 9, 11 -> 30
-            2 -> 28 // 2025년은 평년
-            else -> 31
-        }
-        (startDay..daysInMonth).toList()
-    }
-
-    // 선택된 일이 범위를 벗어나면 조정
-    LaunchedEffect(availableDays) {
-        if (selectedDay !in availableDays) {
-            selectedDay = availableDays.first()
-        }
-    }
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -148,17 +209,17 @@ fun DateTimePickerDialog(
 
                     Spacer(modifier = Modifier.height(24.dp))
 
-                    // 날짜 선택 카드
+                    // 요일 선택 카드
                     Card(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
+                        shape = RoundedCornerShape(12.dp),
                         colors = CardDefaults.cardColors(
                             containerColor = Color(0xFFF8FAFC)
                         ),
                         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
                     ) {
                         Column(
-                            modifier = Modifier.padding(20.dp)
+                            modifier = Modifier.padding(16.dp)
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
@@ -172,109 +233,65 @@ fun DateTimePickerDialog(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "날짜 선택",
+                                    text = "요일 선택",
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.Medium,
                                     color = Color(0xFF4A5568)
                                 )
                             }
 
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            // 요일 선택 그리드
+                            LazyVerticalGrid(
+                                columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(7),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.height(40.dp)
                             ) {
-                                // 월 선택
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "월",
-                                        fontSize = 12.sp,
-                                        color = Color.Gray,
-                                        modifier = Modifier.padding(bottom = 8.dp)
-                                    )
-                                    LazyRow(
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                items(weekDays.size) { index ->
+                                    val day = weekDays[index]
+                                    Card(
+                                        modifier = Modifier
+                                            .aspectRatio(1f)
+                                            .clickable { selectedDayIndex = index },
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = if (selectedDayIndex == index)
+                                                Color(0xFF81C4E8) else Color.White
+                                        ),
+                                        shape = RoundedCornerShape(8.dp),
+                                        border = if (selectedDayIndex != index)
+                                            androidx.compose.foundation.BorderStroke(
+                                                1.dp,
+                                                Color(0xFFE2E8F0)
+                                            )
+                                        else null
                                     ) {
-                                        items(availableMonths) { month ->
-                                            Card(
-                                                modifier = Modifier
-                                                    .size(width = 50.dp, height = 40.dp)
-                                                    .clickable { selectedMonth = month },
-                                                colors = CardDefaults.cardColors(
-                                                    containerColor = if (selectedMonth == month)
-                                                        Color(0xFF81C4E8) else Color.White
-                                                ),
-                                                shape = RoundedCornerShape(12.dp),
-                                                border = if (selectedMonth != month)
-                                                    androidx.compose.foundation.BorderStroke(
-                                                        1.dp,
-                                                        Color(0xFFE2E8F0)
-                                                    )
-                                                else null
-                                            ) {
-                                                Box(
-                                                    modifier = Modifier.fillMaxSize(),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    Text(
-                                                        text = "${month}월",
-                                                        fontSize = 12.sp,
-                                                        fontWeight = if (selectedMonth == month) FontWeight.Bold else FontWeight.Normal,
-                                                        color = if (selectedMonth == month) Color.White else Color(
-                                                            0xFF4A5568
-                                                        )
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(16.dp))
-
-                            // 일 선택
-                            Column {
-                                Text(
-                                    text = "일",
-                                    fontSize = 12.sp,
-                                    color = Color.Gray,
-                                    modifier = Modifier.padding(bottom = 8.dp)
-                                )
-                                LazyVerticalGrid(
-                                    columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(
-                                        7
-                                    ),
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                                    modifier = Modifier.height(120.dp)
-                                ) {
-                                    items(availableDays) { day ->
-                                        Card(
-                                            modifier = Modifier
-                                                .aspectRatio(1f)
-                                                .clickable { selectedDay = day },
-                                            colors = CardDefaults.cardColors(
-                                                containerColor = if (selectedDay == day)
-                                                    Color(0xFF81C4E8) else Color.White
-                                            ),
-                                            shape = RoundedCornerShape(8.dp),
-                                            border = if (selectedDay != day)
-                                                androidx.compose.foundation.BorderStroke(
-                                                    1.dp,
-                                                    Color(0xFFE2E8F0)
-                                                )
-                                            else null
+                                        Column(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.Center
                                         ) {
-                                            Box(
-                                                modifier = Modifier.fillMaxSize(),
-                                                contentAlignment = Alignment.Center
-                                            ) {
+                                            Text(
+                                                text = day.dayName,
+                                                fontSize = 12.sp,
+                                                fontWeight = if (selectedDayIndex == index) FontWeight.Bold else FontWeight.Normal,
+                                                color = if (selectedDayIndex == index) Color.White else Color(
+                                                    0xFF4A5568
+                                                )
+                                            )
+                                            Text(
+                                                text = "${day.dayOfMonth}",
+                                                fontSize = 10.sp,
+                                                fontWeight = if (selectedDayIndex == index) FontWeight.Medium else FontWeight.Normal,
+                                                color = if (selectedDayIndex == index) Color.White else Color(
+                                                    0xFF64748B
+                                                )
+                                            )
+                                            if (day.isToday) {
                                                 Text(
-                                                    text = day.toString(),
-                                                    fontSize = 14.sp,
-                                                    fontWeight = if (selectedDay == day) FontWeight.Bold else FontWeight.Normal,
-                                                    color = if (selectedDay == day) Color.White else Color(
-                                                        0xFF4A5568
+                                                    text = "오늘",
+                                                    fontSize = 8.sp,
+                                                    color = if (selectedDayIndex == index) Color.White else Color(
+                                                        0xFF81C4E8
                                                     )
                                                 )
                                             }
@@ -287,7 +304,7 @@ fun DateTimePickerDialog(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // 시간 선택 카드
+                    // 시간 선택 카드 (간소화된 24시간 버전)
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(16.dp),
@@ -328,7 +345,7 @@ fun DateTimePickerDialog(
                             ) {
                                 Text(
                                     text = String.format("%02d:%02d", selectedHour, selectedMinute),
-                                    fontSize = 32.sp,
+                                    fontSize = 28.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFF81C4E8),
                                     modifier = Modifier
@@ -338,106 +355,84 @@ fun DateTimePickerDialog(
                                 )
                             }
 
+                            Spacer(modifier = Modifier.height(20.dp))
+
+                            LazyVerticalGrid(
+                                columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(6),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.height(130.dp)
+                            ) {
+                                items(24) { hour ->
+                                    Card(
+                                        modifier = Modifier
+                                            .aspectRatio(1f)
+                                            .clickable { selectedHour = hour },
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = if (selectedHour == hour)
+                                                Color(0xFF81C4E8) else Color.White
+                                        ),
+                                        shape = RoundedCornerShape(6.dp),
+                                        border = androidx.compose.foundation.BorderStroke(
+                                            1.dp,
+                                            if (selectedHour == hour) Color(0xFF81C4E8) else Color(
+                                                0xFFE2E8F0
+                                            )
+                                        )
+                                    ) {
+                                        Box(
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = String.format("%02d", hour),
+                                                fontSize = 12.sp,
+                                                fontWeight = if (selectedHour == hour) FontWeight.Bold else FontWeight.Normal,
+                                                color = if (selectedHour == hour) Color.White else Color(
+                                                    0xFF4A5568
+                                                )
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
                             Spacer(modifier = Modifier.height(16.dp))
 
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                // 시간 선택
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "시",
-                                        fontSize = 12.sp,
-                                        color = Color.Gray,
-                                        modifier = Modifier.padding(bottom = 8.dp)
-                                    )
-                                    LazyVerticalGrid(
-                                        columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(
-                                            4
+                                listOf(0, 30).forEach { minute ->
+                                    Card(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(48.dp)
+                                            .clickable { selectedMinute = minute },
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = if (selectedMinute == minute)
+                                                Color(0xFF81C4E8) else Color.White
                                         ),
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                                        modifier = Modifier.height(120.dp)
+                                        shape = RoundedCornerShape(8.dp),
+                                        border = androidx.compose.foundation.BorderStroke(
+                                            1.dp,
+                                            if (selectedMinute == minute) Color(0xFF81C4E8) else Color(
+                                                0xFFE2E8F0
+                                            )
+                                        )
                                     ) {
-                                        items((9..22).toList()) { hour ->
-                                            Card(
-                                                modifier = Modifier
-                                                    .aspectRatio(1f)
-                                                    .clickable { selectedHour = hour },
-                                                colors = CardDefaults.cardColors(
-                                                    containerColor = if (selectedHour == hour)
-                                                        Color(0xFF81C4E8) else Color.White
-                                                ),
-                                                shape = RoundedCornerShape(8.dp),
-                                                border = if (selectedHour != hour)
-                                                    androidx.compose.foundation.BorderStroke(
-                                                        1.dp,
-                                                        Color(0xFFE2E8F0)
-                                                    )
-                                                else null
-                                            ) {
-                                                Box(
-                                                    modifier = Modifier.fillMaxSize(),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    Text(
-                                                        text = String.format("%02d", hour),
-                                                        fontSize = 12.sp,
-                                                        fontWeight = if (selectedHour == hour) FontWeight.Bold else FontWeight.Normal,
-                                                        color = if (selectedHour == hour) Color.White else Color(
-                                                            0xFF4A5568
-                                                        )
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-
-                                // 분 선택
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "분",
-                                        fontSize = 12.sp,
-                                        color = Color.Gray,
-                                        modifier = Modifier.padding(bottom = 8.dp)
-                                    )
-                                    Column(
-                                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        listOf(0, 30).forEach { minute ->
-                                            Card(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .height(40.dp)
-                                                    .clickable { selectedMinute = minute },
-                                                colors = CardDefaults.cardColors(
-                                                    containerColor = if (selectedMinute == minute)
-                                                        Color(0xFF81C4E8) else Color.White
-                                                ),
-                                                shape = RoundedCornerShape(12.dp),
-                                                border = if (selectedMinute != minute)
-                                                    androidx.compose.foundation.BorderStroke(
-                                                        1.dp,
-                                                        Color(0xFFE2E8F0)
-                                                    )
-                                                else null
-                                            ) {
-                                                Box(
-                                                    modifier = Modifier.fillMaxSize(),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    Text(
-                                                        text = String.format("%02d분", minute),
-                                                        fontSize = 14.sp,
-                                                        fontWeight = if (selectedMinute == minute) FontWeight.Bold else FontWeight.Normal,
-                                                        color = if (selectedMinute == minute) Color.White else Color(
-                                                            0xFF4A5568
-                                                        )
-                                                    )
-                                                }
-                                            }
+                                        Box(
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = String.format("%02d분", minute),
+                                                fontSize = 16.sp,
+                                                fontWeight = if (selectedMinute == minute) FontWeight.Bold else FontWeight.Normal,
+                                                color = if (selectedMinute == minute) Color.White else Color(
+                                                    0xFF4A5568
+                                                )
+                                            )
                                         }
                                     }
                                 }
@@ -468,11 +463,22 @@ fun DateTimePickerDialog(
 
                         Button(
                             onClick = {
-                                val dateTimeString = String.format(
-                                    "2025-%02d-%02d-%02d:%02d",
-                                    selectedMonth, selectedDay, selectedHour, selectedMinute
-                                )
-                                onDateTimeSelected(dateTimeString)
+                                val selectedDay = weekDays[selectedDayIndex]
+                                // 요일을 전체 이름으로 변환
+                                val fullDayName = when (selectedDay.dayName) {
+                                    "월" -> "월요일"
+                                    "화" -> "화요일"
+                                    "수" -> "수요일"
+                                    "목" -> "목요일"
+                                    "금" -> "금요일"
+                                    "토" -> "토요일"
+                                    "일" -> "일요일"
+                                    else -> selectedDay.dayName
+                                }
+
+                                // 한국어 형식으로 날짜/시간 문자열 생성: "목요일 14시 30분"
+                                val formattedDateTime = "$fullDayName ${selectedHour}시 ${selectedMinute}분"
+                                onDateTimeSelected(formattedDateTime)
                                 onDismiss()
                             },
                             modifier = Modifier
@@ -642,8 +648,7 @@ fun GroupRegisterScreen(
         if (checkStoragePermissions()) {
             pendingAction?.invoke()
             pendingAction = null
-        }
-        else{
+        } else {
             Toast.makeText(context, "저장소 권한이 필요합니다.", Toast.LENGTH_SHORT).show()
         }
     }
@@ -710,7 +715,7 @@ fun GroupRegisterScreen(
                             pdfPickerLauncher.launch(arrayOf("application/pdf"))
                         }
 
-                        if(checkStoragePermissions()){
+                        if (checkStoragePermissions()) {
                             pendingAction?.invoke()
                             pendingAction = null
                         }
@@ -962,7 +967,7 @@ fun GroupRegisterScreen(
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "설정한 평점 이상의 사용자만 모임에 참여할 수 있습니다",
+                text = "💡설정한 평점 이상의 사용자만 모임에 참여할 수 있습니다",
                 fontSize = 12.sp,
                 color = Color.Gray
             )
@@ -970,7 +975,9 @@ fun GroupRegisterScreen(
 
             // 평점 선택 카드
             Card(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(160.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = Color(0xFFF8FAFC)
                 ),
@@ -1012,76 +1019,38 @@ fun GroupRegisterScreen(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // 평점 선택 그리드 (0 ~ 5, 1점 단위)
-                    LazyVerticalGrid(
-                        columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(6),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.height(80.dp)
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = Color(0xFFF8FAFC)
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
                     ) {
-                        items((0..5).toList()) { rating ->
-                            Card(
-                                modifier = Modifier
-                                    .aspectRatio(1f)
-                                    .clickable { viewModel.updateMinRequiredRating(rating) },
-                                colors = CardDefaults.cardColors(
-                                    containerColor = if (viewModel.minRequiredRating == rating)
-                                        Color(0xFF81C4E8) else Color.White
-                                ),
-                                shape = RoundedCornerShape(8.dp),
-                                border = if (viewModel.minRequiredRating != rating)
-                                    androidx.compose.foundation.BorderStroke(
-                                        1.dp,
-                                        Color(0xFFE2E8F0)
-                                    )
-                                else null
+                        Column(
+                            modifier = Modifier.padding(16.dp)
+                        ) {
+                            // 현재 선택된 평점 표시
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Box(
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Column(
-                                        horizontalAlignment = Alignment.CenterHorizontally
-                                    ) {
-                                        Text(
-                                            text = rating.toString(),
-                                            fontSize = 14.sp,
-                                            fontWeight = if (viewModel.minRequiredRating == rating)
-                                                FontWeight.Bold else FontWeight.Normal,
-                                            color = if (viewModel.minRequiredRating == rating)
-                                                Color.White else Color(0xFF4A5568)
-                                        )
 
-                                        // 별 아이콘 표시 (선택된 경우에만)
-                                        if (viewModel.minRequiredRating == rating) {
-                                            Icon(
-                                                painter = painterResource(id = R.drawable.ic_star),
-                                                contentDescription = null,
-                                                tint = Color.White,
-                                                modifier = Modifier.size(10.dp)
-                                            )
-                                        }
-                                    }
-                                }
+                                // 커스텀 슬라이더
+                                RatingSlider(
+                                    value = viewModel.minRequiredRating,
+                                    onValueChange = { rating ->
+                                        viewModel.updateMinRequiredRating(rating)
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
                             }
                         }
                     }
-
-                    // 평점 설명
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Text(
-                            text = "💡 0점: 모든 사용자 참여 가능, 높은 점수일수록 더 신뢰할 수 있는 사용자들과 모임할 수 있어요",
-                            fontSize = 11.sp,
-                            color = Color(0xFF64748B),
-                            textAlign = TextAlign.Center
-                        )
-                    }
                 }
+
             }
-
-
 
             Spacer(modifier = Modifier.height(32.dp))
 
@@ -1150,13 +1119,15 @@ fun GroupRegisterScreen(
                 shape = RoundedCornerShape(12.dp),
                 enabled = run {
                     val isValid = viewModel.isFormValid() && !isAnalyzing
-                    Log.d(TAG, """
+                    Log.d(
+                        TAG, """
             버튼 활성화 조건:
             - viewModel.isFormValid(): ${viewModel.isFormValid()}
             - !isAnalyzing: ${!isAnalyzing}
             - selectedPdfFile != null: ${selectedPdfFile != null}
             - 최종 결과: $isValid
-        """.trimIndent())
+        """.trimIndent()
+                    )
                     isValid
                 }
             ) {
@@ -1169,60 +1140,208 @@ fun GroupRegisterScreen(
             }
 
             Spacer(modifier = Modifier.height(16.dp))
+
+            // 날짜/시간 선택 다이얼로그
+            if (viewModel.showDateTimePicker) {
+                DateTimePickerDialog(
+                    onDateTimeSelected = { dateTime ->
+                        viewModel.updateDateTime(dateTime)
+                    },
+                    onDismiss = { viewModel.hideDateTimePicker() }
+                )
+            }
         }
 
-        // 날짜/시간 선택 다이얼로그
-        if (viewModel.showDateTimePicker) {
-            DateTimePickerDialog(
-                onDateTimeSelected = { dateTime ->
-                    viewModel.updateDateTime(dateTime)
+        // 권한 설정 다이얼로그
+        if (showPermissionDialog) {
+            AlertDialog(
+                onDismissRequest = { showPermissionDialog = false },
+                title = {
+                    Text(
+                        text = "권한 필요",
+                    )
                 },
-                onDismiss = { viewModel.hideDateTimePicker() }
+                text = {
+                    Text(
+                        text = "PDF 파일에 접근하려면 저장소 권한이 필요합니다.\n설정에서 권한을 허용해주세요.",
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showPermissionDialog = false
+                            // 앱 설정으로 이동
+                            val intent =
+                                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                    data = Uri.fromParts("package", context.packageName, null)
+                                }
+                            settingsLauncher.launch(intent)
+                        }
+                    ) {
+                        Text(
+                            text = "설정으로 이동",
+                            color = Color.Black
+                        )
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { showPermissionDialog = false }
+                    ) {
+                        Text(
+                            text = "취소",
+                            color = Color.Gray
+                        )
+                    }
+                }
             )
         }
     }
+}
 
-    // 권한 설정 다이얼로그
-    if (showPermissionDialog) {
-        AlertDialog(
-            onDismissRequest = { showPermissionDialog = false },
-            title = {
-                Text(
-                    text = "권한 필요",
-                )
-            },
-            text = {
-                Text(
-                    text = "PDF 파일에 접근하려면 저장소 권한이 필요합니다.\n설정에서 권한을 허용해주세요.",
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showPermissionDialog = false
-                        // 앱 설정으로 이동
-                        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                            data = Uri.fromParts("package", context.packageName, null)
-                        }
-                        settingsLauncher.launch(intent)
-                    }
-                ) {
+@Composable
+fun RatingSlider(
+    value: Int,
+    onValueChange: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var isDragging by remember { mutableStateOf(false) }
+    var dragPosition by remember { mutableFloatStateOf(value.toFloat()) } // 연속적인 드래그 위치
+    val density = LocalDensity.current
+
+    // 드래그가 끝나지 않았다면 dragPosition, 끝났다면 value 사용
+    val displayPosition = if (isDragging) dragPosition else value.toFloat()
+
+    BoxWithConstraints(
+        modifier = modifier.height(60.dp)
+    ) {
+        val sliderWidth = maxWidth - 32.dp // 좌우 여백 고려
+        val stepWidth = sliderWidth / 5f // 0~5까지 6개 지점
+        val containerWidthPx = with(density) { sliderWidth.toPx() }
+
+        // 터치 위치를 연속적인 값으로 변환하는 함수 (0.0 ~ 5.0)
+        fun getPositionFromTouch(touchX: Float): Float {
+            val ratio = (touchX / containerWidthPx).coerceIn(0f, 1f)
+            return ratio * 5f
+        }
+
+        // 연속값을 가장 가까운 정수로 스냅하는 함수
+        fun snapToNearestInteger(position: Float): Int {
+            return position.roundToInt().coerceIn(0, 5)
+        }
+
+        Column {
+            // 평점 숫자 표시 - 가장 가까운 정수 기준으로 강조
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                (0..5).forEach { rating ->
+                    val nearestValue = snapToNearestInteger(displayPosition)
                     Text(
-                        text = "설정으로 이동",
-                        color = Color.Black
-                    )
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = { showPermissionDialog = false }
-                ) {
-                    Text(
-                        text = "취소",
-                        color = Color.Gray
+                        text = rating.toString(),
+                        fontSize = 12.sp,
+                        fontWeight = if (nearestValue == rating) FontWeight.Bold else FontWeight.Normal,
+                        color = if (nearestValue == rating) Color(0xFF81C4E8) else Color(0xFF64748B)
                     )
                 }
             }
-        )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // 슬라이더 트랙과 썸
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(32.dp)
+                    .padding(horizontal = 16.dp)
+                    .pointerInput(Unit) {
+                        detectDragGestures(
+                            onDragStart = { offset ->
+                                isDragging = true
+                                // 드래그 시작 시 터치한 위치로 바로 이동
+                                dragPosition = getPositionFromTouch(offset.x)
+                            },
+                            onDragEnd = {
+                                isDragging = false
+                                val finalValue = snapToNearestInteger(dragPosition)
+                                onValueChange(finalValue) // 최종 값은 정수로 스냅
+                            },
+                            onDrag = { _, dragAmount ->
+                                // 드래그 중 연속적인 위치 업데이트
+                                val currentPositionPx = (dragPosition / 5f) * containerWidthPx
+                                val newPositionPx = (currentPositionPx + dragAmount.x).coerceIn(
+                                    0f,
+                                    containerWidthPx
+                                )
+                                dragPosition = (newPositionPx / containerWidthPx) * 5f
+                            }
+                        )
+                    }
+                    .pointerInput(Unit) {
+                        detectTapGestures { offset ->
+                            // 터치 위치로 바로 이동하고 가장 가까운 정수로 스냅
+                            val touchPosition = getPositionFromTouch(offset.x)
+                            val snappedValue = snapToNearestInteger(touchPosition)
+                            dragPosition = snappedValue.toFloat()
+                            onValueChange(snappedValue)
+                        }
+                    }
+            ) {
+                // 백그라운드 트랙
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(6.dp)
+                        .align(Alignment.Center)
+                        .background(
+                            Color(0xFFE2E8F0),
+                            RoundedCornerShape(3.dp)
+                        )
+                )
+
+                // 활성화된 트랙 - 드래그 위치까지 채워짐 (0부터 현재 드래그 위치까지)
+                Box(
+                    modifier = Modifier
+                        .width(stepWidth * displayPosition)
+                        .height(6.dp)
+                        .align(Alignment.CenterStart)
+                        .background(
+                            Color(0xFF81C4E8),
+                            RoundedCornerShape(3.dp)
+                        )
+                )
+
+                // 드래그 가능한 썸 - 드래그 위치에 따라 이동
+                Box(
+                    modifier = Modifier
+                        .size(if (isDragging) 28.dp else 24.dp)
+                        .offset(x = (stepWidth * displayPosition) - if (isDragging) 14.dp else 12.dp)
+                        .align(Alignment.CenterStart)
+                        .background(
+                            Color.White,
+                            CircleShape
+                        )
+                        .border(
+                            if (isDragging) 3.dp else 2.dp,
+                            if (isDragging) Color(0xFF81C4E8) else Color(0xFFE2E8F0),
+                            CircleShape
+                        )
+                ) {
+                    // 썸 중앙의 작은 원
+                    Box(
+                        modifier = Modifier
+                            .size(if (isDragging) 10.dp else 8.dp)
+                            .align(Alignment.Center)
+                            .background(
+                                Color(0xFF81C4E8),
+                                CircleShape
+                            )
+                    )
+                }
+            }
+        }
     }
 }

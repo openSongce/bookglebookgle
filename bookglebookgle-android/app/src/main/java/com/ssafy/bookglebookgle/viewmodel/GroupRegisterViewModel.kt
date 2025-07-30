@@ -138,12 +138,14 @@ class GroupRegisterViewModel @Inject constructor(
 
     // 날짜 형식 변환
     private fun formatDateTimeForServer(dateTime: String): String {
-        val parts = dateTime.split("-")
-        return if (parts.size == 4) {
-            "${parts[0]}-${parts[1]}-${parts[2]}T${parts[3]}:00"
-        } else {
-            throw IllegalArgumentException("Invalid dateTime format: $dateTime")
-        }
+//        val parts = dateTime.split("-")
+//        return if (parts.size == 4) {
+//            "${parts[0]}-${parts[1]}-${parts[2]}T${parts[3]}:00"
+//        } else {
+//            throw IllegalArgumentException("Invalid dateTime format: $dateTime")
+//        }
+
+        return dateTime
     }
 
     // JSON 생성
@@ -152,10 +154,10 @@ class GroupRegisterViewModel @Inject constructor(
             put("roomTitle", groupName)
             put("description", groupDescription)
             put("category", getCategoryForServer(selectedCategory))
+            put("minRequiredRating", minRequiredRating)
             put("schedule", formatDateTimeForServer(selectedDateTime))
             put("groupMaxNum", maxMembers)
             put("readingMode", ReadingMode.FOLLOW.value)
-            put("minRequiredRating", minRequiredRating)
             put("imageBased", if (isOcrRequired) "true" else "false")
         }
         return json.toString()
