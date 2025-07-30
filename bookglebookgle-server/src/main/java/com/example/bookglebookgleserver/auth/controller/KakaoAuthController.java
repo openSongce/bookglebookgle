@@ -44,16 +44,19 @@ public class KakaoAuthController {
         String profileImage = userInfo.path("properties").path("profile_image").asText(null);
 
         String nickname = authService.generateUniqueNickname(nicknameRaw);
+        String generatedEmail = "kakao_" + UUID.randomUUID() + "@bookgle.com";
 
-        User user = userRepository.findByNickname(nickname)
+        User user = userRepository.findByEmail(generatedEmail)
                 .orElseGet(() -> userRepository.save(User.builder()
+                        .email(generatedEmail)
                         .nickname(nickname)
                         .profileImageUrl(profileImage)
                         .provider("kakao")
                         .build()));
 
-        String jwtAccessToken = jwtService.createAccessToken(nickname);
-        String jwtRefreshToken = jwtService.createRefreshToken(nickname);
+        String jwtAccessToken = jwtService.createAccessToken(user.getEmail());
+        String jwtRefreshToken = jwtService.createRefreshToken(user.getEmail());
+
 
         return ResponseEntity.ok(new JwtResponse(jwtAccessToken, jwtRefreshToken));
     }
