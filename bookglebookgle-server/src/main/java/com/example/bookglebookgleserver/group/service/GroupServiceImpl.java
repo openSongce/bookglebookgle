@@ -22,10 +22,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.File;
+import java.io.IOException;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
 import java.util.List;
+import java.util.UUID;
 
 @Slf4j
 @Service
@@ -48,11 +49,31 @@ public class GroupServiceImpl implements GroupService {
                 .orElseThrow(() -> new NotFoundException("사용자를 찾을 수 없습니다."));
 
         // 2. PDF 저장
+        // 현재 실행 경로 + /uploads
+//      String uploadDir = System.getProperty("user.dir") + "/uploads/";
+
+        String uploadDir = "/home/ubuntu/pdf-uploads/";
+        File uploadDirFile = new File(uploadDir);
+        if (!uploadDirFile.exists()) {
+            uploadDirFile.mkdirs(); // 자동 생성
+        }
+
+        String storedFileName = UUID.randomUUID() + "_" + pdfFile.getOriginalFilename();
+        String filePath = uploadDir + storedFileName;
+
+        try {
+            pdfFile.transferTo(new File(filePath));
+        } catch (IOException e) {
+            log.error("❌ PDF 파일 저장 실패", e);
+            throw new BadRequestException("PDF 파일 저장 중 오류가 발생했습니다.");
+        }
+
         PdfFile pdf = PdfFile.builder()
                 .fileName(pdfFile.getOriginalFilename())
                 .pageCnt(0)
                 .uploadUser(user)
                 .createdAt(LocalDateTime.now())
+                .filePath(filePath)
                 .build();
 
         PdfFile savedPdf = pdfRepository.save(pdf);
@@ -83,21 +104,12 @@ public class GroupServiceImpl implements GroupService {
             ocrService.saveOcrResults(savedPdf, response);
         }
 
-        // 4. 그룹 생성
-        LocalDateTime schedule;
-        try {
-            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
-            schedule = LocalDateTime.parse(dto.getSchedule(), formatter);
-        } catch (DateTimeParseException e) {
-            throw new BadRequestException("잘못된 일정 포맷입니다. (yyyy-MM-dd'T'HH:mm:ss)");
-        }
-
         Group group = Group.builder()
                 .roomTitle(dto.getRoomTitle())
                 .description(dto.getDescription())
                 .category(Group.Category.valueOf(dto.getCategory().toUpperCase()))
                 .minRequiredRating(dto.getMinRequiredRating())
-                .schedule(schedule)
+                .schedule(dto.getSchedule())
                 .groupMaxNum(dto.getGroupMaxNum())
                 .readingMode(Group.ReadingMode.valueOf(dto.getReadingMode().toUpperCase()))
                 .hostUser(user)

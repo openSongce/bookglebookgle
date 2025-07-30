@@ -39,7 +39,8 @@ public class Group {
 
     private int minRequiredRating;
 
-    private LocalDateTime schedule;
+    @Column(length = 255)
+    private String schedule;
 
     private float progressPercent;  // 그룹 전체의 현재 진도율
 

@@ -14,6 +14,7 @@ public class PdfFile {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "pdf_id")
     private Long pdfId;
 
     private String fileName;
@@ -31,4 +32,7 @@ public class PdfFile {
     public void prePersist() {
         this.createdAt = LocalDateTime.now();
     }
+
+    @Column(name = "file_path", nullable = false)
+    private String filePath;
 }
