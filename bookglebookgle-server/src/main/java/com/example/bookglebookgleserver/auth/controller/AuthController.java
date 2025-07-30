@@ -172,7 +172,7 @@ public class AuthController {
             @ApiResponse(responseCode = "500", description = "서버 오류")
     })
     @PostMapping("/oauth/google")
-    public ResponseEntity<?> loginWithGoogle(@RequestBody Map<String, String> body) {
+    public ResponseEntity<?> googleCallback(@RequestBody Map<String, String> body) {
         String idToken = body.get("idToken");
 
         // 1. ID 토큰 검증
@@ -195,7 +195,11 @@ public class AuthController {
         String accessToken = jwtService.createAccessToken(user.getEmail());
         String refreshToken= jwtService.createRefreshToken(user.getEmail());
 
-        JwtResponse response = new JwtResponse(accessToken, refreshToken);
+        JwtResponse response = new JwtResponse(accessToken,
+                refreshToken,
+                user.getEmail(),
+                user.getNickname(),
+                user.getProfileImageUrl());
         return ResponseEntity.ok(response);
 
     }
