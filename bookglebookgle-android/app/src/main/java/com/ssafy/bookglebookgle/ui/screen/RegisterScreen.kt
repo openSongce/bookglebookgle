@@ -93,7 +93,8 @@ fun RegisterScreen(navController: NavController, registerViewModel: RegisterView
                             unfocusedBorderColor = Color.Transparent,
                             focusedBorderColor = Color.Transparent,
                             focusedContainerColor = Color.Transparent,
-                            unfocusedContainerColor = Color.Transparent
+                            unfocusedContainerColor = Color.Transparent,
+                            cursorColor = Color(0xFF4A90E2)
                         ),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                         keyboardActions = KeyboardActions(
@@ -101,7 +102,7 @@ fun RegisterScreen(navController: NavController, registerViewModel: RegisterView
                                 focusManager.clearFocus()
                                 keyboardController?.hide()  // 👈 키보드 내려감
                             }
-                        )
+                        ),
                     )
                     Box(
                         modifier = Modifier
@@ -249,7 +250,8 @@ fun CustomInputField(
             unfocusedBorderColor = Color.Transparent,
             focusedBorderColor = Color.Transparent,
             unfocusedContainerColor = Color.Transparent,
-            focusedContainerColor = Color.Transparent
+            focusedContainerColor = Color.Transparent,
+            cursorColor = Color(0xFF4A90E2)
         ),
         visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None,
         keyboardOptions = if (isPassword) KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done)

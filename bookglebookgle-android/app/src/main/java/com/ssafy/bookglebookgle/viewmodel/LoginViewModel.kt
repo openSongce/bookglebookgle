@@ -42,7 +42,6 @@ class LoginViewModel @Inject constructor(
         }
     }
 
-
     fun googleLogin(idToken: String) {
         viewModelScope.launch {
             val success = googleLoginUseCase(idToken)
@@ -57,6 +56,10 @@ class LoginViewModel @Inject constructor(
         }
     }
 
-
+    // 텍스트필드 초기화 메서드
+    fun clearFields() {
+        id.value = ""
+        password.value = ""
+    }
 
 }
