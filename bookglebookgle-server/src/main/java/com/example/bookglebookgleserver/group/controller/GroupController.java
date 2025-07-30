@@ -1,17 +1,19 @@
 package com.example.bookglebookgleserver.group.controller;
 
+import com.example.bookglebookgleserver.auth.security.CustomUserDetails;
 import com.example.bookglebookgleserver.group.dto.GroupCreateRequestDto;
 import com.example.bookglebookgleserver.group.dto.GroupDetailResponse;
 import com.example.bookglebookgleserver.group.dto.GroupListResponseDto;
 import com.example.bookglebookgleserver.group.service.GroupService;
+import com.example.bookglebookgleserver.user.entity.User;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -38,19 +40,14 @@ public class GroupController {
                     @ApiResponse(responseCode = "500", description = "서버 오류")
             }
     )
-    @PostMapping(value = "/create", consumes = "multipart/form-data")
+    @PostMapping("/create")
     public ResponseEntity<?> createGroup(
-            @Parameter(description = "그룹 정보 JSON", required = true,
-                    content = @Content(schema = @Schema(implementation = GroupCreateRequestDto.class)))
-            @RequestPart("groupInfo") GroupCreateRequestDto groupDto,
-
-            @Parameter(description = "PDF 파일", required = true)
-            @RequestPart("file") MultipartFile pdfFile,
-
-            @Parameter(description = "JWT 토큰", required = true)
-            @RequestHeader("Authorization") String token
+            @RequestPart("groupInfo") GroupCreateRequestDto dto,
+            @RequestPart("file") MultipartFile file,
+            @AuthenticationPrincipal CustomUserDetails customUser  // ✅ 여기만 바꾸면 됨
     ) {
-        groupService.createGroup(groupDto, pdfFile, token);
+        User user = customUser.getUser();  // ✅ User 엔티티 직접 접근 가능
+        groupService.createGroup(dto, file, user);
         return ResponseEntity.ok("스터디 그룹 생성 완료");
     }
 
@@ -62,9 +59,10 @@ public class GroupController {
     public ResponseEntity<?> createGroupWithoutOcr(
             @RequestPart("groupInfo") GroupCreateRequestDto groupDto,
             @RequestPart("file") MultipartFile pdfFile,
-            @RequestHeader("Authorization") String token
+            @AuthenticationPrincipal CustomUserDetails customUser  // ✅ 변경
     ) {
-        groupService.createGroupWithoutOcr(groupDto, pdfFile, token);
+        User user = customUser.getUser();  // ✅ User 추출
+        groupService.createGroupWithoutOcr(groupDto, pdfFile, user);  // ✅ User 넘김
         return ResponseEntity.ok("OCR 없이 그룹 생성 완료");
     }
 
@@ -87,4 +85,11 @@ public class GroupController {
     public ResponseEntity<GroupDetailResponse> getGroupDetail(@PathVariable("groupId") Long groupId) {
         return ResponseEntity.ok(groupService.getGroupDetail(groupId));
     }
+//
+//    @PutMapping("/{groupId}/edit")
+//    public ResponseEntity<GroupUpdateRequestDto> updateGroup(
+//            @PathVariable("groupId") Long groupId,
+//            @RequestBody GroupUpdateRequestDto groupDto) {
+//
+//    }
 }

@@ -4,7 +4,6 @@ import com.bgbg.ai.grpc.ProcessPdfResponse;
 import com.bgbg.ai.grpc.TextBlock;
 import com.example.bookglebookgleserver.global.exception.BadRequestException;
 import com.example.bookglebookgleserver.global.exception.NotFoundException;
-import com.example.bookglebookgleserver.global.util.AuthUtil;
 import com.example.bookglebookgleserver.group.dto.GroupCreateRequestDto;
 import com.example.bookglebookgleserver.group.dto.GroupDetailResponse;
 import com.example.bookglebookgleserver.group.dto.GroupListResponseDto;
@@ -44,20 +43,17 @@ public class GroupServiceImpl implements GroupService {
 
     @Override
     @Transactional
-    public void createGroup(GroupCreateRequestDto dto, MultipartFile pdfFile, String token) {
-        // 1. 사용자 인증
-        String email = AuthUtil.getCurrentUserEmail();
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new NotFoundException("사용자를 찾을 수 없습니다."));
+    public void createGroup(GroupCreateRequestDto dto, MultipartFile pdfFile, User user) {
+        // 🔥 기존 인증 로직 제거
+        // String email = AuthUtil.getCurrentUserEmail();
+        // User user = userRepository.findByEmail(email)
+        //     .orElseThrow(() -> new NotFoundException("사용자를 찾을 수 없습니다."));
 
-        // 2. PDF 저장
-        // 현재 실행 경로 + /uploads
-//      String uploadDir = System.getProperty("user.dir") + "/uploads/";
-
+        // 그대로 유지
         String uploadDir = "/home/ubuntu/pdf-uploads/";
         File uploadDirFile = new File(uploadDir);
         if (!uploadDirFile.exists()) {
-            uploadDirFile.mkdirs(); // 자동 생성
+            uploadDirFile.mkdirs();
         }
 
         String storedFileName = UUID.randomUUID() + "_" + pdfFile.getOriginalFilename();
@@ -80,7 +76,6 @@ public class GroupServiceImpl implements GroupService {
 
         PdfFile savedPdf = pdfRepository.save(pdf);
 
-        // 3. OCR 필요 시 요청
         if (dto.isImageBased()) {
             log.info("🟡 OCR 요청 시작 - PDF ID: {}, 파일명: {}", savedPdf.getPdfId(), pdfFile.getOriginalFilename());
 
@@ -123,25 +118,26 @@ public class GroupServiceImpl implements GroupService {
 
         groupRepository.save(group);
 
-        // 그룹 멤버로 생성자 추가
         GroupMember groupMember = GroupMember.builder()
                 .group(group)
                 .user(user)
                 .isHost(true)
                 .lastPageRead(0)
                 .progressPercent(0f)
-                .isFollowingHost(false) // 기본값. 필요 시 true로 설정
+                .isFollowingHost(false)
                 .build();
 
         groupMemberRepository.save(groupMember);
         log.info("🟢 그룹 생성자 '{}'를 그룹 멤버로 자동 등록 완료", user.getEmail());
     }
 
+
     @Override
-    public void createGroupWithoutOcr(GroupCreateRequestDto dto, MultipartFile pdfFile, String token) {
-        dto.setImageBased(false); // 강제 비활성화
-        createGroup(dto, pdfFile, token);
+    public void createGroupWithoutOcr(GroupCreateRequestDto dto, MultipartFile pdfFile, User user) {
+        dto.setImageBased(false); // OCR 비활성화
+        createGroup(dto, pdfFile, user); // ✅ token → user
     }
+
 
     @Override
     public List<GroupListResponseDto> getGroupList() {
