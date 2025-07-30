@@ -12,7 +12,7 @@ import org.springframework.web.client.RestTemplate;
 @Service
 public class KakaoOAuthService {
     private final String CLIENT_ID = "67f26fda68f31113df39cde27bff0a6a";
-    private final String REDIRECT_URI = "http://localhost:8081/auth/kakao/callback";
+    private final String REDIRECT_URI = "http://localhost:8081/auth/oauth/kakao";
 
     public String getAccessToken(String code) {
         RestTemplate restTemplate = new RestTemplate();
