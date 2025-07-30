@@ -4,11 +4,13 @@ import com.example.bookglebookgleserver.global.exception.AuthException;
 import com.example.bookglebookgleserver.global.exception.BadRequestException;
 import com.example.bookglebookgleserver.global.exception.NotFoundException;
 import com.example.bookglebookgleserver.global.exception.dto.ErrorResponse;
+import io.swagger.v3.oas.annotations.Hidden;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+@Hidden
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
