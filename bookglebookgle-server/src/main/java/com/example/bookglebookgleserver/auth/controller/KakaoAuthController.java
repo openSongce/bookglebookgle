@@ -37,24 +37,44 @@ public class KakaoAuthController {
     })
     @PostMapping("/oauth/kakao")
     public ResponseEntity<?> kakaoLogin(@RequestBody KakaoLoginRequest request) {
-        String accessToken = request.getAccessToken();
-        JsonNode userInfo = kakaoOAuthService.getUserInfo(accessToken);
+    	System.out.println("💥 컨트롤러 진입 성공!");
 
-        String email = userInfo.get("kakao_account").get("email").asText();
-        String nicknameRaw = userInfo.get("properties").get("nickname").asText();
-        String nickname = authService.generateUniqueNickname(nicknameRaw);
+        try {
+        	System.out.println("try문 안쪽 💥 컨트롤러 진입 성공!");
 
-        // 회원가입 or 로그인
-        User user = userRepository.findByEmail(email)
-                .orElseGet(() -> userRepository.save(User.builder()
-                        .email(email)
-                        .nickname(nickname)
-                        .provider("kakao")
-                        .build()));
+            String accessToken = request.getAccessToken();
+            JsonNode userInfo = kakaoOAuthService.getUserInfo(accessToken);
+            System.out.println(" userInfo = " + userInfo);
 
-        String jwtAccessToken = jwtService.createAccessToken(user.getEmail());
-        String jwtRefreshToken = jwtService.createRefreshToken(user.getEmail());
+            System.out.println("accessToken 들어옴 = " + request.getAccessToken());
+            
+            String kakaoId = userInfo.path("id").asText();
+            String generatedEmail = "kakao_" + kakaoId + "@bookgle.com";
 
-        return ResponseEntity.ok(new JwtResponse(jwtAccessToken, jwtRefreshToken));
+            String nicknameRaw = userInfo.path("properties").path("nickname").asText("카카오사용자");
+            String profileImage = userInfo.path("properties").path("profile_image").asText(null);
+            String nickname = authService.generateUniqueNickname(nicknameRaw);
+            System.out.println(" nickname = " + nickname);
+
+            User user = userRepository.findByEmail(generatedEmail)
+                    .orElseGet(() -> {
+                        System.out.println(" 신규 유저 생성: " + generatedEmail);
+                        return userRepository.save(User.builder()
+                                .email(generatedEmail)
+                                .nickname(nickname)
+                                .profileImageUrl(profileImage)
+                                .provider("kakao")
+                                .build());
+                    });
+
+            String jwtAccessToken = jwtService.createAccessToken(user.getEmail());
+            String jwtRefreshToken = jwtService.createRefreshToken(user.getEmail());
+
+            return ResponseEntity.ok(new JwtResponse(jwtAccessToken, jwtRefreshToken));
+        } catch (Exception e) {
+            e.printStackTrace(); // 콘솔에 전체 예외 로그 출력
+            return ResponseEntity.status(500).body("카카오 로그인 실패: " + e.getMessage());
+        }
     }
+
 }
