@@ -8,6 +8,7 @@ import com.example.bookglebookgleserver.auth.dto.SignupRequest;
 import com.example.bookglebookgleserver.auth.service.AuthService;
 import com.example.bookglebookgleserver.auth.service.GoogleTokenVerifier;
 import com.example.bookglebookgleserver.auth.service.JwtService;
+import com.example.bookglebookgleserver.auth.service.RefreshTokenService;
 import com.example.bookglebookgleserver.user.entity.User;
 import com.example.bookglebookgleserver.user.repository.UserRepository;
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
@@ -29,6 +30,8 @@ public class AuthController {
 
     private final UserRepository userRepository;
     private final JwtService jwtService;
+
+    private final RefreshTokenService refreshTokenService;
 
 
     @Operation(
@@ -129,13 +132,6 @@ public class AuthController {
     }
 
 
-
-
-
-
-
-
-
     @PostMapping("/signup/email")
     public ResponseEntity<String> signup(@RequestBody SignupRequest request) {
         System.out.println("signup 요청 도달");
@@ -194,6 +190,10 @@ public class AuthController {
         // 4. JWT 발급
         String accessToken = jwtService.createAccessToken(user.getEmail());
         String refreshToken= jwtService.createRefreshToken(user.getEmail());
+
+
+        refreshTokenService.saveRefreshToken(user.getEmail(), refreshToken);
+
 
         JwtResponse response = new JwtResponse(accessToken,
                 refreshToken,
