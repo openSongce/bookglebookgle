@@ -46,6 +46,8 @@ public class KakaoAuthController {
             JsonNode userInfo = kakaoOAuthService.getUserInfo(accessToken);
             System.out.println(" userInfo = " + userInfo);
 
+            System.out.println("✅ accessToken 들어옴 = " + request.getAccessToken());
+            
             String kakaoId = userInfo.path("id").asText();
             String generatedEmail = "kakao_" + kakaoId + "@bookgle.com";
 
