@@ -27,7 +27,7 @@ services:
       MAIL_USERNAME: ${MAIL_USERNAME}
       MAIL_PASSWORD: ${MAIL_PASSWORD}
     volumes:
-      - ./backend-logs:/logs   # ✅ spring 로그 공유 (logback-spring.xml과 연결됨)
+      - ./backend-logs:/logs
 
   loki:
     image: grafana/loki:2.9.4
@@ -43,7 +43,7 @@ services:
     container_name: promtail
     volumes:
       - ./promtail-config.yml:/etc/promtail/promtail-config.yml
-      - ./backend-logs:/logs  # ✅ promtail이 로그 파일 읽음
+      - ./backend-logs:/logs
     command: ["-config.file=/etc/promtail/promtail-config.yml"]
     networks:
       - test-net
@@ -51,10 +51,19 @@ services:
   grafana:
     image: grafana/grafana:10.4.2
     container_name: grafana
+    restart: always  # 🔁 재시작 시 자동 복구
     ports:
       - "3001:3000"
     depends_on:
       - loki
+    volumes:
+      - grafana-storage:/var/lib/grafana  # 💾 설정 및 세션 유지
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin1234  # 🔐 원하는 비밀번호로 변경
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+      - GF_SESSION_PROVIDER=file
+      - GF_SESSION_PROVIDER_CONFIG=session.db
     networks:
       - test-net
 
@@ -67,6 +76,9 @@ services:
       - ./prometheus:/etc/prometheus 
     networks:
       - test-net
+
+volumes:
+  grafana-storage:  # 🔧 Grafana 데이터 유지용 볼륨
 
 networks:
   test-net:
