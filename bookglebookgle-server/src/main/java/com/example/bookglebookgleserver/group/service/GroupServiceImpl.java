@@ -8,6 +8,7 @@ import com.example.bookglebookgleserver.global.util.AuthUtil;
 import com.example.bookglebookgleserver.group.dto.GroupCreateRequestDto;
 import com.example.bookglebookgleserver.group.dto.GroupListResponseDto;
 import com.example.bookglebookgleserver.group.entity.Group;
+import com.example.bookglebookgleserver.group.entity.GroupMember;
 import com.example.bookglebookgleserver.group.repository.GroupMemberRepository;
 import com.example.bookglebookgleserver.group.repository.GroupRepository;
 import com.example.bookglebookgleserver.ocr.grpc.GrpcOcrClient;
@@ -120,6 +121,19 @@ public class GroupServiceImpl implements GroupService {
                 .build();
 
         groupRepository.save(group);
+
+        // 그룹 멤버로 생성자 추가
+        GroupMember groupMember = GroupMember.builder()
+                .group(group)
+                .user(user)
+                .isHost(true)
+                .lastPageRead(0)
+                .progressPercent(0f)
+                .isFollowingHost(false) // 기본값. 필요 시 true로 설정
+                .build();
+
+        groupMemberRepository.save(groupMember);
+        log.info("🟢 그룹 생성자 '{}'를 그룹 멤버로 자동 등록 완료", user.getEmail());
     }
 
     @Override
