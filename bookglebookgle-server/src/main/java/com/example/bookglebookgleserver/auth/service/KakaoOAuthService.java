@@ -11,7 +11,7 @@ import org.springframework.web.client.RestTemplate;
 
 @Service
 public class KakaoOAuthService {
-    private final String CLIENT_ID = "카카오 REST API 키";
+    private final String CLIENT_ID = "67f26fda68f31113df39cde27bff0a6a";
     private final String REDIRECT_URI = "http://localhost:8081/auth/kakao/callback";
 
     public String getAccessToken(String code) {
@@ -22,7 +22,7 @@ public class KakaoOAuthService {
 
         MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
         body.add("grant_type", "authorization_code");
-        body.add("client_id", CLIENT_ID);
+        body.add("cl                                                                                                                                                ient_id", CLIENT_ID);
         body.add("redirect_uri", REDIRECT_URI);
         body.add("code", code);
 

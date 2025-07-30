@@ -27,5 +27,7 @@ public class User {
     //로그인 제공자
     private String provider;
 
+    private String profileImageUrl;
+
 
 }
