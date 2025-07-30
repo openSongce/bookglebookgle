@@ -12,6 +12,11 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@Table(
+        uniqueConstraints = {
+                @UniqueConstraint(columnNames = {"group_id", "user_id"}) // 중복 참여 방지
+        }
+)
 public class GroupMember {
 
     @Id
@@ -34,6 +39,7 @@ public class GroupMember {
 
     private LocalDateTime joinedAt;
 
+    private boolean isHost;
     @PrePersist
     public void prePersist() {
         this.joinedAt = LocalDateTime.now();
