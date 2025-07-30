@@ -28,7 +28,7 @@ services:
       MAIL_PASSWORD: ${MAIL_PASSWORD}
     volumes:
       - ./backend-logs:/logs
-      - ./uploads:/home/ubuntu/pdf-uploads
+      - /home/ubuntu/bookglebookgle-server/uploads:/home/ubuntu/pdf-uploads
 
   loki:
     image: grafana/loki:2.9.4
