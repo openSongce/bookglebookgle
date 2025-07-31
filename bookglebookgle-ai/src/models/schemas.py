@@ -237,58 +237,6 @@ class TopicGenerationResponse(BaseResponse):
     topic_count: int = Field(..., description="Number of generated topics")
 
 
-# Analytics Models
-class UserActivityData(BaseModel):
-    """User activity data model"""
-    reading_sessions: List[Dict[str, Any]] = Field(default_factory=list)
-    quiz_participations: List[Dict[str, Any]] = Field(default_factory=list)
-    discussion_participations: List[Dict[str, Any]] = Field(default_factory=list)
-    meeting_attendances: List[Dict[str, Any]] = Field(default_factory=list)
-
-
-class ActivityAnalysisRequest(BaseRequest):
-    """Activity analysis request"""
-    user_id: str = Field(..., description="User identifier")
-    start_date: int = Field(..., description="Analysis start date (Unix timestamp)")
-    end_date: int = Field(..., description="Analysis end date (Unix timestamp)")
-
-
-class ActivityPatterns(BaseModel):
-    """User activity patterns"""
-    reading_patterns: Dict[str, Any] = Field(default_factory=dict)
-    engagement_patterns: Dict[str, Any] = Field(default_factory=dict)
-    time_patterns: Dict[str, Any] = Field(default_factory=dict)
-    category_preferences: Dict[str, Any] = Field(default_factory=dict)
-
-
-class ActivityAnalysisResponse(BaseResponse):
-    """Activity analysis response"""
-    user_id: str = Field(..., description="User identifier")
-    analysis_period: Dict[str, Any] = Field(..., description="Analysis time period")
-    activity_data: UserActivityData = Field(..., description="Raw activity data")
-    patterns: ActivityPatterns = Field(..., description="Identified patterns")
-    insights: List[str] = Field(..., description="Generated insights")
-    metrics: Dict[str, float] = Field(..., description="Calculated metrics")
-
-
-class InterestExtractionRequest(BaseRequest):
-    """Interest extraction request"""
-    user_id: str = Field(..., description="User identifier")
-    activity_data: Dict[str, Any] = Field(..., description="User activity data")
-    recent_searches: List[str] = Field(default_factory=list, description="Recent search terms")
-    bookmarked_topics: List[str] = Field(default_factory=list, description="Bookmarked topics")
-
-
-class InterestExtractionResponse(BaseResponse):
-    """Interest extraction response"""
-    user_id: str = Field(..., description="User identifier")
-    primary_interests: List[str] = Field(..., description="Primary interests")
-    emerging_interests: List[str] = Field(..., description="Emerging interests")
-    interest_scores: Dict[str, float] = Field(..., description="Interest confidence scores")
-    recommended_categories: List[str] = Field(..., description="Recommended content categories")
-    insights: List[str] = Field(..., description="Interest insights")
-    confidence_level: float = Field(..., description="Overall confidence level")
-
 
 # Session and Statistics Models
 class DiscussionSession(BaseModel):
