@@ -40,7 +40,6 @@ class AISettings(BaseModel):
     ENABLE_QUIZ_GENERATION: bool = Field(default=True, description="Enable quiz generation")
     ENABLE_PROOFREADING: bool = Field(default=True, description="Enable proofreading")
     ENABLE_DISCUSSION_AI: bool = Field(default=True, description="Enable discussion AI")
-    ENABLE_USER_ANALYTICS: bool = Field(default=True, description="Enable user analytics")
     
     # Model configurations
     KOREAN_MODEL_PATH: str = Field(default="./models/korean", description="Korean model path")

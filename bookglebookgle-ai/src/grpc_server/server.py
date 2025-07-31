@@ -53,8 +53,21 @@ class GRPCServer:
             try:
                 logger.info(f"Attempting to start gRPC server (attempt {attempt}/{self.settings.SERVER_START_RETRIES})...")
                 
+                # OCR 처리용 서버 옵션 설정
+                server_options = [
+                    ('grpc.keepalive_time_ms', 120000),  # 2분
+                    ('grpc.keepalive_timeout_ms', 30000),  # 30초
+                    ('grpc.keepalive_permit_without_calls', True),
+                    ('grpc.http2.max_pings_without_data', 2),
+                    ('grpc.http2.min_time_between_pings_ms', 60000),  # 1분
+                    ('grpc.http2.min_ping_interval_without_data_ms', 300000),  # 5분
+                    ('grpc.max_receive_message_length', 50 * 1024 * 1024),  # 50MB
+                    ('grpc.max_send_message_length', 50 * 1024 * 1024),  # 50MB
+                ]
+                
                 self.server = grpc.aio.server(
-                    ThreadPoolExecutor(max_workers=self.settings.SERVER_WORKERS)
+                    ThreadPoolExecutor(max_workers=self.settings.SERVER_WORKERS),
+                    options=server_options
                 )
                 
                 # Pass the initialized vector_db_manager to the servicer
