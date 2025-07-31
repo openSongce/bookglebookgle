@@ -105,8 +105,8 @@ public class GroupController {
     }
 
     @GetMapping("/my")
-    public ResponseEntity<List<MyGroupSummaryDto>> getMyGroups(@RequestParam Long userId) {
-        List<MyGroupSummaryDto> result = groupService.getMyGroupList(userId);
-        return ResponseEntity.ok(result);
+    public ResponseEntity<List<MyGroupSummaryDto>> getMyGroups(@AuthenticationPrincipal CustomUserDetails userDetails) {
+        Long userId = userDetails.getUser().getId();
+        return ResponseEntity.ok(groupService.getMyGroupList(userId));
     }
 }
