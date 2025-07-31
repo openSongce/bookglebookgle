@@ -5,12 +5,15 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.selection.LocalTextSelectionColors
+import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -19,6 +22,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.*
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import com.ssafy.bookglebookgle.R
 import com.ssafy.bookglebookgle.entity.RegisterStep
 import com.ssafy.bookglebookgle.viewmodel.RegisterViewModel
 
@@ -150,13 +154,24 @@ fun RegisterScreen(navController: NavController, registerViewModel: RegisterView
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    OutlinedTextField(
-                        value = registerViewModel.nickname,
-                        onValueChange = registerViewModel::onNicknameChange,
-                        modifier = Modifier.weight(1f),
-                        placeholder = { Text("닉네임") },
-                        enabled = !registerViewModel.isNicknameValid
-                    )
+                    CompositionLocalProvider(
+                        LocalTextSelectionColors provides TextSelectionColors(
+                            handleColor = Color(0xFF4A90E2), // 드래그 핸들(물방울) 색상
+                            backgroundColor = Color(0xFF0064FF).copy(alpha = 0.3f) // 선택 영역 배경색 (투명도 적용)
+                        )
+                    ) {
+                        OutlinedTextField(
+                            value = registerViewModel.nickname,
+                            onValueChange = registerViewModel::onNicknameChange,
+                            modifier = Modifier.weight(1f),
+                            placeholder = { Text("닉네임") },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = Color(0xFF4A90E2), // 포커스 시 테두리 색상
+                                cursorColor = Color(0xFF4A90E2)
+                            ),
+                            enabled = !registerViewModel.isNicknameValid
+                        )
+                    }
 
                     Spacer(modifier = Modifier.width(maxW * 0.02f))
 
@@ -246,6 +261,7 @@ fun CustomInputField(
 ) {
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
+    var passwordVisible by remember { mutableStateOf(false) }
 
     OutlinedTextField(
         value = value,
@@ -262,7 +278,7 @@ fun CustomInputField(
             focusedContainerColor = Color.Transparent,
             cursorColor = Color(0xFF4A90E2)
         ),
-        visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None,
+        visualTransformation = if (isPassword && !passwordVisible) PasswordVisualTransformation() else VisualTransformation.None,
         keyboardOptions = if (isPassword) KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done)
         else KeyboardOptions(imeAction = ImeAction.Done),
         keyboardActions = KeyboardActions(
@@ -270,7 +286,20 @@ fun CustomInputField(
                 focusManager.clearFocus()
                 keyboardController?.hide()
             }
-        )
+        ),
+        trailingIcon = if (isPassword) {
+            {
+                IconButton(
+                    onClick = { passwordVisible = !passwordVisible }
+                ) {
+                    Icon(
+                        painterResource(if (passwordVisible) R.drawable.noneye else R.drawable.eye),
+                        contentDescription = if (passwordVisible) "비밀번호 숨기기" else "비밀번호 보이기",
+                        tint = Color(0xFF8D7E6E)
+                    )
+                }
+            }
+        } else null
     )
 }
 

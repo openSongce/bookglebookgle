@@ -23,6 +23,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -52,6 +53,10 @@ fun MainScreen(navController: NavHostController, viewModel: MainViewModel = hilt
     val tabs = listOf("독서", "학습", "첨삭")
     val horizontalPadding = ScreenSize.width * 0.04f
     val verticalPadding = ScreenSize.height * 0.01f
+
+    LaunchedEffect(Unit) {
+        viewModel.getchAllGroups()
+    }
 
     Column(
         modifier = Modifier
@@ -159,8 +164,10 @@ fun MainScreen(navController: NavHostController, viewModel: MainViewModel = hilt
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "모임이 존재하지 않습니다",
+                                text = "생성된 모임이 없습니다\n" +
+                                        "모임을 생성해보세요!",
                                 color = Color.Gray,
+                                textAlign = TextAlign.Center,
                                 fontSize = ScreenSize.width.value.times(0.04f).sp
                             )
                         }

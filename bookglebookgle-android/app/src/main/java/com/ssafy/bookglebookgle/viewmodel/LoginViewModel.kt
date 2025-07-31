@@ -31,7 +31,7 @@ class LoginViewModel @Inject constructor(
             try {
                 val success = loginUseCase(id.value, password.value)
                 loginSuccess.value = success
-
+                clearFields()
 
             } catch (e: Exception) {
                 e.printStackTrace()

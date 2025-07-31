@@ -1,6 +1,7 @@
 package com.ssafy.bookglebookgle
 
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -14,8 +15,10 @@ import androidx.compose.ui.Modifier
 import com.ssafy.bookglebookgle.ui.theme.BookgleBookgleTheme
 import dagger.hilt.android.AndroidEntryPoint
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import com.kakao.sdk.common.util.Utility
 import com.ssafy.bookglebookgle.navigation.MainNavigation
 
+private const val TAG = "싸피_MainActivity"
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
@@ -30,6 +33,8 @@ class MainActivity : ComponentActivity() {
         // 즉시 스플래시 제거
         splashScreen.setKeepOnScreenCondition { false }
 
+        val keyHash = Utility.getKeyHash(this)
+        Log.d(TAG, "keyHash : $keyHash")
 
         enableEdgeToEdge()
         setContent {

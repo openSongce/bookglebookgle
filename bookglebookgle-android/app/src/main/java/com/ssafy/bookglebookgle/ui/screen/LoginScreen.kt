@@ -70,8 +70,16 @@ import android.util.Log
 import androidx.compose.foundation.text.input.InputTransformation.Companion.keyboardOptions
 import androidx.compose.foundation.text.selection.LocalTextSelectionColors
 import androidx.compose.foundation.text.selection.TextSelectionColors
+import androidx.compose.material.icons.Icons
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.credentials.exceptions.GetCredentialException
 import com.kakao.sdk.user.UserApiClient
 import com.ssafy.bookglebookgle.BuildConfig
@@ -87,6 +95,8 @@ fun LoginScreen(navController: NavController, loginViewModel: LoginViewModel = h
     val id = loginViewModel.id.value
     val password = loginViewModel.password.value
     val loginResult = loginViewModel.loginSuccess.value
+
+    var passwordVisible by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
 
@@ -111,10 +121,10 @@ fun LoginScreen(navController: NavController, loginViewModel: LoginViewModel = h
             }
 
             false -> {
-                loginViewModel.loginSuccess.value = null // 다시 초기화
+                loginViewModel.loginSuccess.value = null // 초기화
             }
 
-            null -> {} // 아무것도 안함
+            null -> {}
         }
     }
 
@@ -132,7 +142,7 @@ fun LoginScreen(navController: NavController, loginViewModel: LoginViewModel = h
     val startGoogleLogin = {
         val googleIdOption = GetGoogleIdOption.Builder()
             .setFilterByAuthorizedAccounts(false)
-            .setServerClientId(clientId) // 웹 클라이언트 ID 꼭 바꿔!
+            .setServerClientId(clientId)
             .build()
 
         val request = GetCredentialRequest.Builder()
@@ -256,20 +266,31 @@ fun LoginScreen(navController: NavController, loginViewModel: LoginViewModel = h
                     value = password,
                     onValueChange = { loginViewModel.password.value = it },
                     placeholder = { Text("비밀번호를 입력해주세요.") },
-                    visualTransformation = PasswordVisualTransformation(),
+                    visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                     shape = RoundedCornerShape(maxW * 0.02f),
                     modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(
                         onDone = {
                             focusManager.clearFocus()
-                            keyboardController?.hide()  // 👈 키보드 내려감
+                            keyboardController?.hide()
                         }
                     ),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = Color(0xFF4A90E2), // 포커스 시 테두리 색상
                         cursorColor = Color(0xFF4A90E2)
-                    )
+                    ),
+                    trailingIcon = {
+                        IconButton(
+                            onClick = { passwordVisible = !passwordVisible }
+                        ) {
+                            Icon(
+                                painterResource(if (passwordVisible) R.drawable.noneye else R.drawable.eye),
+                                contentDescription = if (passwordVisible) "비밀번호 숨기기" else "비밀번호 보이기",
+                                tint = Color(0xFF8D7E6E)
+                            )
+                        }
+                    }
                 )
             }
 
@@ -278,8 +299,7 @@ fun LoginScreen(navController: NavController, loginViewModel: LoginViewModel = h
             // 로그인 버튼
             Button(
                 onClick = {
-                    loginViewModel.login()
-                    loginViewModel.clearFields() },
+                    loginViewModel.login() },
                 colors = ButtonDefaults.buttonColors(
                     containerColor = if (id.isNotBlank() && password.isNotBlank())
                         Color(0xFFDED0BB) else Color(0xFFCCC7C0)
