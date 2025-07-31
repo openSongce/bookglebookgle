@@ -6,6 +6,8 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Getter
@@ -79,4 +81,8 @@ public class Group {
         this.pdfFile = pdfFile;
         pdfFile.setGroup(this);
     }
+
+    @OneToMany(mappedBy = "group", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<GroupMember> groupMembers = new ArrayList<>();
+
 }

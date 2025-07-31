@@ -7,6 +7,7 @@ import com.example.bookglebookgleserver.global.exception.NotFoundException;
 import com.example.bookglebookgleserver.group.dto.GroupCreateRequestDto;
 import com.example.bookglebookgleserver.group.dto.GroupDetailResponse;
 import com.example.bookglebookgleserver.group.dto.GroupListResponseDto;
+import com.example.bookglebookgleserver.group.dto.MyGroupSummaryDto;
 import com.example.bookglebookgleserver.group.entity.Group;
 import com.example.bookglebookgleserver.group.entity.GroupMember;
 import com.example.bookglebookgleserver.group.repository.GroupMemberRepository;
@@ -31,6 +32,7 @@ import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -188,5 +190,24 @@ public class GroupServiceImpl implements GroupService {
                 .contentType(MediaType.APPLICATION_PDF)
                 .header("Content-Disposition", "inline; filename=\"" + pdfFile.getFileName() + "\"")
                 .body(resource);
+    }
+
+    @Override
+    public List<MyGroupSummaryDto> getMyGroupList(Long userId) {
+        List<GroupMember> memberships = groupMemberRepository.findByUser_Id(userId);
+
+        return memberships.stream()
+                .map(GroupMember::getGroup)
+                .distinct()
+                .map(group -> new MyGroupSummaryDto(
+                        group.getId(),
+                        group.getRoomTitle(),
+                        group.getDescription(),
+                        null, // 이미지 URL은 아직 없음
+                        group.getCategory().name(),
+                        group.getGroupMembers().size(),
+                        group.getGroupMaxNum()
+                ))
+                .collect(Collectors.toList());
     }
 }
