@@ -4,6 +4,7 @@ import com.example.bookglebookgleserver.auth.security.CustomUserDetails;
 import com.example.bookglebookgleserver.group.dto.GroupCreateRequestDto;
 import com.example.bookglebookgleserver.group.dto.GroupDetailResponse;
 import com.example.bookglebookgleserver.group.dto.GroupListResponseDto;
+import com.example.bookglebookgleserver.group.dto.MyGroupSummaryDto;
 import com.example.bookglebookgleserver.group.service.GroupService;
 import com.example.bookglebookgleserver.user.entity.User;
 import io.swagger.v3.oas.annotations.Operation;
@@ -12,11 +13,11 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.Resource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.core.io.Resource;
 
 import java.util.List;
 
@@ -101,5 +102,11 @@ public class GroupController {
     ) {
         User user = customUser.getUser();
         return groupService.getPdfFileResponse(groupId, user);
+    }
+
+    @GetMapping("/my")
+    public ResponseEntity<List<MyGroupSummaryDto>> getMyGroups(@RequestParam Long userId) {
+        List<MyGroupSummaryDto> result = groupService.getMyGroupList(userId);
+        return ResponseEntity.ok(result);
     }
 }

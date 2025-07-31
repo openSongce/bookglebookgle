@@ -3,6 +3,7 @@ package com.example.bookglebookgleserver.group.service;
 import com.example.bookglebookgleserver.group.dto.GroupCreateRequestDto;
 import com.example.bookglebookgleserver.group.dto.GroupDetailResponse;
 import com.example.bookglebookgleserver.group.dto.GroupListResponseDto;
+import com.example.bookglebookgleserver.group.dto.MyGroupSummaryDto;
 import com.example.bookglebookgleserver.user.entity.User;
 import org.springframework.core.io.Resource;
 import org.springframework.http.ResponseEntity;
@@ -16,4 +17,5 @@ public interface GroupService {
     List<GroupListResponseDto> getGroupList();
     GroupDetailResponse getGroupDetail(Long groupId);
     ResponseEntity<Resource> getPdfFileResponse(Long groupId, User user);
+    List<MyGroupSummaryDto> getMyGroupList(Long userId);
 }
