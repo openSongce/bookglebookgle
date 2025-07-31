@@ -74,4 +74,9 @@ public class Group {
     public enum ReadingMode {
         FREE, FOLLOW, GATE
     }
+
+    public void setPdfFile(PdfFile pdfFile) {
+        this.pdfFile = pdfFile;
+        pdfFile.setGroup(this);
+    }
 }
