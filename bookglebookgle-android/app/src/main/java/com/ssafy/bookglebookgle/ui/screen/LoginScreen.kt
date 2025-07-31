@@ -278,8 +278,7 @@ fun LoginScreen(navController: NavController, loginViewModel: LoginViewModel = h
             // 로그인 버튼
             Button(
                 onClick = {
-                    loginViewModel.login()
-                    loginViewModel.clearFields() },
+                    loginViewModel.login() },
                 colors = ButtonDefaults.buttonColors(
                     containerColor = if (id.isNotBlank() && password.isNotBlank())
                         Color(0xFFDED0BB) else Color(0xFFCCC7C0)

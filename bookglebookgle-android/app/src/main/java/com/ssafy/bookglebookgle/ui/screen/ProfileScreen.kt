@@ -69,8 +69,8 @@ fun ProfileScreen(navController: NavHostController, viewModel: ProfileViewModel 
                 contentDescription = "프로필 이미지",
                 contentScale = ContentScale.Crop,
                 placeholder = painterResource(R.drawable.profile_example), // 로딩 중 기본 이미지
-                error = painterResource(R.drawable.profile_example),       // 로딩 실패 시
-                fallback = painterResource(R.drawable.profile_example),    // null일 경우
+                error = painterResource(R.drawable.profile_image),       // 로딩 실패 시
+                fallback = painterResource(R.drawable.profile_image),    // null일 경우
                 modifier = Modifier
                     .fillMaxSize()
                     .clip(CircleShape)
