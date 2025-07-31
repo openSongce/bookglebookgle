@@ -13,4 +13,5 @@ public interface GroupService {
     void createGroupWithoutOcr(GroupCreateRequestDto dto, MultipartFile pdfFile, User user);
     List<GroupListResponseDto> getGroupList();
     GroupDetailResponse getGroupDetail(Long groupId);
+
 }
