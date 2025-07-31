@@ -111,7 +111,7 @@ fun LoginScreen(navController: NavController, loginViewModel: LoginViewModel = h
             }
 
             false -> {
-                loginViewModel.loginSuccess.value = null // ✅ 다시 초기화
+                loginViewModel.loginSuccess.value = null // 다시 초기화
             }
 
             null -> {} // 아무것도 안함
