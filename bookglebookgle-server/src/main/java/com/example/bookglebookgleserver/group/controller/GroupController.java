@@ -16,6 +16,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.core.io.Resource;
 
 import java.util.List;
 
@@ -92,4 +93,13 @@ public class GroupController {
 //            @RequestBody GroupUpdateRequestDto groupDto) {
 //
 //    }
+
+    @GetMapping("/{groupId}/pdf")
+    public ResponseEntity<Resource> getGroupPdf(
+            @PathVariable Long groupId,
+            @AuthenticationPrincipal CustomUserDetails customUser
+    ) {
+        User user = customUser.getUser();
+        return groupService.getPdfFileResponse(groupId, user);
+    }
 }

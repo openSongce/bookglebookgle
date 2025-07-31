@@ -1,5 +1,6 @@
 package com.example.bookglebookgleserver.pdf.entity;
 
+import com.example.bookglebookgleserver.group.entity.Group;
 import com.example.bookglebookgleserver.user.entity.User;
 import jakarta.persistence.*;
 import lombok.*;
@@ -35,4 +36,12 @@ public class PdfFile {
 
     @Column(name = "file_path", nullable = false)
     private String filePath;
+
+    @OneToOne
+    @JoinColumn(name = "group_id")
+    private Group group;
+
+    public void setGroup(Group group) {
+        this.group = group;
+    }
 }

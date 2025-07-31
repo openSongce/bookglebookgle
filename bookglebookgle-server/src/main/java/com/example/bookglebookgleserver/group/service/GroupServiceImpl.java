@@ -1,8 +1,8 @@
 package com.example.bookglebookgleserver.group.service;
 
 import com.bgbg.ai.grpc.ProcessPdfResponse;
-import com.bgbg.ai.grpc.TextBlock;
 import com.example.bookglebookgleserver.global.exception.BadRequestException;
+import com.example.bookglebookgleserver.global.exception.ForbiddenException;
 import com.example.bookglebookgleserver.global.exception.NotFoundException;
 import com.example.bookglebookgleserver.group.dto.GroupCreateRequestDto;
 import com.example.bookglebookgleserver.group.dto.GroupDetailResponse;
@@ -16,10 +16,13 @@ import com.example.bookglebookgleserver.ocr.service.OcrService;
 import com.example.bookglebookgleserver.pdf.entity.PdfFile;
 import com.example.bookglebookgleserver.pdf.repository.PdfFileRepository;
 import com.example.bookglebookgleserver.user.entity.User;
-import com.example.bookglebookgleserver.user.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.Resource;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -36,21 +39,15 @@ public class GroupServiceImpl implements GroupService {
 
     private final GroupRepository groupRepository;
     private final GroupMemberRepository groupMemberRepository;
-    private final PdfFileRepository pdfRepository;
-    private final UserRepository userRepository;
+    private final PdfFileRepository pdfFileRepository;
     private final GrpcOcrClient grpcOcrClient;
     private final OcrService ocrService;
 
     @Override
     @Transactional
     public void createGroup(GroupCreateRequestDto dto, MultipartFile pdfFile, User user) {
-        // 🔥 기존 인증 로직 제거
-        // String email = AuthUtil.getCurrentUserEmail();
-        // User user = userRepository.findByEmail(email)
-        //     .orElseThrow(() -> new NotFoundException("사용자를 찾을 수 없습니다."));
-
-        // 그대로 유지
         String uploadDir = "/home/ubuntu/pdf-uploads/";
+//        String uploadDir = System.getProperty("user.dir") + "/uploads/";
         File uploadDirFile = new File(uploadDir);
         if (!uploadDirFile.exists()) {
             uploadDirFile.mkdirs();
@@ -62,10 +59,10 @@ public class GroupServiceImpl implements GroupService {
         try {
             pdfFile.transferTo(new File(filePath));
         } catch (IOException e) {
-            log.error("❌ PDF 파일 저장 실패", e);
             throw new BadRequestException("PDF 파일 저장 중 오류가 발생했습니다.");
         }
 
+        // 📌 PdfFile 먼저 생성 (group은 null)
         PdfFile pdf = PdfFile.builder()
                 .fileName(pdfFile.getOriginalFilename())
                 .pageCnt(0)
@@ -73,34 +70,9 @@ public class GroupServiceImpl implements GroupService {
                 .createdAt(LocalDateTime.now())
                 .filePath(filePath)
                 .build();
+        pdfFileRepository.save(pdf);  // 1차 저장
 
-        PdfFile savedPdf = pdfRepository.save(pdf);
-
-        if (dto.isImageBased()) {
-            log.info("🟡 OCR 요청 시작 - PDF ID: {}, 파일명: {}", savedPdf.getPdfId(), pdfFile.getOriginalFilename());
-
-            ProcessPdfResponse response;
-            try {
-                response = grpcOcrClient.sendPdf(savedPdf.getPdfId(), pdfFile);
-            } catch (Exception e) {
-                log.error("🔴 OCR 서버 통신 오류", e);
-                throw new BadRequestException("OCR 서버와의 통신 중 오류가 발생했습니다.");
-            }
-
-            if (!response.getSuccess()) {
-                log.error("🔴 OCR 실패 응답 수신: {}", response.getMessage());
-                throw new BadRequestException("OCR 처리 실패: " + response.getMessage());
-            }
-
-            log.info("🟢 OCR 응답 수신 완료 - 블록 수: {}", response.getTextBlocksCount());
-            if (response.getTextBlocksCount() > 0) {
-                TextBlock block = response.getTextBlocks(0);
-                log.info(" - 첫 번째 블럭 내용: [{}] (페이지: {})", block.getText(), block.getPageNumber());
-            }
-
-            ocrService.saveOcrResults(savedPdf, response);
-        }
-
+        // 📌 Group 생성 시 PdfFile 연결
         Group group = Group.builder()
                 .roomTitle(dto.getRoomTitle())
                 .description(dto.getDescription())
@@ -110,13 +82,24 @@ public class GroupServiceImpl implements GroupService {
                 .groupMaxNum(dto.getGroupMaxNum())
                 .readingMode(Group.ReadingMode.valueOf(dto.getReadingMode().toUpperCase()))
                 .hostUser(user)
-                .pdfFile(savedPdf)
+                .pdfFile(pdf)  // 연결
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .isDeleted(false)
                 .build();
-
         groupRepository.save(group);
+
+        // 📌 역방향 연결 (중요)
+        pdf.setGroup(group);
+        // pdfFileRepository.save(pdf); // ❌ 생략해도 무방 (영속성 컨텍스트 안에서 관리됨)
+
+        if (dto.isImageBased()) {
+            ProcessPdfResponse response = grpcOcrClient.sendPdf(pdf.getPdfId(), pdfFile);
+            if (!response.getSuccess()) {
+                throw new BadRequestException("OCR 실패: " + response.getMessage());
+            }
+            ocrService.saveOcrResults(pdf, response);
+        }
 
         GroupMember groupMember = GroupMember.builder()
                 .group(group)
@@ -126,18 +109,14 @@ public class GroupServiceImpl implements GroupService {
                 .progressPercent(0f)
                 .isFollowingHost(false)
                 .build();
-
         groupMemberRepository.save(groupMember);
-        log.info("🟢 그룹 생성자 '{}'를 그룹 멤버로 자동 등록 완료", user.getEmail());
     }
-
 
     @Override
     public void createGroupWithoutOcr(GroupCreateRequestDto dto, MultipartFile pdfFile, User user) {
-        dto.setImageBased(false); // OCR 비활성화
-        createGroup(dto, pdfFile, user); // ✅ token → user
+        dto.setImageBased(false);
+        createGroup(dto, pdfFile, user);
     }
-
 
     @Override
     public List<GroupListResponseDto> getGroupList() {
@@ -151,7 +130,7 @@ public class GroupServiceImpl implements GroupService {
                     try {
                         log.info("📌 그룹 ID: {}, 제목: {}", group.getId(), group.getRoomTitle());
 
-                        int currentNum = groupMemberRepository.countByGroup(group);  // 💥 예외 가능성
+                        int currentNum = groupMemberRepository.countByGroup(group);
                         log.info("📌 currentNum 조회 완료: {}", currentNum);
 
                         return GroupListResponseDto.builder()
@@ -168,7 +147,7 @@ public class GroupServiceImpl implements GroupService {
                         throw new RuntimeException("그룹 정보 처리 중 오류 발생");
                     }
                 })
-                .collect(java.util.stream.Collectors.toList()); // ✅ Java 11 이하 대응
+                .collect(java.util.stream.Collectors.toList());
     }
 
     @Override
@@ -187,9 +166,27 @@ public class GroupServiceImpl implements GroupService {
                 group.getDescription(),
                 null
         );
-
     }
 
+    @Override
+    public ResponseEntity<Resource> getPdfFileResponse(Long groupId, User user) {
+        if (!groupMemberRepository.existsByGroup_IdAndUser_Id(groupId, user.getId())) {
+            throw new ForbiddenException("해당 그룹에 속해 있지 않습니다.");
+        }
 
+        PdfFile pdfFile = pdfFileRepository.findByGroup_Id(groupId)
+                .orElseThrow(() -> new NotFoundException("PDF 파일이 없습니다."));
+
+        File file = new File(pdfFile.getFilePath());
+        if (!file.exists()) {
+            throw new NotFoundException("서버에 PDF 파일이 존재하지 않습니다.");
+        }
+
+        Resource resource = new FileSystemResource(file);
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header("Content-Disposition", "inline; filename=\"" + pdfFile.getFileName() + "\"")
+                .body(resource);
+    }
 }
-
