@@ -29,6 +29,7 @@ class ProfileViewModel @Inject constructor(
     fun logout() {
         viewModelScope.launch {
             logoutUseCase()
+            userInfoManager.clearUserInfo()
             _logoutCompleted.value = true
         }
     }
