@@ -184,9 +184,7 @@ fun LoginScreen(navController: NavController, loginViewModel: LoginViewModel = h
                 token?.let { loginViewModel.kakaoLogin(it.accessToken) }
             }
         } else {
-            UserApiClient.instance.loginWithKakaoAccount(context) { token, error ->
-                token?.let { loginViewModel.kakaoLogin(it.accessToken) }
-            }
+            Toast.makeText(context, "카카오톡을 설치해주세요", Toast.LENGTH_SHORT).show()
         }
     }
 

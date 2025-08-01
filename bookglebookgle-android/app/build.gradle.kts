@@ -34,8 +34,6 @@ android {
         buildConfigField("String", "GOOGLE_CLIENT_ID", "\"$googleClientId\"")
         buildConfigField("String", "KAKAO_NATIVE_KEY", "\"$kakaoNativeKey\"")
 
-        manifestPlaceholders["kakao_scheme"] = kakaoNativeKey
-
         vectorDrawables {
             useSupportLibrary = true
         }
