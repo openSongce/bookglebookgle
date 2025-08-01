@@ -90,25 +90,34 @@ fun CustomTopAppBar(
                 Text(
                     text = title,
                     fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = 16.dp)
+                        .padding(end = 40.dp)
                 )
             }
             else { // 모임 상세, PDF 뷰어, AI 퀴즈 등에서 사용 될 TopAppBar Text
                 Text(
                     text = title,
+                    textAlign = TextAlign.Center,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 20.sp
+                    fontSize = 20.sp,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(end = 16.dp)
                 )
             }
         },
         navigationIcon = {
             if(ismygroup){
                 Icon(
-                    painter = painterResource(id = R.drawable.register_back),
+                    painter = painterResource(id = R.drawable.ic_back_arrow_left),
                     contentDescription = "뒤로가기",
-                    modifier = Modifier.size(40.dp).padding(start = 16.dp).clickable { navController.popBackStack() })
+                    modifier = Modifier
+                        .padding(start = 16.dp)
+                        .size(24.dp)
+                        .clickable { navController.popBackStack() }
+                )
             }
         },
         actions = {

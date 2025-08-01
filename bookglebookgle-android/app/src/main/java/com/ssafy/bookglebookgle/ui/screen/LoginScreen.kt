@@ -83,6 +83,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.credentials.exceptions.GetCredentialException
 import com.kakao.sdk.user.UserApiClient
 import com.ssafy.bookglebookgle.BuildConfig
+import com.ssafy.bookglebookgle.ui.theme.BaseColor
 import com.ssafy.bookglebookgle.ui.theme.MainColor
 
 
@@ -230,8 +231,8 @@ fun LoginScreen(navController: NavController, loginViewModel: LoginViewModel = h
 
             CompositionLocalProvider(
                 LocalTextSelectionColors provides TextSelectionColors(
-                    handleColor = Color(0xFF4A90E2), // 드래그 핸들(물방울) 색상
-                    backgroundColor = Color(0xFF0064FF).copy(alpha = 0.3f) // 선택 영역 배경색 (투명도 적용)
+                    handleColor = BaseColor, // 드래그 핸들(물방울) 색상
+                    backgroundColor = BaseColor.copy(alpha = 0.3f) // 선택 영역 배경색 (투명도 적용)
                 )
             ) {
                 OutlinedTextField(
@@ -248,8 +249,8 @@ fun LoginScreen(navController: NavController, loginViewModel: LoginViewModel = h
                         }
                     ),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color(0xFF4A90E2),
-                        cursorColor = Color(0xFF4A90E2),
+                        focusedBorderColor = BaseColor,
+                        cursorColor = BaseColor,
                     )
                 )
             }
@@ -258,8 +259,8 @@ fun LoginScreen(navController: NavController, loginViewModel: LoginViewModel = h
 
             CompositionLocalProvider(
                 LocalTextSelectionColors provides TextSelectionColors(
-                    handleColor = Color(0xFF4A90E2), // 드래그 핸들(물방울) 색상
-                    backgroundColor = Color(0xFF0064FF).copy(alpha = 0.3f) // 선택 영역 배경색 (투명도 적용)
+                    handleColor = BaseColor, // 드래그 핸들(물방울) 색상
+                    backgroundColor = BaseColor.copy(alpha = 0.3f) // 선택 영역 배경색 (투명도 적용)
                 )
             ) {
                 OutlinedTextField(
@@ -277,8 +278,8 @@ fun LoginScreen(navController: NavController, loginViewModel: LoginViewModel = h
                         }
                     ),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color(0xFF4A90E2), // 포커스 시 테두리 색상
-                        cursorColor = Color(0xFF4A90E2)
+                        focusedBorderColor = BaseColor, // 포커스 시 테두리 색상
+                        cursorColor = BaseColor
                     ),
                     trailingIcon = {
                         IconButton(

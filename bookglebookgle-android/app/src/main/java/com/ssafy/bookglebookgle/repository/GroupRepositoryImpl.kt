@@ -3,6 +3,7 @@ package com.ssafy.bookglebookgle.repository
 import android.util.Log
 import com.ssafy.bookglebookgle.entity.GroupDetailResponse
 import com.ssafy.bookglebookgle.entity.GroupListResponse
+import com.ssafy.bookglebookgle.entity.MyGroupResponse
 import com.ssafy.bookglebookgle.network.api.GroupApi
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
@@ -120,4 +121,28 @@ class GroupRepositoryImpl @Inject constructor(
             throw Exception("모임 상세 조회 중 오류가 발생했습니다: ${e.message}", e)
         }
     }
+
+    /**
+     * 내 모임 조회
+     * @return 내가 참여한 그룹 리스트
+     */
+    override suspend fun getMyGroups(): Response<List<MyGroupResponse>> {
+        return try {
+            Log.d(TAG, "내 모임 조회 요청 시작")
+
+            val response = groupApi.getMyGroups()
+
+            if (response.isSuccessful) {
+                Log.d(TAG, "내 모임 조회 성공 - 응답코드: ${response.code()}")
+            } else {
+                Log.d(TAG, "내 모임 조회 실패 - 응답코드: ${response.code()}, 메시지: ${response.message()}")
+            }
+
+            response
+        } catch (e: Exception) {
+            Log.e(TAG, "내 모임 조회 실패 - 네트워크 오류: ${e.message}")
+            throw Exception("내 모임 조회 중 오류가 발생했습니다: ${e.message}", e)
+        }
+    }
+
 }

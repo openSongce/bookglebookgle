@@ -1,6 +1,7 @@
 package com.example.pdfnotemate.ui.activity.reader
 
 import android.graphics.PointF
+import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*

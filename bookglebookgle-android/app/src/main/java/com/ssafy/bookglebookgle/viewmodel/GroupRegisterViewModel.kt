@@ -32,7 +32,7 @@ data class GroupRegisterUiState(
 enum class GroupCategory(val value: String) {
     READING("READING"),
     STUDY("STUDY"),
-    CORRECTION("CORRECTION")
+    REVIEW("REVIEW")
 }
 
 enum class ReadingMode(val value: String) {
@@ -131,20 +131,12 @@ class GroupRegisterViewModel @Inject constructor(
         return when (category) {
             "독서" -> GroupCategory.READING.value
             "학습" -> GroupCategory.STUDY.value
-            "첨삭" -> GroupCategory.CORRECTION.value
+            "첨삭" -> GroupCategory.REVIEW.value
             else -> GroupCategory.STUDY.value
         }
     }
 
-    // 날짜 형식 변환
     private fun formatDateTimeForServer(dateTime: String): String {
-//        val parts = dateTime.split("-")
-//        return if (parts.size == 4) {
-//            "${parts[0]}-${parts[1]}-${parts[2]}T${parts[3]}:00"
-//        } else {
-//            throw IllegalArgumentException("Invalid dateTime format: $dateTime")
-//        }
-
         return dateTime
     }
 
@@ -249,17 +241,6 @@ class GroupRegisterViewModel @Inject constructor(
         pdfFile = null
         selectedPdfFileName = ""
         Log.d(TAG, "PDF file reset, Form valid: ${isFormValid()}")
-    }
-
-    // 그룹 생성 (OCR 포함)
-    fun createGroup(pdfFile: File) {
-        this.pdfFile = pdfFile
-        createGroupWithPdf(isOcrRequired = true)
-    }
-
-    fun createGroupWithoutOcr(pdfFile: File) {
-        this.pdfFile = pdfFile
-        createGroupWithPdf(isOcrRequired = false)
     }
 
     // 상태 초기화

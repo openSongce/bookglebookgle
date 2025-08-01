@@ -6,8 +6,10 @@ import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
 import java.io.File
+import java.io.InputStream
 import javax.inject.Inject
 
+private const val TAG = "싸피_PdfRepositoryImpl"
 class PdfRepositoryImpl @Inject constructor(
     private val pdfApi: PdfApi
 ) : PdfRepository {
@@ -33,4 +35,20 @@ class PdfRepositoryImpl @Inject constructor(
             false
         }
     }
+
+    override suspend fun getGroupPdf(groupId: Long): InputStream? {
+        return try {
+            val response = pdfApi.getGroupPdf(groupId)
+            if (response.isSuccessful) {
+                response.body()?.byteStream()
+            } else {
+                Log.d(TAG, "PDF 다운로드 실패 - 응답코드: ${response.code()}, 메시지: ${response.message()}")
+                null
+            }
+        } catch (e: Exception) {
+            Log.d(TAG, "PDF 다운로드 중 예외 발생: ${e.message}", e)
+            null
+        }
+    }
+
 }

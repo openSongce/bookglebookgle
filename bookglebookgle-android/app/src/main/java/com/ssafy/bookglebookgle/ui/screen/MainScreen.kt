@@ -5,7 +5,6 @@ import com.ssafy.bookglebookgle.R
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -18,7 +17,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
@@ -29,10 +27,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
-import com.ssafy.bookglebookgle.entity.toDomain
+import com.ssafy.bookglebookgle.entity.GroupListResponse
 import com.ssafy.bookglebookgle.navigation.Screen
 import com.ssafy.bookglebookgle.ui.component.CustomTopAppBar
-import com.ssafy.bookglebookgle.ui.theme.MainColor
 import com.ssafy.bookglebookgle.util.ScreenSize
 import com.ssafy.bookglebookgle.viewmodel.MainViewModel
 
@@ -175,9 +172,9 @@ fun MainScreen(navController: NavHostController, viewModel: MainViewModel = hilt
                 } else {
                     itemsIndexed(groups) { index, group ->
                         MeetingCard(
-                            group = group.toDomain(),
+                            group = group,
                         ) {
-                            navController.currentBackStackEntry?.savedStateHandle?.set("group", group)
+                            navController.currentBackStackEntry?.savedStateHandle?.set("groupId", group.groupId)
                             navController.currentBackStackEntry?.savedStateHandle?.set("isMyGroup", false)
                             navController.navigate(Screen.GroupDetailScreen.route)
                         }
@@ -242,9 +239,8 @@ fun RecommendCard(
     }
 }
 
-
 @Composable
-fun MeetingCard(group: Group, onClick: () -> Unit) {
+fun MeetingCard(group: GroupListResponse, onClick: () -> Unit) {
     val config = LocalConfiguration.current
     val screenWidth = config.screenWidthDp.dp
     val screenHeight = config.screenHeightDp.dp
@@ -267,8 +263,13 @@ fun MeetingCard(group: Group, onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(group.category.displayName, fontSize = screenWidth.value.times(0.03f).sp, color = Color(0xFFD2B48C))
-                Text(group.title, fontWeight = FontWeight.Bold)
+                Text(text = when (group.category) {
+                    "STUDY" -> "스터디"
+                    "READING" -> "독서"
+                    "REVIEW" -> "첨삭"
+                    else -> group.category // 예외 처리: 혹시 다른 값이 있을 경우 그대로 출력
+                }, fontSize = screenWidth.value.times(0.03f).sp, color = Color(0xFFD2B48C))
+                Text(group.roomTitle, fontWeight = FontWeight.Bold)
                 Text(
                     group.description,
                     fontSize = screenWidth.value.times(0.032f).sp,
@@ -280,7 +281,7 @@ fun MeetingCard(group: Group, onClick: () -> Unit) {
                     color = Color(0xFFF1F1F1)
                 ) {
                     Text(
-                        "${group.currentMembers}/${group.maxMembers}명",
+                        "${group.currentNum}/${group.groupMaxNum}명",
                         modifier = Modifier.padding(
                             horizontal = screenWidth * 0.02f,
                             vertical = screenHeight * 0.003f
@@ -292,9 +293,10 @@ fun MeetingCard(group: Group, onClick: () -> Unit) {
             Spacer(modifier = Modifier.width(screenWidth * 0.03f))
             Image(
                 painter = painterResource(id = when (group.category) {
-                    GroupCategory.READING -> R.drawable.book_group
-                    GroupCategory.STUDY -> R.drawable.study_group
-                    GroupCategory.REVIEW -> R.drawable.editing_group
+                    "READING" -> R.drawable.book_group
+                    "STUDY" -> R.drawable.study_group
+                    "REVIEW" -> R.drawable.editing_group
+                    else -> { R.drawable.profile_example}
                 }),
                 contentDescription = null,
                 modifier = Modifier

@@ -1,5 +1,6 @@
 package com.ssafy.bookglebookgle.navigation
 
+import android.util.Log
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
@@ -11,6 +12,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.pdfnotemate.ui.activity.home.PdfScreen
+import com.example.pdfnotemate.ui.activity.reader.PdfReadScreen
 import com.example.pdfnotemate.ui.activity.reader.PdfReaderScreen
 import com.ssafy.bookglebookgle.pdf.response.PdfNoteListModel
 import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.BookmarkModel
@@ -21,7 +23,6 @@ import com.ssafy.bookglebookgle.pdf.ui.screen.AddPdfScreen
 import com.ssafy.bookglebookgle.pdf.ui.screen.BookmarkListScreen
 import com.ssafy.bookglebookgle.pdf.ui.screen.CommentsListScreen
 import com.ssafy.bookglebookgle.pdf.ui.screen.HighlightListScreen
-import com.ssafy.bookglebookgle.ui.screen.Group
 import com.ssafy.bookglebookgle.ui.screen.GroupRegisterScreen
 import com.ssafy.bookglebookgle.ui.screen.LoginScreen
 import com.ssafy.bookglebookgle.ui.screen.MainScreen
@@ -128,6 +129,17 @@ fun MainNavigation(
 
             composable(Screen.GroupRegisterScreen.route){
                 GroupRegisterScreen(navController)
+            }
+
+            composable(Screen.PdfReadScreen.route){
+                val groupId = navController.previousBackStackEntry
+                    ?.savedStateHandle?.get<Long>("groupId") ?: -1L
+
+
+                // 디버깅용 로그 추가
+                Log.d("GroupDetail", "groupId: $groupId")
+
+                PdfReadScreen(groupId, navController =  navController)
             }
 
             composable(Screen.AddPdfScreen.route) {
@@ -256,13 +268,16 @@ fun MainNavigation(
             }
 
             composable(Screen.GroupDetailScreen.route) {
-                val group = navController.previousBackStackEntry
-                    ?.savedStateHandle?.get<Group>("group") ?: return@composable
+                val groupId = navController.previousBackStackEntry
+                    ?.savedStateHandle?.get<Long>("groupId") ?: -1L
 
                 val isMyGroup = navController.previousBackStackEntry
                     ?.savedStateHandle?.get<Boolean>("isMyGroup") ?: false
 
-                GroupDetailScreen(navController, group, isMyGroup)
+                // 디버깅용 로그 추가
+                Log.d("GroupDetail", "groupId: $groupId, isMyGroup: $isMyGroup")
+
+                GroupDetailScreen(navController,  groupId, isMyGroup)
             }
 
         }
