@@ -24,6 +24,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.ssafy.bookglebookgle.R
 import com.ssafy.bookglebookgle.entity.RegisterStep
+import com.ssafy.bookglebookgle.ui.theme.BaseColor
 import com.ssafy.bookglebookgle.viewmodel.RegisterViewModel
 
 
@@ -107,7 +108,7 @@ fun RegisterScreen(navController: NavController, registerViewModel: RegisterView
                             focusedBorderColor = Color.Transparent,
                             focusedContainerColor = Color.Transparent,
                             unfocusedContainerColor = Color.Transparent,
-                            cursorColor = Color(0xFF4A90E2)
+                            cursorColor = BaseColor
                         ),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                         keyboardActions = KeyboardActions(
@@ -156,8 +157,8 @@ fun RegisterScreen(navController: NavController, registerViewModel: RegisterView
                 ) {
                     CompositionLocalProvider(
                         LocalTextSelectionColors provides TextSelectionColors(
-                            handleColor = Color(0xFF4A90E2), // 드래그 핸들(물방울) 색상
-                            backgroundColor = Color(0xFF0064FF).copy(alpha = 0.3f) // 선택 영역 배경색 (투명도 적용)
+                            handleColor = BaseColor, // 드래그 핸들(물방울) 색상
+                            backgroundColor = BaseColor.copy(alpha = 0.3f) // 선택 영역 배경색 (투명도 적용)
                         )
                     ) {
                         OutlinedTextField(
@@ -166,8 +167,8 @@ fun RegisterScreen(navController: NavController, registerViewModel: RegisterView
                             modifier = Modifier.weight(1f),
                             placeholder = { Text("닉네임") },
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = Color(0xFF4A90E2), // 포커스 시 테두리 색상
-                                cursorColor = Color(0xFF4A90E2)
+                                focusedBorderColor = BaseColor, // 포커스 시 테두리 색상
+                                cursorColor = BaseColor
                             ),
                             enabled = !registerViewModel.isNicknameValid
                         )
@@ -276,7 +277,7 @@ fun CustomInputField(
             focusedBorderColor = Color.Transparent,
             unfocusedContainerColor = Color.Transparent,
             focusedContainerColor = Color.Transparent,
-            cursorColor = Color(0xFF4A90E2)
+            cursorColor = BaseColor
         ),
         visualTransformation = if (isPassword && !passwordVisible) PasswordVisualTransformation() else VisualTransformation.None,
         keyboardOptions = if (isPassword) KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done)

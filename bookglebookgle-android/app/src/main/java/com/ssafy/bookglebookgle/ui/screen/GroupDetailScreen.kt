@@ -1,5 +1,6 @@
 package com.ssafy.bookglebookgle.ui.screen
 
+import android.util.Log
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -8,8 +9,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Divider
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -18,109 +21,236 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import com.ssafy.bookglebookgle.R
+import com.ssafy.bookglebookgle.entity.GroupDetailResponse
+import com.ssafy.bookglebookgle.navigation.Screen
 import com.ssafy.bookglebookgle.ui.component.CustomTopAppBar
+import com.ssafy.bookglebookgle.ui.theme.MainColor
 import com.ssafy.bookglebookgle.util.ScreenSize
+import com.ssafy.bookglebookgle.viewmodel.GroupDetailUiState
+import com.ssafy.bookglebookgle.viewmodel.GroupDetailViewModel
 
 @Composable
 fun GroupDetailScreen(
     navController: NavHostController,
-    group: Group,
-    isMyGroup: Boolean
+    groupId: Long,
+    isMyGroup: Boolean,
+    viewModel: GroupDetailViewModel = hiltViewModel()
+) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    // 컴포넌트가 처음 생성될 때 그룹 상세 정보 조회
+    LaunchedEffect(groupId) {
+        viewModel.getGroupDetail(groupId)
+    }
+
+    Column(
+        modifier = Modifier.fillMaxSize()
+    ) {
+        val title = when (val currentState = uiState) {
+            is GroupDetailUiState.Success -> currentState.groupDetail.roomTitle
+            else -> "모임 상세"
+        }
+
+        CustomTopAppBar(
+            title = title,
+            navController = navController,
+            ismygroup = isMyGroup
+        )
+
+        when (val currentState = uiState) {
+            is GroupDetailUiState.Loading -> {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(
+                        color = Color(0xFFDED0BB)
+                    )
+                }
+            }
+
+            is GroupDetailUiState.Success -> {
+                GroupDetailContent(
+                    groupDetail = currentState.groupDetail,
+                    isMyGroup = isMyGroup,
+                    navController,
+                    groupId
+                )
+            }
+
+            is GroupDetailUiState.Error -> {
+                Log.d("GroupDetailScreen", "Error: ${currentState.message}")
+            }
+        }
+    }
+}
+
+@Composable
+private fun GroupDetailContent(
+    groupDetail: GroupDetailResponse,
+    isMyGroup: Boolean,
+    navController: NavHostController,
+    groupId: Long
 ) {
     val dummyMembers = listOf(
-        "이지원" to 80,
-        "김지우" to 75,
-        "박서연" to 73,
-        "전승훈" to 70
+        "허지명" to 80,
+        "송진우" to 70,
+        "송하윤" to 40,
+        "홍은솔" to 60
     )
 
     val listState = rememberLazyListState()
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        CustomTopAppBar(title = group.title, navController = navController, ismygroup = true)
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = ScreenSize.width * 0.08f),
+        state = listState
+    ) {
+        item {
+            Spacer(modifier = Modifier.height(ScreenSize.height * 0.02f))
 
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = ScreenSize.width * 0.08f),
-            state = listState
-        ) {
-            item {
-                Spacer(modifier = Modifier.height(ScreenSize.height * 0.02f))
+            Text(
+                "모임 정보",
+                fontWeight = FontWeight.Bold,
+                fontSize = ScreenSize.width.value.times(0.045f).sp
+            )
 
-                Text("모임 정보", fontWeight = FontWeight.Bold, fontSize = ScreenSize.width.value.times(0.045f).sp)
-                Spacer(modifier = Modifier.height(ScreenSize.height * 0.015f))
-                InfoRow("카테고리", group.category.displayName)
-                InfoRow("시작 시간", "2025년 7월 20일 (토) 오후 10:00")
-                InfoRow("참여 인원", "${group.currentMembers}명")
-                InfoRow("모임 설명", group.description)
+            Spacer(modifier = Modifier.height(ScreenSize.height * 0.015f))
+            InfoRow("카테고리", when(groupDetail.category) {
+                "STUDY" -> "학습"
+                "READING" -> "독서"
+                "REVIEW" -> "첨삭"
+                else -> groupDetail.category
+            })
+            InfoRow("시작 시간", "매주 ${groupDetail.schedule}")
+            InfoRow("참여 인원", "${groupDetail.memberCount}/${groupDetail.maxMemberCount}명")
+            InfoRow("모임 설명", groupDetail.description)
+            Spacer(modifier = Modifier.height(ScreenSize.height * 0.01f))
+            // 구분선 추가
+            Divider(
+                modifier = Modifier.fillMaxWidth(),
+                thickness = 1.dp,
+                color = Color(0xFFE0E0E0)
+            )
 
-                Spacer(modifier = Modifier.height(ScreenSize.height * 0.03f))
+            Spacer(modifier = Modifier.height(ScreenSize.height * 0.03f))
 
-                Text("문서 보기", fontWeight = FontWeight.Bold, fontSize = ScreenSize.width.value.times(0.045f).sp)
-                Spacer(modifier = Modifier.height(ScreenSize.height * 0.01f))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column {
-                        Text("PDF", color = Color.Gray, fontSize = ScreenSize.width.value.times(0.035f).sp)
-                        Text("스크립트 문서", fontWeight = FontWeight.Medium)
-                        Text("12 페이지", fontSize = ScreenSize.width.value.times(0.03f).sp, color = Color.Gray)
-                    }
-                    Spacer(modifier = Modifier.weight(1f))
-                    Image(
-                        painter = painterResource(id = R.drawable.group_detail_pdf),
-                        contentDescription = null,
-                        modifier = Modifier.size(ScreenSize.width * 0.25f)
-                    )
-                }
+            Text(
+                "문서 보기",
+                fontWeight = FontWeight.Bold,
+                fontSize = ScreenSize.width.value.times(0.045f).sp
+            )
 
-                Spacer(modifier = Modifier.height(ScreenSize.height * 0.03f))
-
-                Text("참여자 목록", fontWeight = FontWeight.Bold, fontSize = ScreenSize.width.value.times(0.045f).sp)
-                Spacer(modifier = Modifier.height(ScreenSize.height * 0.01f))
-                Row(horizontalArrangement = Arrangement.spacedBy(ScreenSize.width * 0.02f)) {
-                    repeat(group.currentMembers) {
-                        Image(
-                            painter = painterResource(id = R.drawable.group_detail_profile),
-                            contentDescription = null,
-                            modifier = Modifier
-                                .size(ScreenSize.width * 0.12f)
-                                .clip(CircleShape)
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(ScreenSize.height * 0.03f))
-
-                if (!isMyGroup) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(ScreenSize.height * 0.065f)
-                            .clip(RoundedCornerShape(ScreenSize.width * 0.03f))
-                            .background(Color(0xFFDED0BB))
-                            .clickable { /* 참여 로직 */ },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "참여하기",
-                            color = Color.White,
-                            fontSize = ScreenSize.width.value.times(0.04f).sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                } else {
+            Spacer(modifier = Modifier.height(ScreenSize.height * 0.01f))
+            Row(
+                modifier = Modifier.clickable {
+                    // PDF 보기 로직 추가 필요
+                    navController.currentBackStackEntry?.savedStateHandle?.set("groupId", groupId)
+                    navController.navigate(Screen.PdfReadScreen.route)
+                },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
                     Text(
-                        "진도 현황",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = ScreenSize.width.value.times(0.045f).sp
+                        "PDF",
+                        color = Color.Gray,
+                        fontSize = ScreenSize.width.value.times(0.035f).sp
                     )
-                    ProgressStatusCard(75, 10, dummyMembers)
+                    Text("스크립트 문서", fontWeight = FontWeight.Medium)
+                    Text(
+                        "12 페이지",
+                        fontSize = ScreenSize.width.value.times(0.03f).sp,
+                        color = Color.Gray
+                    )
                 }
+                Spacer(modifier = Modifier.weight(1f))
 
-                Spacer(modifier = Modifier.height(ScreenSize.height * 0.05f))
+                // photoUrl이 있을 경우 처리 (현재는 기본 이미지 사용)
+                Image(
+                    painter = painterResource(id = R.drawable.ic_pdf),
+                    contentDescription = null,
+                    modifier = Modifier.size(ScreenSize.width * 0.15f)
+                )
             }
+            Spacer(modifier = Modifier.height(ScreenSize.height * 0.01f))
+            // 구분선 추가
+            Divider(
+                modifier = Modifier.fillMaxWidth(),
+                thickness = 1.dp,
+                color = Color(0xFFE0E0E0)
+            )
+
+            Spacer(modifier = Modifier.height(ScreenSize.height * 0.03f))
+
+            Text(
+                "참여자 목록",
+                fontWeight = FontWeight.Bold,
+                fontSize = ScreenSize.width.value.times(0.045f).sp
+            )
+
+            Spacer(modifier = Modifier.height(ScreenSize.height * 0.01f))
+            Row(horizontalArrangement = Arrangement.spacedBy(ScreenSize.width * 0.02f)) {
+                repeat(groupDetail.memberCount) {
+                    Image(
+                        painter = painterResource(id = R.drawable.profile_image),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(ScreenSize.width * 0.12f)
+                            .clip(CircleShape)
+                    )
+                }
+            }
+
+            if(isMyGroup){
+                Spacer(modifier = Modifier.height(ScreenSize.height * 0.02f))
+                // 구분선 추가
+                Divider(
+                    modifier = Modifier.fillMaxWidth(),
+                    thickness = 1.dp,
+                    color = Color(0xFFE0E0E0)
+                )
+
+                Spacer(modifier = Modifier.height(ScreenSize.height * 0.03f))
+            }
+            else{
+                Spacer(modifier = Modifier.height(ScreenSize.height * 0.04f))
+            }
+
+
+            if (!isMyGroup) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(ScreenSize.height * 0.065f)
+                        .clip(RoundedCornerShape(ScreenSize.width * 0.03f))
+                        .background(Color(0xFFDED0BB))
+                        .clickable {
+                            /* Todo: 참여 로직 추가 필요 */
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "참여하기",
+                        color = Color.White,
+                        fontSize = ScreenSize.width.value.times(0.04f).sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            } else {
+                Text(
+                    "진도 현황",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = ScreenSize.width.value.times(0.045f).sp
+                )
+                ProgressStatusCard(75, 10, dummyMembers)
+            }
+
+            Spacer(modifier = Modifier.height(ScreenSize.height * 0.05f))
         }
     }
 }
@@ -158,7 +288,7 @@ fun ProgressStatusCard(
             .padding(ScreenSize.width * 0.05f)
             .background(Color.White, RoundedCornerShape(ScreenSize.width * 0.03f))
     ) {
-        Text(text = "스크립트 읽기 진도", color = Color.Gray, fontSize = fontSize.sp)
+        Text(text = "문서 읽기 진도", color = Color.Gray, fontSize = fontSize.sp)
         Text(
             text = "$overallProgress%",
             fontSize = (fontSize + 8).sp,
@@ -189,7 +319,7 @@ fun ProgressStatusCard(
                                 .fillMaxWidth()
                                 .fillMaxHeight(percent / 100f)
                                 .align(Alignment.BottomCenter)
-                                .background(Color.Black, RoundedCornerShape(4.dp))
+                                .background(MainColor, RoundedCornerShape(4.dp))
                         )
                     }
                     Spacer(modifier = Modifier.height(8.dp))

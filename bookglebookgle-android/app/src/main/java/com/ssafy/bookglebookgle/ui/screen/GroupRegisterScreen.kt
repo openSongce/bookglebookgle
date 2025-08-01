@@ -1,9 +1,11 @@
 package com.ssafy.bookglebookgle.ui.screen
 
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.provider.OpenableColumns
 import android.provider.Settings
 import android.util.Log
 import android.widget.Toast
@@ -13,7 +15,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -32,14 +33,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.LocalTextSelectionColors
+import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -53,6 +52,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -60,7 +60,6 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -80,15 +79,16 @@ import androidx.navigation.NavHostController
 import com.ssafy.bookglebookgle.R
 import com.ssafy.bookglebookgle.pdf.tools.AppFileManager
 import com.ssafy.bookglebookgle.ui.component.CustomTopAppBar
+import com.ssafy.bookglebookgle.ui.theme.BaseColor
+import com.ssafy.bookglebookgle.ui.theme.MainColor
 import com.ssafy.bookglebookgle.util.PdfAnalysisResult
 import com.ssafy.bookglebookgle.util.PdfOcrChecker
 import com.ssafy.bookglebookgle.viewmodel.GroupRegisterViewModel
-import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileOutputStream
-import java.text.SimpleDateFormat
+import java.net.URLDecoder
+import java.nio.charset.StandardCharsets
 import java.util.Calendar
-import java.util.Locale
 import kotlin.math.roundToInt
 
 private const val TAG = "싸피_GroupRegisterScreen"
@@ -255,7 +255,7 @@ fun DateTimePickerDialog(
                                             .clickable { selectedDayIndex = index },
                                         colors = CardDefaults.cardColors(
                                             containerColor = if (selectedDayIndex == index)
-                                                Color(0xFF81C4E8) else Color.White
+                                                Color(0xFFEFE5D8) else Color.White
                                         ),
                                         shape = RoundedCornerShape(8.dp),
                                         border = if (selectedDayIndex != index)
@@ -274,7 +274,7 @@ fun DateTimePickerDialog(
                                                 text = day.dayName,
                                                 fontSize = 12.sp,
                                                 fontWeight = if (selectedDayIndex == index) FontWeight.Bold else FontWeight.Normal,
-                                                color = if (selectedDayIndex == index) Color.White else Color(
+                                                color = if (selectedDayIndex == index) Color.Black else Color(
                                                     0xFF4A5568
                                                 )
                                             )
@@ -282,7 +282,7 @@ fun DateTimePickerDialog(
                                                 text = "${day.dayOfMonth}",
                                                 fontSize = 10.sp,
                                                 fontWeight = if (selectedDayIndex == index) FontWeight.Medium else FontWeight.Normal,
-                                                color = if (selectedDayIndex == index) Color.White else Color(
+                                                color = if (selectedDayIndex == index) Color.Black else Color(
                                                     0xFF64748B
                                                 )
                                             )
@@ -290,7 +290,7 @@ fun DateTimePickerDialog(
                                                 Text(
                                                     text = "오늘",
                                                     fontSize = 8.sp,
-                                                    color = if (selectedDayIndex == index) Color.White else Color(
+                                                    color = if (selectedDayIndex == index) Color.Black else Color(
                                                         0xFF81C4E8
                                                     )
                                                 )
@@ -323,7 +323,7 @@ fun DateTimePickerDialog(
                                 Icon(
                                     painter = painterResource(id = R.drawable.ic_clock),
                                     contentDescription = "시간",
-                                    tint = Color(0xFF81C4E8),
+                                    tint = Color(0xFFEFE5D8),
                                     modifier = Modifier.size(20.dp)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
@@ -339,7 +339,7 @@ fun DateTimePickerDialog(
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
                                 colors = CardDefaults.cardColors(
-                                    containerColor = Color(0xFF81C4E8).copy(alpha = 0.1f)
+                                    containerColor = Color(0xFFEFE5D8)
                                 ),
                                 shape = RoundedCornerShape(12.dp)
                             ) {
@@ -347,7 +347,7 @@ fun DateTimePickerDialog(
                                     text = String.format("%02d:%02d", selectedHour, selectedMinute),
                                     fontSize = 28.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF81C4E8),
+                                    color = Color.Black,
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(20.dp),
@@ -370,12 +370,12 @@ fun DateTimePickerDialog(
                                             .clickable { selectedHour = hour },
                                         colors = CardDefaults.cardColors(
                                             containerColor = if (selectedHour == hour)
-                                                Color(0xFF81C4E8) else Color.White
+                                                Color(0xFFEFE5D8) else Color.White
                                         ),
                                         shape = RoundedCornerShape(6.dp),
                                         border = androidx.compose.foundation.BorderStroke(
                                             1.dp,
-                                            if (selectedHour == hour) Color(0xFF81C4E8) else Color(
+                                            if (selectedHour == hour) Color(0xFFEFE5D8) else Color(
                                                 0xFFE2E8F0
                                             )
                                         )
@@ -388,7 +388,7 @@ fun DateTimePickerDialog(
                                                 text = String.format("%02d", hour),
                                                 fontSize = 12.sp,
                                                 fontWeight = if (selectedHour == hour) FontWeight.Bold else FontWeight.Normal,
-                                                color = if (selectedHour == hour) Color.White else Color(
+                                                color = if (selectedHour == hour) Color.Black else Color(
                                                     0xFF4A5568
                                                 )
                                             )
@@ -411,12 +411,12 @@ fun DateTimePickerDialog(
                                             .clickable { selectedMinute = minute },
                                         colors = CardDefaults.cardColors(
                                             containerColor = if (selectedMinute == minute)
-                                                Color(0xFF81C4E8) else Color.White
+                                                Color(0xFFEFE5D8) else Color.White
                                         ),
                                         shape = RoundedCornerShape(8.dp),
                                         border = androidx.compose.foundation.BorderStroke(
                                             1.dp,
-                                            if (selectedMinute == minute) Color(0xFF81C4E8) else Color(
+                                            if (selectedMinute == minute) Color(0xFFEFE5D8) else Color(
                                                 0xFFE2E8F0
                                             )
                                         )
@@ -429,7 +429,7 @@ fun DateTimePickerDialog(
                                                 text = String.format("%02d분", minute),
                                                 fontSize = 16.sp,
                                                 fontWeight = if (selectedMinute == minute) FontWeight.Bold else FontWeight.Normal,
-                                                color = if (selectedMinute == minute) Color.White else Color(
+                                                color = if (selectedMinute == minute) Color.Black else Color(
                                                     0xFF4A5568
                                                 )
                                             )
@@ -477,7 +477,8 @@ fun DateTimePickerDialog(
                                 }
 
                                 // 한국어 형식으로 날짜/시간 문자열 생성: "목요일 14시 30분"
-                                val formattedDateTime = "$fullDayName ${selectedHour}시 ${selectedMinute}분"
+                                val formattedDateTime =
+                                    "$fullDayName ${selectedHour}시 ${selectedMinute}분"
                                 onDateTimeSelected(formattedDateTime)
                                 onDismiss()
                             },
@@ -485,7 +486,7 @@ fun DateTimePickerDialog(
                                 .weight(1f)
                                 .height(48.dp),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFF81C4E8)
+                                containerColor = Color(0xFFEFE5D8)
                             ),
                             shape = RoundedCornerShape(12.dp)
                         ) {
@@ -493,7 +494,7 @@ fun DateTimePickerDialog(
                                 "확인",
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color.White
+                                color = Color.Black
                             )
                         }
                     }
@@ -577,6 +578,28 @@ fun GroupRegisterScreen(
         }
     }
 
+    // URI에서 파일명을 추출하는 함수 추가 (import 섹션 다음에 추가)
+    fun getFileNameFromUri(context: Context, uri: Uri): String? {
+        var fileName: String? = null
+
+        // DocumentProvider를 통한 파일명 추출
+        context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+            val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            if (nameIndex != -1 && cursor.moveToFirst()) {
+                fileName = cursor.getString(nameIndex)
+            }
+        }
+
+        // 위에서 실패하면 URI path에서 추출
+        if (fileName == null) {
+            fileName = uri.path?.let { path ->
+                path.substring(path.lastIndexOf('/') + 1)
+            }
+        }
+
+        return fileName
+    }
+
     // PDF 선택 런처
     val pdfPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -585,6 +608,8 @@ fun GroupRegisterScreen(
             try {
                 isAnalyzing = true // 분석 시작
 
+                val originalFileName = getFileNameFromUri(context, it) ?: "선택된 파일"
+
                 context.contentResolver?.openInputStream(it)?.use { input ->
                     val saveFile = AppFileManager.getNewPdfFile(context)
                     FileOutputStream(saveFile).use { output ->
@@ -592,7 +617,7 @@ fun GroupRegisterScreen(
                     }
                     viewModel.updatePdfFile(saveFile)
                     selectedPdfFile = saveFile
-                    selectedPdfFileName = saveFile.name
+                    selectedPdfFileName = originalFileName
                     isPdfImported = true
 
                     // PDF OCR 필요 여부 확인 (백그라운드에서 실행)
@@ -723,7 +748,7 @@ fun GroupRegisterScreen(
                     }
                     .border(
                         width = 1.dp,
-                        color = if (selectedPdfFile != null) selectedColor else unselectedColor,
+                        color = if (selectedPdfFile != null) BaseColor else unselectedColor,
                         shape = RoundedCornerShape(8.dp)
                     ),
                 colors = CardDefaults.cardColors(
@@ -745,7 +770,16 @@ fun GroupRegisterScreen(
                     Spacer(modifier = Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = if (selectedPdfFileName.isNotEmpty()) displayFileName else "PDF 업로드",
+                            text = if (selectedPdfFileName.isNotEmpty()) {
+                                // 파일명이 너무 길면 앞부분만 표시
+                                if (selectedPdfFileName.length > 25) {
+                                    selectedPdfFileName.take(22) + "..."
+                                } else {
+                                    selectedPdfFileName
+                                }
+                            } else {
+                                "PDF 업로드"
+                            },
                             color = if (selectedPdfFile != null) Color.Black else Color.Gray,
                             fontSize = 16.sp,
                             fontWeight = if (selectedPdfFile != null) FontWeight.Medium else FontWeight.Normal
@@ -753,7 +787,7 @@ fun GroupRegisterScreen(
                         if (selectedPdfFile != null) {
                             Text(
                                 text = "파일이 선택되었습니다",
-                                color = selectedColor,
+                                color = BaseColor,
                                 fontSize = 12.sp,
                                 modifier = Modifier.padding(top = 4.dp)
                             )
@@ -798,38 +832,52 @@ fun GroupRegisterScreen(
             )
             Spacer(modifier = Modifier.height(16.dp))
 
-            // 모임 제목 입력
-            OutlinedTextField(
-                value = viewModel.groupName,
-                onValueChange = { viewModel.updateGroupName(it) },
-                placeholder = { Text("모임 제목을 입력해주세요", color = Color.Gray) },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(8.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = selectedColor,
-                    focusedLabelColor = selectedColor,
-                    cursorColor = selectedColor
+            CompositionLocalProvider(
+                LocalTextSelectionColors provides TextSelectionColors(
+                    handleColor = BaseColor, // 드래그 핸들(물방울) 색상
+                    backgroundColor = BaseColor.copy(alpha = 0.3f) // 선택 영역 배경색 (투명도 적용)
                 )
-            )
+            ) {
+                // 모임 제목 입력
+                OutlinedTextField(
+                    value = viewModel.groupName,
+                    onValueChange = { viewModel.updateGroupName(it) },
+                    placeholder = { Text("모임 제목을 입력해주세요", color = Color.Gray) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = BaseColor,
+                        focusedLabelColor = BaseColor,
+                        cursorColor = BaseColor
+                    )
+                )
+            }
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // 모임 설명 작성
-            OutlinedTextField(
-                value = viewModel.groupDescription,
-                onValueChange = { viewModel.updateGroupDescription(it) },
-                placeholder = { Text("모임에 대한 설명을 작성해주세요", color = Color.Gray) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(120.dp),
-                shape = RoundedCornerShape(8.dp),
-                maxLines = 5,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = selectedColor,
-                    focusedLabelColor = selectedColor,
-                    cursorColor = selectedColor
+            CompositionLocalProvider(
+                LocalTextSelectionColors provides TextSelectionColors(
+                    handleColor = BaseColor, // 드래그 핸들(물방울) 색상
+                    backgroundColor = BaseColor.copy(alpha = 0.3f) // 선택 영역 배경색 (투명도 적용)
                 )
-            )
+            ) {
+                // 모임 설명 작성
+                OutlinedTextField(
+                    value = viewModel.groupDescription,
+                    onValueChange = { viewModel.updateGroupDescription(it) },
+                    placeholder = { Text("모임에 대한 설명을 작성해주세요", color = Color.Gray) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(120.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    maxLines = 5,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = BaseColor,
+                        focusedLabelColor = BaseColor,
+                        cursorColor = BaseColor
+                    )
+                )
+            }
 
             Spacer(modifier = Modifier.height(20.dp))
 
@@ -851,13 +899,15 @@ fun GroupRegisterScreen(
                         onClick = { viewModel.updateCategory(category) },
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = if (viewModel.selectedCategory == category) selectedColor else Color.White,
-                            contentColor = if (viewModel.selectedCategory == category) Color.White else Color.Gray
+                            containerColor = if (viewModel.selectedCategory == category) Color(
+                                0xFFEFE5D8
+                            ) else Color.White,
+                            contentColor = if (viewModel.selectedCategory == category) Color.Black else Color.Gray
                         ),
                         shape = RoundedCornerShape(8.dp),
                         border = androidx.compose.foundation.BorderStroke(
                             1.dp,
-                            if (viewModel.selectedCategory == category) selectedColor else unselectedColor
+                            if (viewModel.selectedCategory == category) Color(0xFFEFE5D8) else unselectedColor
                         )
                     ) {
                         Text(
@@ -890,13 +940,13 @@ fun GroupRegisterScreen(
                             .weight(1f)
                             .height(40.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = if (viewModel.maxMembers == number) selectedColor else Color.White,
-                            contentColor = if (viewModel.maxMembers == number) Color.White else Color.Gray
+                            containerColor = if (viewModel.maxMembers == number) Color(0xFFEFE5D8) else Color.White,
+                            contentColor = if (viewModel.maxMembers == number) Color.Black else Color.Gray
                         ),
                         shape = RoundedCornerShape(8.dp),
                         border = androidx.compose.foundation.BorderStroke(
                             1.dp,
-                            if (viewModel.maxMembers == number) selectedColor else unselectedColor
+                            if (viewModel.maxMembers == number) Color(0xFFEFE5D8) else unselectedColor
                         ),
                         contentPadding = PaddingValues(4.dp)
                     ) {
@@ -925,7 +975,7 @@ fun GroupRegisterScreen(
                     .clickable { viewModel.showDateTimePicker() }
                     .border(
                         width = 1.dp,
-                        color = if (viewModel.selectedDateTime.isNotEmpty()) selectedColor else unselectedColor,
+                        color = if (viewModel.selectedDateTime.isNotEmpty()) Color(0xFFEFE5D8) else unselectedColor,
                         shape = RoundedCornerShape(8.dp)
                     ),
                 colors = CardDefaults.cardColors(
@@ -944,7 +994,7 @@ fun GroupRegisterScreen(
                         painter = painterResource(id = R.drawable.ic_clock),
                         contentDescription = "시간 선택",
                         modifier = Modifier.size(24.dp),
-                        tint = if (viewModel.selectedDateTime.isNotEmpty()) selectedColor else Color.Gray
+                        tint = if (viewModel.selectedDateTime.isNotEmpty()) Color(0xFFEFE5D8) else Color.Gray
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
@@ -1012,7 +1062,7 @@ fun GroupRegisterScreen(
                             text = "${viewModel.minRequiredRating}점 이상",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF81C4E8)
+                            color = MainColor
                         )
                     }
 
@@ -1114,7 +1164,7 @@ fun GroupRegisterScreen(
                     .fillMaxWidth()
                     .height(48.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = selectedColor
+                    containerColor = Color(0xFFEFE5D8)
                 ),
                 shape = RoundedCornerShape(12.dp),
                 enabled = run {
@@ -1244,7 +1294,7 @@ fun RatingSlider(
                         text = rating.toString(),
                         fontSize = 12.sp,
                         fontWeight = if (nearestValue == rating) FontWeight.Bold else FontWeight.Normal,
-                        color = if (nearestValue == rating) Color(0xFF81C4E8) else Color(0xFF64748B)
+                        color = if (nearestValue == rating) MainColor else Color(0xFF64748B)
                     )
                 }
             }
@@ -1309,7 +1359,7 @@ fun RatingSlider(
                         .height(6.dp)
                         .align(Alignment.CenterStart)
                         .background(
-                            Color(0xFF81C4E8),
+                            MainColor,
                             RoundedCornerShape(3.dp)
                         )
                 )
@@ -1326,7 +1376,7 @@ fun RatingSlider(
                         )
                         .border(
                             if (isDragging) 3.dp else 2.dp,
-                            if (isDragging) Color(0xFF81C4E8) else Color(0xFFE2E8F0),
+                            if (isDragging) MainColor else Color(0xFFE2E8F0),
                             CircleShape
                         )
                 ) {
@@ -1336,7 +1386,7 @@ fun RatingSlider(
                             .size(if (isDragging) 10.dp else 8.dp)
                             .align(Alignment.Center)
                             .background(
-                                Color(0xFF81C4E8),
+                                MainColor,
                                 CircleShape
                             )
                     )

@@ -11,7 +11,7 @@ sealed class Screen(val route: String) {
     object CommentsListScreen : Screen("comments_list")
     object HighlightsListScreen : Screen("highlights_list")
     object BookmarksListScreen : Screen("bookmarks_list")
-    object PdfScreen : Screen("pdf")
+    object PdfReadScreen : Screen("pdf_read")
     object GroupRegisterScreen : Screen("group_register")
     object GroupDetailScreen : Screen("group_detail")
 }

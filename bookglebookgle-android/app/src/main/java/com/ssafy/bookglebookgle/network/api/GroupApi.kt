@@ -2,6 +2,7 @@ package com.ssafy.bookglebookgle.network.api
 
 import com.ssafy.bookglebookgle.entity.GroupDetailResponse
 import com.ssafy.bookglebookgle.entity.GroupListResponse
+import com.ssafy.bookglebookgle.entity.MyGroupResponse
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
 import okhttp3.ResponseBody
@@ -10,6 +11,7 @@ import retrofit2.http.GET
 import retrofit2.http.Multipart
 import retrofit2.http.POST
 import retrofit2.http.Part
+import retrofit2.http.Path
 import retrofit2.http.Query
 
 interface GroupApi {
@@ -44,6 +46,12 @@ interface GroupApi {
      * */
     @GET("group/{groupId}")
     suspend fun getGroupDetail(
-        @Query("groupId") groupId: Long
+        @Path("groupId") groupId: Long
     ): Response<GroupDetailResponse>
+
+    /**
+     * 내 모임 조회
+     * */
+    @GET("group/my")
+    suspend fun getMyGroups(): Response<List<MyGroupResponse>>
 }

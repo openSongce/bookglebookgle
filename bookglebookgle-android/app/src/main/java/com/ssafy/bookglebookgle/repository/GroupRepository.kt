@@ -2,6 +2,7 @@ package com.ssafy.bookglebookgle.repository
 
 import com.ssafy.bookglebookgle.entity.GroupDetailResponse
 import com.ssafy.bookglebookgle.entity.GroupListResponse
+import com.ssafy.bookglebookgle.entity.MyGroupResponse
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
 import okhttp3.ResponseBody
@@ -21,4 +22,6 @@ interface GroupRepository {
     suspend fun getAllGroups(): Response<List<GroupListResponse>>
 
     suspend fun getGroupDetail(groupId: Long): Response<GroupDetailResponse>
+
+    suspend fun getMyGroups(): Response<List<MyGroupResponse>>
 }

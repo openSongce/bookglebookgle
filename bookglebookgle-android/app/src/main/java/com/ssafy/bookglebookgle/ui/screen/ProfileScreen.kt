@@ -174,7 +174,7 @@ fun ProfileScreen(navController: NavHostController, viewModel: ProfileViewModel 
                 .padding(horizontal = ScreenSize.width * 0.08f),
             horizontalArrangement = Arrangement.spacedBy(ScreenSize.width * 0.04f)
         ) {
-            ProfileItemHorizontal("내 보상", Modifier.weight(1f)) { }
+            ProfileItemHorizontal("내 책장", Modifier.weight(1f)) { }
             ProfileItemHorizontal("로그아웃", Modifier.weight(1f)) {
                 viewModel.logout()
             }
