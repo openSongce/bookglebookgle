@@ -37,7 +37,7 @@ public class KakaoAuthController {
     })
     @PostMapping("/oauth/kakao")
     public ResponseEntity<?> kakaoLogin(@RequestBody KakaoLoginRequest request) {
-    	System.out.println("💥 컨트롤러 진입 성공!");
+    	System.out.println(" 컨트롤러 진입 성공!");
 
         try {
         	System.out.println("try문 안쪽 💥 컨트롤러 진입 성공!");
@@ -69,6 +69,8 @@ public class KakaoAuthController {
 
             String jwtAccessToken = jwtService.createAccessToken(user.getEmail());
             String jwtRefreshToken = jwtService.createRefreshToken(user.getEmail());
+
+            authService.saveRefreshToken(user.getEmail(), jwtRefreshToken);
 
             return ResponseEntity.ok(new JwtResponse(jwtAccessToken, jwtRefreshToken));
         } catch (Exception e) {
