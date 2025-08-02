@@ -415,7 +415,7 @@ fun PdfReadScreen(
                                 OutlinedTextField(
                                     value = commentText,
                                     onValueChange = { commentText = it },
-                                    placeholder = { Text("댓글을 입력하세요", color = Color.Gray) },
+                                    placeholder = { Text("댓글을 입력하세요", color = Color.Gray, fontSize = 14.sp) },
                                     modifier = Modifier.fillMaxWidth(),
                                     maxLines = 1,
                                     colors = OutlinedTextFieldDefaults.colors(
