@@ -70,7 +70,7 @@ public class Group {
     }
 
     public enum Category {
-        STUDY, DISCUSSION, READING
+        STUDY, REVIEW, READING
     }
 
     public enum ReadingMode {
