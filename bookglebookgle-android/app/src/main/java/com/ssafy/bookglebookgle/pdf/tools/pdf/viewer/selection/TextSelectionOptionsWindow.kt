@@ -26,6 +26,8 @@ import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.PDFView
 import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.Coordinates
 import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.TextSelectionData
 import com.ssafy.bookglebookgle.pdf.utils.Utils
+import com.ssafy.bookglebookgle.ui.theme.BaseColor
+import com.ssafy.bookglebookgle.ui.theme.MainColor
 import kotlin.math.roundToInt
 
 // 메인 클래스 - XML 버전과 동일한 생성자 패턴
@@ -55,10 +57,9 @@ class TextSelectionOptionsWindow(
     private val colorsList = listOf(
         "#FFFF00", "#00FF00", "#0000FF", "#FFA500", "#FFC0CB",
         "#800080", "#00FFFF", "#FF0000", "#008080", "#E6E6FA",
-        CLOSE_ICON_ID
     )
 
-    private var colorOptionSize = 50
+    private var colorOptionSize = 20
 
     // XML 버전과 동일한 초기화
     init {
@@ -111,17 +112,17 @@ class TextSelectionOptionsWindow(
             // XML 버전과 동일한 계산
             val optionWindowHeight = Utils.convertDpToPixel(context, 40f)
 
-            val calculatedY = if (currentY - (optionWindowHeight * 1.2) <= 0) {
-                optionWindowHeight.toFloat() * 1.2
+            val calculatedY = if (currentY - (optionWindowHeight * 1.5) <= 0) {
+                optionWindowHeight.toFloat() * 0.5
             } else {
-                currentY - (optionWindowHeight * 1.2)
+                currentY - (optionWindowHeight * 1.5)
             }
 
             Popup(
                 alignment = Alignment.TopStart,
                 offset = with(density) {
                     IntOffset(
-                        x = currentX.roundToInt(),
+                        x = (currentX - 60.dp.toPx()).toInt(),  // 팝업 너비의 절반 정도 왼쪽으로 이동
                         y = calculatedY.roundToInt()
                     )
                 },
@@ -130,10 +131,10 @@ class TextSelectionOptionsWindow(
             ) {
                 Card(
                     modifier = Modifier
-                        .padding(8.dp)
+                        .padding(4.dp)
                         .wrapContentSize(),
                     elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFAF2E6)),
                     shape = RoundedCornerShape(8.dp)
                 ) {
                     if (!showColorPicker) {
@@ -149,8 +150,8 @@ class TextSelectionOptionsWindow(
     @Composable
     private fun OptionContainer() {
         Row(
-            modifier = Modifier.padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.padding(2.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             TextButton(
@@ -166,15 +167,21 @@ class TextSelectionOptionsWindow(
                         }
                     }
                 },
-                modifier = Modifier.padding(4.dp)
             ) {
                 Text(
-                    text = "노트 추가",
-                    fontSize = 14.sp,
+                    text = "댓글 작성",
+                    fontSize = 10.sp,
                     fontWeight = FontWeight.Medium,
                     color = Color.Black
                 )
             }
+            // 세로 구분선 추가
+            Box(
+                modifier = Modifier
+                    .width(1.dp)
+                    .height(20.dp)
+                    .background(Color.Gray)
+            )
 
             TextButton(
                 onClick = { showColorPicker = true },
@@ -182,7 +189,7 @@ class TextSelectionOptionsWindow(
             ) {
                 Text(
                     text = "하이라이트",
-                    fontSize = 14.sp,
+                    fontSize = 10.sp,
                     fontWeight = FontWeight.Medium,
                     color = Color.Black
                 )
@@ -193,7 +200,7 @@ class TextSelectionOptionsWindow(
     @Composable
     private fun ColorContainer() {
         Column(
-            modifier = Modifier.padding(16.dp)
+            modifier = Modifier.padding(8.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -212,7 +219,7 @@ class TextSelectionOptionsWindow(
                         // XML 버전의 CLOSE_ICON_ID 클릭과 동일한 동작
                         showColorPicker = false
                     },
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(20.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Close,
@@ -227,7 +234,8 @@ class TextSelectionOptionsWindow(
             // XML 버전과 동일한 색상 처리 로직
             LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(7.dp),
-                modifier = Modifier.wrapContentWidth()
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(horizontal = 8.dp)
             ) {
                 items(colorsList.size) { index ->
                     val colorItem = colorsList[index]
@@ -244,12 +252,6 @@ class TextSelectionOptionsWindow(
                                 },
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = "닫기",
-                                tint = Color.Black,
-                                modifier = Modifier.size(16.dp)
-                            )
                         }
                     } else {
                         // XML 버전의 색상 View와 동일한 동작
@@ -257,7 +259,7 @@ class TextSelectionOptionsWindow(
 
                         Box(
                             modifier = Modifier
-                                .size(colorOptionSize.dp)
+                                .size(35.dp)
                                 .clip(CircleShape)
                                 .background(color)
                                 .border(

@@ -3,6 +3,7 @@ package com.ssafy.bookglebookgle.ui.component
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -35,6 +36,7 @@ fun CustomTopAppBar(
     navController : NavHostController,
     ismygroup : Boolean = false,
     onBackPressed: (() -> Unit)? = null, // 뒤로가기 버튼 클릭 콜백
+    actions: @Composable RowScope.() -> Unit = {}
 ) {
     TopAppBar(
         title = {
@@ -168,6 +170,9 @@ fun CustomTopAppBar(
                         .padding(end = 16.dp)
                         .clickable { onBackPressed?.invoke() }
                 )
+            }
+            else{
+                actions()
             }
         },
         colors = TopAppBarDefaults.topAppBarColors(

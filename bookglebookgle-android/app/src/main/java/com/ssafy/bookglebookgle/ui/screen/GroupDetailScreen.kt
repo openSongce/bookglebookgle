@@ -149,7 +149,6 @@ private fun GroupDetailContent(
             Spacer(modifier = Modifier.height(ScreenSize.height * 0.01f))
             Row(
                 modifier = Modifier.clickable {
-                    // PDF 보기 로직 추가 필요
                     navController.currentBackStackEntry?.savedStateHandle?.set("groupId", groupId)
                     navController.navigate(Screen.PdfReadScreen.route)
                 },

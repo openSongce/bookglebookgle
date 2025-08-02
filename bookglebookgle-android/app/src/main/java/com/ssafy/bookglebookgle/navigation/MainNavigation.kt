@@ -12,7 +12,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.pdfnotemate.ui.activity.home.PdfScreen
-import com.example.pdfnotemate.ui.activity.reader.PdfReadScreen
+import com.ssafy.bookglebookgle.ui.screen.PdfReadScreen
 import com.example.pdfnotemate.ui.activity.reader.PdfReaderScreen
 import com.ssafy.bookglebookgle.pdf.response.PdfNoteListModel
 import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.BookmarkModel
@@ -131,10 +131,22 @@ fun MainNavigation(
                 GroupRegisterScreen(navController)
             }
 
-            composable(Screen.PdfReadScreen.route){
+            composable(Screen.GroupDetailScreen.route) {
                 val groupId = navController.previousBackStackEntry
                     ?.savedStateHandle?.get<Long>("groupId") ?: -1L
 
+                val isMyGroup = navController.previousBackStackEntry
+                    ?.savedStateHandle?.get<Boolean>("isMyGroup") ?: false
+
+                // 디버깅용 로그 추가
+                Log.d("GroupDetail", "groupId: $groupId, isMyGroup: $isMyGroup")
+
+                GroupDetailScreen(navController,  groupId, isMyGroup)
+            }
+
+            composable(Screen.PdfReadScreen.route){
+                val groupId = navController.previousBackStackEntry
+                    ?.savedStateHandle?.get<Long>("groupId") ?: -1L
 
                 // 디버깅용 로그 추가
                 Log.d("GroupDetail", "groupId: $groupId")
@@ -142,6 +154,8 @@ fun MainNavigation(
                 PdfReadScreen(groupId, navController =  navController)
             }
 
+
+            /** PDF 라이브러리 호출*/
             composable(Screen.AddPdfScreen.route) {
                 val pageType = navController.previousBackStackEntry
                     ?.savedStateHandle
@@ -265,19 +279,6 @@ fun MainNavigation(
                         navController.navigateUp()
                     }
                 )
-            }
-
-            composable(Screen.GroupDetailScreen.route) {
-                val groupId = navController.previousBackStackEntry
-                    ?.savedStateHandle?.get<Long>("groupId") ?: -1L
-
-                val isMyGroup = navController.previousBackStackEntry
-                    ?.savedStateHandle?.get<Boolean>("isMyGroup") ?: false
-
-                // 디버깅용 로그 추가
-                Log.d("GroupDetail", "groupId: $groupId, isMyGroup: $isMyGroup")
-
-                GroupDetailScreen(navController,  groupId, isMyGroup)
             }
 
         }

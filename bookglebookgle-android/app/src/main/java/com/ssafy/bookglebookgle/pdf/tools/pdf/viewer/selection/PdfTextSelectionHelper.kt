@@ -6,13 +6,13 @@ import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.TextSelectionData
 
 class PdfTextSelectionHelper {
     private val selectedTextPaint = Paint().apply {
-        this.color = Color.parseColor("#FA5D3B")
+        this.color = Color.parseColor("#997256")
         this.alpha = 50
         this.style = Paint.Style.FILL
         this.isAntiAlias = true
     }
     private val selectionHandleColor = Paint().apply {
-        this.color = Color.parseColor("#FA5D3B")
+        this.color = Color.parseColor("#B38D70")
         this.style = Paint.Style.FILL_AND_STROKE
         this.isAntiAlias = true
     }
@@ -31,7 +31,7 @@ class PdfTextSelectionHelper {
     }
 
     // Handle
-    val handleRoundRadius = 20f
+    val handleRoundRadius = 15f
 
     var startHandlePosition = PointF()
     var endHandlePosition = PointF()
