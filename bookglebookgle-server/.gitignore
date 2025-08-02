@@ -38,3 +38,12 @@ out/
 
 # bookglebookgle-server/.gitignore
 .env
+
+# pdf
+/uploads/
+
+# 로그 파일
+*.log
+logs/
+**/logs/
+backend-logs/

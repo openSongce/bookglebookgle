@@ -84,7 +84,11 @@ public class AuthService {
         refreshTokenService.saveRefreshToken(user.getEmail(), refreshToken);
 
 
-        return new JwtResponse(accessToken, refreshToken);
+        return new JwtResponse(accessToken,
+                refreshToken,
+                user.getEmail(),
+                user.getNickname(),
+                user.getProfileImageUrl());
 
     }
 
@@ -135,8 +139,25 @@ public class AuthService {
 
     }
 
+    public boolean isNicknameDuplicated(String nickname) {
+        return userRepository.existsByNickname(nickname);
+    }
 
 
+    public String generateUniqueNickname(String base) {
+        String nickname = base;
+        int suffix = 1;
+        while (userRepository.existsByNickname(nickname)) {
+            nickname = base + suffix++;
+        }
+        return nickname;
+    }
+
+
+    //refresh token  저장
+    public void saveRefreshToken(String email, String refreshToken) {
+        refreshTokenService.saveRefreshToken(email, refreshToken);
+    }
 
 
 

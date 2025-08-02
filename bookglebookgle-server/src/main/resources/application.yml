@@ -3,7 +3,7 @@ server:
 
 ocr:
   server:
-    url: http://bgbg-container:50052/ocr
+    url: 52.79.59.66:50052
 
 spring:
   config:
@@ -41,3 +41,8 @@ spring:
       hibernate:
         format_sql: true
         dialect: org.hibernate.dialect.MySQL8Dialect
+
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB

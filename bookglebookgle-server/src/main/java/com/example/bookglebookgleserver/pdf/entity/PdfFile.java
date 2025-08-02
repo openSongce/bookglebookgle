@@ -1,5 +1,6 @@
 package com.example.bookglebookgleserver.pdf.entity;
 
+import com.example.bookglebookgleserver.group.entity.Group;
 import com.example.bookglebookgleserver.user.entity.User;
 import jakarta.persistence.*;
 import lombok.*;
@@ -14,6 +15,7 @@ public class PdfFile {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "pdf_id")
     private Long pdfId;
 
     private String fileName;
@@ -30,5 +32,16 @@ public class PdfFile {
     @PrePersist
     public void prePersist() {
         this.createdAt = LocalDateTime.now();
+    }
+
+    @Column(name = "file_path", nullable = false)
+    private String filePath;
+
+    @OneToOne
+    @JoinColumn(name = "group_id")
+    private Group group;
+
+    public void setGroup(Group group) {
+        this.group = group;
     }
 }

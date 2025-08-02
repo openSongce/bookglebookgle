@@ -10,7 +10,7 @@ public class AuthServiceTest {
 
     @Test
     void encode1234() {
-        String rawPassword = "123";
+        String rawPassword = "1234";
         String encodedPassword = passwordEncoder.encode(rawPassword);
         System.out.println("🔐 1234의 인코딩 값: " + encodedPassword);
     }

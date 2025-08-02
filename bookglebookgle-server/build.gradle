@@ -2,6 +2,7 @@ plugins {
     id 'java'
     id 'org.springframework.boot' version '3.5.3'
     id 'io.spring.dependency-management' version '1.1.7'
+    id 'com.google.protobuf' version '0.9.4'
 }
 
 group = 'com.example'
@@ -33,6 +34,9 @@ bootJar {
     archiveFileName.set("app.jar")
 }
 
+def grpcVersion = '1.64.0'
+def protobufVersion = '3.25.0'
+
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-web'
@@ -60,8 +64,78 @@ dependencies {
     //redis
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
     implementation 'io.lettuce:lettuce-core'
+
+    // Google ID Token 검증용
+    implementation 'com.google.api-client:google-api-client:2.0.0'
+    implementation 'com.google.api-client:google-api-client-gson:2.0.0'
+
+    // JWT 토큰 발급용
+    implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
+    runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.11.5'
+    runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.11.5'
+
+    // grpc
+    implementation "io.grpc:grpc-netty-shaded:${grpcVersion}"
+    implementation "io.grpc:grpc-protobuf:${grpcVersion}"
+    implementation "io.grpc:grpc-stub:${grpcVersion}"
+    implementation "com.google.protobuf:protobuf-java:${protobufVersion}"
+
+    implementation 'javax.annotation:javax.annotation-api:1.3.2'
+
+    // Google ID Token 검증용
+    implementation 'com.google.api-client:google-api-client:2.0.0'
+    implementation 'com.google.api-client:google-api-client-gson:2.0.0'
+
+
+    //kakao oauth
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+
+    // log
+    implementation("net.logstash.logback:logstash-logback-encoder:7.4")
+
 }
 
 tasks.named('test') {
     useJUnitPlatform()
 }
+
+protobuf {
+    protoc {
+        artifact = "com.google.protobuf:protoc:${protobufVersion}"
+    }
+    plugins {
+        grpc {
+            artifact = "io.grpc:protoc-gen-grpc-java:${grpcVersion}"
+        }
+    }
+    generateProtoTasks {
+        all().each { task ->
+            task.plugins {
+                grpc {}
+            }
+        }
+    }
+}
+
+sourceSets {
+    main {
+        java {
+            srcDirs = [
+                    'src/main/java',
+                    'build/generated/source/proto/main/java',
+                    'build/generated/source/proto/main/grpc'
+            ]
+        }
+        proto {
+            srcDir 'src/main/proto'
+        }
+    }
+}
+
+
+tasks.withType(ProcessResources).configureEach {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+compileJava.dependsOn 'generateProto'
+
