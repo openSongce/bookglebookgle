@@ -261,4 +261,34 @@ public class GroupServiceImpl implements GroupService {
         groupMemberRepository.save(member);
     }
 
+    @Override
+    @Transactional
+    public GroupDetailResponse updateGroup(Long groupId, GroupUpdateRequestDto dto, User user) {
+        Group group = groupRepository.findById(groupId)
+                .orElseThrow(() -> new NotFoundException("해당 모임이 존재하지 않습니다."));
+
+        if (!group.getHostUser().getId().equals(user.getId())) {
+            throw new ForbiddenException("그룹 수정 권한이 없습니다.");
+        }
+
+        if (dto.getRoomTitle() != null) group.setRoomTitle(dto.getRoomTitle());
+        if (dto.getDescription() != null) group.setDescription(dto.getDescription());
+        if (dto.getCategory() != null) group.setCategory(Group.Category.valueOf(dto.getCategory().toUpperCase()));
+        if (dto.getSchedule() != null) group.setSchedule(dto.getSchedule());
+        if (dto.getGroupMaxNum() > 0) group.setGroupMaxNum(dto.getGroupMaxNum());
+        if (dto.getMinRequiredRating() > 0) group.setMinRequiredRating(dto.getMinRequiredRating());
+        if (dto.getReadingMode() != null) group.setReadingMode(Group.ReadingMode.valueOf(dto.getReadingMode().toUpperCase()));
+
+        int memberCount = groupMemberRepository.countByGroup(group);
+        return new GroupDetailResponse(
+                group.getRoomTitle(),
+                group.getCategory().name(),
+                group.getSchedule(),
+                memberCount,
+                group.getGroupMaxNum(),
+                group.getDescription(),
+                null
+        );
+    }
+
 }
