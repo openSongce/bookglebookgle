@@ -1,10 +1,7 @@
 package com.example.bookglebookgleserver.group.controller;
 
 import com.example.bookglebookgleserver.auth.security.CustomUserDetails;
-import com.example.bookglebookgleserver.group.dto.GroupCreateRequestDto;
-import com.example.bookglebookgleserver.group.dto.GroupDetailResponse;
-import com.example.bookglebookgleserver.group.dto.GroupListResponseDto;
-import com.example.bookglebookgleserver.group.dto.MyGroupSummaryDto;
+import com.example.bookglebookgleserver.group.dto.*;
 import com.example.bookglebookgleserver.group.service.GroupService;
 import com.example.bookglebookgleserver.user.entity.User;
 import io.swagger.v3.oas.annotations.Operation;
@@ -43,15 +40,16 @@ public class GroupController {
             }
     )
     @PostMapping("/create")
-    public ResponseEntity<?> createGroup(
+    public ResponseEntity<GroupCreateResponseDto> createGroup(
             @RequestPart("groupInfo") GroupCreateRequestDto dto,
             @RequestPart("file") MultipartFile file,
-            @AuthenticationPrincipal CustomUserDetails customUser  // ✅ 여기만 바꾸면 됨
+            @AuthenticationPrincipal CustomUserDetails customUser
     ) {
-        User user = customUser.getUser();  // ✅ User 엔티티 직접 접근 가능
-        groupService.createGroup(dto, file, user);
-        return ResponseEntity.ok("스터디 그룹 생성 완료");
+        User user = customUser.getUser();
+        GroupCreateResponseDto result = groupService.createGroup(dto, file, user);
+        return ResponseEntity.ok(result);
     }
+
 
     @Operation(
             summary = "OCR 없이 스터디 그룹 생성",

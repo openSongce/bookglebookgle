@@ -3,7 +3,7 @@ server:
 
 ocr:
   server:
-    url: 52.79.59.66:50505
+    url: 52.79.59.66:50000
 
 spring:
   config:
