@@ -86,6 +86,24 @@ public class GroupController {
         return ResponseEntity.ok(groupService.getGroupDetail(groupId));
     }
 
+    @Operation(
+            summary = "스터디 그룹 정보 수정",
+            description = """
+        특정 그룹의 정보를 수정합니다.<br>
+        - 그룹장만 수정 가능<br>
+        - JWT 인증 필요 (Authorization 헤더)
+        """,
+            responses = {
+                    @ApiResponse(
+                            responseCode = "200",
+                            description = "수정 성공",
+                            content = @Content(schema = @Schema(implementation = GroupDetailResponse.class))
+                    ),
+                    @ApiResponse(responseCode = "403", description = "수정 권한 없음"),
+                    @ApiResponse(responseCode = "404", description = "해당 그룹이 존재하지 않음"),
+                    @ApiResponse(responseCode = "500", description = "서버 오류")
+            }
+    )
     @PutMapping("/{groupId}/edit")
     public ResponseEntity<GroupDetailResponse> updateGroup(
             @PathVariable("groupId") Long groupId,
@@ -97,7 +115,20 @@ public class GroupController {
         return ResponseEntity.ok(result);
     }
 
-
+    @Operation(
+            summary = "그룹 PDF 파일 다운로드",
+            description = """
+        해당 그룹의 PDF 파일을 다운로드합니다.<br>
+        - 그룹원만 다운로드 가능<br>
+        - JWT 인증 필요 (Authorization 헤더)
+        """,
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "PDF 다운로드 성공"),
+                    @ApiResponse(responseCode = "403", description = "다운로드 권한 없음"),
+                    @ApiResponse(responseCode = "404", description = "해당 그룹 또는 PDF가 존재하지 않음"),
+                    @ApiResponse(responseCode = "500", description = "서버 오류")
+            }
+    )
     @GetMapping("/{groupId}/pdf")
     public ResponseEntity<Resource> getGroupPdf(
             @PathVariable Long groupId,
@@ -107,12 +138,41 @@ public class GroupController {
         return groupService.getPdfFileResponse(groupId, user);
     }
 
+    @Operation(
+            summary = "내가 속한 그룹 목록 조회",
+            description = """
+        현재 로그인한 사용자가 속한 모든 스터디 그룹의 요약 정보를 조회합니다.<br>
+        - JWT 인증 필요 (Authorization 헤더)
+        """,
+            responses = {
+                    @ApiResponse(
+                            responseCode = "200",
+                            description = "조회 성공",
+                            content = @Content(schema = @Schema(implementation = MyGroupSummaryDto.class))
+                    ),
+                    @ApiResponse(responseCode = "401", description = "인증 필요"),
+                    @ApiResponse(responseCode = "500", description = "서버 오류")
+            }
+    )
     @GetMapping("/my")
     public ResponseEntity<List<MyGroupSummaryDto>> getMyGroups(@AuthenticationPrincipal CustomUserDetails userDetails) {
         Long userId = userDetails.getUser().getId();
         return ResponseEntity.ok(groupService.getMyGroupList(userId));
     }
 
+    @Operation(
+            summary = "스터디 그룹 참가",
+            description = """
+        해당 groupId의 스터디 그룹에 참가합니다.<br>
+        - JWT 인증 필요 (Authorization 헤더)
+        """,
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "참가 성공"),
+                    @ApiResponse(responseCode = "400", description = "이미 참가한 그룹이거나 기타 오류"),
+                    @ApiResponse(responseCode = "404", description = "해당 그룹이 존재하지 않음"),
+                    @ApiResponse(responseCode = "500", description = "서버 오류")
+            }
+    )
     @PostMapping("/{groupId}/join")
     public ResponseEntity<String> joinGroup(
             @PathVariable Long groupId,
@@ -122,4 +182,28 @@ public class GroupController {
         groupService.joinGroup(groupId, user);
         return ResponseEntity.ok("그룹 참가 완료!");
     }
+
+    @Operation(
+            summary = "스터디 그룹 삭제",
+            description = """
+        그룹 ID를 받아 해당 그룹을 삭제합니다. <br>
+        - JWT 인증 필요 (Authorization 헤더, Bearer 토큰)
+        - 그룹장만 삭제 가능
+        - 삭제 시 연관된 PDF/댓글/하이라이트 등도 모두 삭제됩니다.
+        """,
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "삭제 성공"),
+                    @ApiResponse(responseCode = "403", description = "삭제 권한 없음"),
+                    @ApiResponse(responseCode = "404", description = "해당 그룹이 존재하지 않음"),
+                    @ApiResponse(responseCode = "500", description = "서버 오류")
+            }
+    )
+    @DeleteMapping("/{groupId}")
+    public ResponseEntity<Void> deleteGroup(
+            @PathVariable Long groupId,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        groupService.deleteGroup(groupId, userDetails.getUser());
+        return ResponseEntity.ok().build();
+    }
+
 }

@@ -27,8 +27,8 @@ public class Group {
     @JoinColumn(name = "user_id", nullable = false)
     private User hostUser;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "pdf_id", nullable = false)
+    @OneToOne(fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
+    @JoinColumn(name = "pdf_id", nullable = false, unique = true)
     private PdfFile pdfFile;
 
     private String roomTitle;

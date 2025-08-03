@@ -291,4 +291,15 @@ public class GroupServiceImpl implements GroupService {
         );
     }
 
+    @Override
+    @Transactional
+    public void deleteGroup(Long groupId, User user) {
+        Group group = groupRepository.findById(groupId)
+                .orElseThrow(() -> new NotFoundException("그룹이 존재하지 않습니다."));
+        if (!group.getHostUser().getId().equals(user.getId())) {
+            throw new ForbiddenException("그룹 삭제 권한이 없습니다.");
+        }
+        groupRepository.delete(group);
+    }
+
 }
