@@ -11,7 +11,7 @@ import java.io.InputStream
 
 interface PdfRepository {
     suspend fun uploadPdf(file: File): Boolean
-    suspend fun getGroupPdf(groupId: Long): InputStream?
+    suspend fun getGroupPdf(groupId: Long): PdfRepositoryImpl.PdfData?
 
     // 댓글 관리
     suspend fun addComment(

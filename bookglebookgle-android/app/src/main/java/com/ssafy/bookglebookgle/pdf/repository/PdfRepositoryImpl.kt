@@ -198,7 +198,7 @@ class PdfRepositoryImpl @Inject constructor(
                         snippet,
                         text,
                         page,
-                        commentEntity.updatedAt,
+//                        commentEntity.updatedAt,
                         coordinates
                     )
                 )
@@ -220,7 +220,7 @@ class PdfRepositoryImpl @Inject constructor(
                         it.snippet,
                         it.text,
                         it.page,
-                        it.updatedAt,
+//                        it.updatedAt,
                         it.coordinates
                     )
                 }
@@ -260,7 +260,7 @@ class PdfRepositoryImpl @Inject constructor(
                     comment.snippet,
                     newText,
                     comment.page,
-                    updatedAt,
+//                    updatedAt,
                     comment.coordinates
                 )
                 )
@@ -298,7 +298,7 @@ class PdfRepositoryImpl @Inject constructor(
                         snippet,
                         color,
                         page,
-                        highlightEntity.updatedAt,
+//                        highlightEntity.updatedAt,
                         coordinates
                     )
                 )
@@ -320,7 +320,7 @@ class PdfRepositoryImpl @Inject constructor(
                         it.snippet,
                         it.color,
                         it.page,
-                        it.updatedAt,
+//                        it.updatedAt,
                         it.coordinates
                     )
                 }
@@ -365,7 +365,7 @@ class PdfRepositoryImpl @Inject constructor(
                     BookmarkModel(
                         id,
                         page,
-                        bookmarkEntity.updatedAt,
+//                        bookmarkEntity.updatedAt,
                     )
                 )
             } catch (e: Exception) {
@@ -384,7 +384,7 @@ class PdfRepositoryImpl @Inject constructor(
                     BookmarkModel(
                         it.id?:-1L,
                         it.page,
-                        it.updatedAt
+//                        it.updatedAt
                     )
                 }
                 return@withContext ResponseState.Success<List<BookmarkModel>>(bookmarks)
@@ -436,7 +436,7 @@ class PdfRepositoryImpl @Inject constructor(
                         it.snippet,
                         it.text,
                         it.page,
-                        it.updatedAt,
+//                        it.updatedAt,
                         it.coordinates
                     )
                 }
@@ -447,7 +447,7 @@ class PdfRepositoryImpl @Inject constructor(
                         it.snippet,
                         it.color,
                         it.page,
-                        it.updatedAt,
+//                        it.updatedAt,
                         it.coordinates
                     )
                 }
@@ -456,7 +456,7 @@ class PdfRepositoryImpl @Inject constructor(
                     BookmarkModel(
                         it.id ?: -1L,
                         it.page,
-                        it.updatedAt
+//                        it.updatedAt
                     )
                 }
 

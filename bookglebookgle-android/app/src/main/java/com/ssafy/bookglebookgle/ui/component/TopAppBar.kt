@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -17,7 +18,9 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -28,6 +31,7 @@ import androidx.navigation.NavHostController
 import com.ssafy.bookglebookgle.R
 import com.ssafy.bookglebookgle.util.ScreenSize
 import com.ssafy.bookglebookgle.navigation.Screen
+import org.bouncycastle.asn1.x500.style.RFC4519Style.c
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -35,8 +39,8 @@ fun CustomTopAppBar(
     title: String,
     navController : NavHostController,
     ismygroup : Boolean = false,
+    isPdfView : Boolean = false,
     onBackPressed: (() -> Unit)? = null, // 뒤로가기 버튼 클릭 콜백
-    actions: @Composable RowScope.() -> Unit = {}
 ) {
     TopAppBar(
         title = {
@@ -88,6 +92,15 @@ fun CustomTopAppBar(
                         .padding(end = 16.dp)
                 )
             }
+            else if(isPdfView){
+                Text(
+                    text = title,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                )
+            }
             else if(ismygroup){
                 Text(
                     text = title,
@@ -98,20 +111,9 @@ fun CustomTopAppBar(
                         .padding(end = 40.dp)
                 )
             }
-            else { // 모임 상세, PDF 뷰어, AI 퀴즈 등에서 사용 될 TopAppBar Text
-                Text(
-                    text = title,
-                    textAlign = TextAlign.Center,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 20.sp,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(end = 16.dp)
-                )
-            }
         },
         navigationIcon = {
-            if(ismygroup){
+            if(isPdfView || ismygroup) {
                 Icon(
                     painter = painterResource(id = R.drawable.ic_back_arrow_left),
                     contentDescription = "뒤로가기",
@@ -171,8 +173,17 @@ fun CustomTopAppBar(
                         .clickable { onBackPressed?.invoke() }
                 )
             }
-            else{
-                actions()
+            else if(isPdfView){
+                Icon(
+                    painter = painterResource(id = R.drawable.profile_image),
+                    contentDescription = "접속인원",
+                    tint = Color.Unspecified,
+                    modifier = Modifier
+                        .padding(end = 16.dp)
+                        .size(32.dp)
+                        .clip(CircleShape)
+
+                )
             }
         },
         colors = TopAppBarDefaults.topAppBarColors(

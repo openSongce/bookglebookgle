@@ -38,21 +38,19 @@ class GroupDetailViewModel @Inject constructor(
             _uiState.value = GroupDetailUiState.Loading
 
             try {
-                Log.d(TAG, "API 호출 시작")
                 val response = groupRepositoryImpl.getGroupDetail(groupId)
 
-                Log.d(TAG, "API 응답 받음 - 성공여부: ${response.isSuccessful}, 코드: ${response.code()}")
+                Log.d(TAG, "그룹 상세 조회 응답 - 성공여부: ${response.isSuccessful}, 코드: ${response.code()}")
 
                 if (response.isSuccessful) {
                     response.body()?.let { groupDetail ->
                         Log.d(TAG, "그룹 상세 조회 성공 - 제목: ${groupDetail.roomTitle}, 카테고리: ${groupDetail.category}")
                         _uiState.value = GroupDetailUiState.Success(groupDetail)
                     } ?: run {
-                        Log.e(TAG, "응답 바디가 null입니다")
                         _uiState.value = GroupDetailUiState.Error("그룹 상세 정보를 가져올 수 없습니다.")
                     }
                 } else {
-                    Log.e(TAG, "API 호출 실패 - 코드: ${response.code()}, 메시지: ${response.message()}")
+                    Log.e(TAG, "그룹 상세 조회 실패 - 코드: ${response.code()}, 메시지: ${response.message()}")
                     _uiState.value = GroupDetailUiState.Error(
                         "그룹 상세 조회 실패: ${response.code()} ${response.message()}"
                     )

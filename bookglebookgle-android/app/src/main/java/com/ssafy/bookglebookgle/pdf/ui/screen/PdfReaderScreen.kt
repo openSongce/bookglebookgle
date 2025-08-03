@@ -207,7 +207,7 @@ fun PdfReaderScreen(
                         viewModel.annotations.comments.map { comment ->
                             if (comment.id == response.id) {
                                 comment.text = response.text
-                                comment.updatedAt = response.updatedAt
+//                                comment.updatedAt = response.updatedAt
                             }
                         }
                         pdfView?.updateComment(response)
@@ -397,10 +397,10 @@ fun PdfReaderScreen(
                                 }
 
                                 override fun onAddNotClick(snippet: String, page: Int, coordinates: Coordinates) {
-                                    val commentModel = CommentModel(-1, snippet, "", page, 0L, coordinates)
-                                    currentCommentModel = commentModel
-                                    commentPageType = CommentPageType.ADD
-                                    showCommentBottomSheet = true
+//                                    val commentModel = CommentModel(-1, snippet, "", page, 0L, coordinates)
+//                                    currentCommentModel = commentModel
+//                                    commentPageType = CommentPageType.ADD
+//                                    showCommentBottomSheet = true
                                 }
                             })
                             textSelectionWindow?.attachToPdfView(this)

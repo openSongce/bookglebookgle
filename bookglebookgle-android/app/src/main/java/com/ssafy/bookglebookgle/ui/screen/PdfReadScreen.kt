@@ -2,6 +2,7 @@ package com.ssafy.bookglebookgle.ui.screen
 
 import android.graphics.PointF
 import android.util.Log
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.selection.LocalTextSelectionColors
 import androidx.compose.foundation.text.selection.TextSelectionColors
@@ -27,6 +28,7 @@ import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.PDFView
 import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.PdfFile
 import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.CommentModel
 import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.Coordinates
+import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.HighlightModel
 import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.PdfAnnotationModel
 import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.TextSelectionData
 import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.selection.TextSelectionOptionsWindow
@@ -39,8 +41,8 @@ import kotlinx.coroutines.Dispatchers
 @Composable
 fun PdfReadScreen(
     groupId: Long? = null,
-    viewModel: PdfViewModel = hiltViewModel(),
-    navController: NavHostController
+    navController: NavHostController,
+    viewModel: PdfViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
 
@@ -48,6 +50,10 @@ fun PdfReadScreen(
     var pdfView by remember { mutableStateOf<PDFView?>(null) }
     var textSelectionData by remember { mutableStateOf<TextSelectionData?>(null) }
     val pdfRenderScope = remember { CoroutineScope(Dispatchers.IO) }
+
+    // PDF 렌더링 상태
+    val isPdfRenderingComplete by viewModel.isPdfRenderingComplete.collectAsState()
+    val pdfRenderingError by viewModel.pdfRenderingError.collectAsState()
 
     // ViewModel 상태들 관찰
     val pdfFile by viewModel.pdfFile.collectAsState()
@@ -76,15 +82,14 @@ fun PdfReadScreen(
     // 상태 핸들러들 관찰
     val addCommentState by viewModel.addCommentResponse.state.observeAsState()
     val addHighlightState by viewModel.addHighlightResponse.state.observeAsState()
-    val addBookmarkState by viewModel.addBookmarkResponse.state.observeAsState()
-    val deleteBookmarkState by viewModel.deleteBookmarkResponse.state.observeAsState()
+//    val addBookmarkState by viewModel.addBookmarkResponse.state.observeAsState()
+//    val deleteBookmarkState by viewModel.deleteBookmarkResponse.state.observeAsState()
 
-    // 북마크 아이콘 결정
-    val bookmarkIcon = if (viewModel.hasBookmarkOnPage(currentPage)) {
-        painterResource(id = R.drawable.ic_bookmarked)
-    } else {
-        painterResource(id = R.drawable.ic_bookmark)
-    }
+    val bookmarkedIcon = painterResource(id = R.drawable.ic_bookmarked)
+    val bookmarkIcon = painterResource(id = R.drawable.ic_bookmark)
+
+    val hasBookmark = annotations.bookmarks.any { it.page == currentPage }
+    val currentBookmarkIcon = if (hasBookmark) bookmarkedIcon else bookmarkIcon
 
     // 헬퍼 함수들
     fun hideTextSelection() {
@@ -93,13 +98,15 @@ fun PdfReadScreen(
         try {
             pdfView?.clearAllTextSelectionAndCoordinates()
         } catch (e: Exception) {
-            Log.e("PdfReadScreen", "hideTextSelection 오류: ${e.message}", e)
         }
     }
 
     fun showAddCommentDialog(snippet: String, page: Int, coordinates: Coordinates) {
-        Log.d("PdfReadScreen", "댓글 다이얼로그 표시 - snippet: $snippet, page: $page")
-        Log.d("PdfReadScreen", "좌표 정보 - startX: ${coordinates.startX}, startY: ${coordinates.startY}, endX: ${coordinates.endX}, endY: ${coordinates.endY}")
+        Log.d("PdfReadScreen", "==== 댓글 다이얼로그 표시 ====")
+        Log.d("PdfReadScreen", "스니펫: $snippet")
+        Log.d("PdfReadScreen", "페이지: $page")
+        Log.d("PdfReadScreen", "좌표: startX=${coordinates.startX}, startY=${coordinates.startY}, endX=${coordinates.endX}, endY=${coordinates.endY}")
+
         commentDialogData = Triple(snippet, page, coordinates)
         commentText = ""
         showCommentDialog = true
@@ -110,12 +117,21 @@ fun PdfReadScreen(
         TextSelectionOptionsWindow(
             context,
             object : TextSelectionOptionsWindow.Listener {
-                override fun onAddHighlightClick(snippet: String, color: String, page: Int, coordinates: Coordinates) {
+                override fun onAddHighlightClick(
+                    snippet: String,
+                    color: String,
+                    page: Int,
+                    coordinates: Coordinates
+                ) {
+                    Log.d("PdfReadScreen", "==== 하이라이트 추가 클릭 ====")
+                    Log.d("PdfReadScreen", "색상: $color, 페이지: $page, 스니펫: $snippet")
                     viewModel.addHighlight(snippet, color, page, coordinates)
                     hideTextSelection()
                 }
 
                 override fun onAddNotClick(snippet: String, page: Int, coordinates: Coordinates) {
+                    Log.d("PdfReadScreen", "==== 댓글 추가 클릭 ====")
+                    Log.d("PdfReadScreen", "페이지: $page, 스니펫: $snippet")
                     showAddCommentDialog(snippet, page, coordinates)
                     hideTextSelection()
                 }
@@ -123,41 +139,110 @@ fun PdfReadScreen(
         )
     }
 
-    // ViewModel 초기 설정 - 뷰모델이 모든 상태를 관리
+    // ViewModel 초기 설정
     LaunchedEffect(groupId) {
+        Log.d("PdfReadScreen", "==== LaunchedEffect 시작 ====")
+        Log.d("PdfReadScreen", "그룹 ID: $groupId")
         viewModel.resetPdfState()
+
         groupId?.let {
+            Log.d("PdfReadScreen", "그룹 ID 설정 및 PDF 로드 시작")
             viewModel.setGroupId(it)
             viewModel.loadGroupPdf(it, context)
+            viewModel.loadAllAnnotations()
         }
     }
 
-    // 주석 추가/삭제 결과 처리
+    // 댓글 추가 결과 처리
     LaunchedEffect(addCommentState) {
+        Log.d("PdfReadScreen", "==== addCommentState 변경 감지 ====")
+        Log.d("PdfReadScreen", "상태: $addCommentState")
+
         when (addCommentState) {
             is ResponseState.Success<*> -> {
                 val comment = (addCommentState as ResponseState.Success<*>).response as? CommentModel
-                comment?.let { pdfView?.addComment(it) }
+                comment?.let {
+                    Log.d("PdfReadScreen", "댓글 추가 성공 - PDF 뷰에 추가")
+                    Log.d("PdfReadScreen", "추가된 댓글: $it")
+                    pdfView?.addComment(it)
+                } ?: Log.e("PdfReadScreen", "댓글 캐스팅 실패")
             }
             is ResponseState.Failed -> {
-                Log.e("PdfReadScreen", "댓글 추가 실패: ${(addCommentState as ResponseState.Failed).error}")
+                val error = (addCommentState as ResponseState.Failed).error
+                Log.e("PdfReadScreen", "댓글 추가 실패: $error")
             }
-            else -> {}
+            is ResponseState.Loading -> {
+                Log.d("PdfReadScreen", "댓글 추가 중...")
+            }
+            else -> {
+                Log.d("PdfReadScreen", "addCommentState - 기타 상태")
+            }
         }
     }
 
+    // 하이라이트 추가 결과 처리
     LaunchedEffect(addHighlightState) {
+        Log.d("PdfReadScreen", "==== addHighlightState 변경 감지 ====")
+        Log.d("PdfReadScreen", "상태: $addHighlightState")
+
         when (addHighlightState) {
             is ResponseState.Success<*> -> {
-                val highlight = (addHighlightState as ResponseState.Success<*>).response as? com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.HighlightModel
-                highlight?.let { pdfView?.addHighlight(it) }
+                val highlight = (addHighlightState as ResponseState.Success<*>).response as? HighlightModel
+                highlight?.let {
+                    Log.d("PdfReadScreen", "하이라이트 추가 성공 - PDF 뷰에 추가")
+                    Log.d("PdfReadScreen", "추가된 하이라이트: $it")
+                    pdfView?.addHighlight(it)
+                } ?: Log.e("PdfReadScreen", "하이라이트 캐스팅 실패")
             }
             is ResponseState.Failed -> {
-                Log.e("PdfReadScreen", "하이라이트 추가 실패: ${(addHighlightState as ResponseState.Failed).error}")
+                val error = (addHighlightState as ResponseState.Failed).error
+                Log.e("PdfReadScreen", "하이라이트 추가 실패: $error")
             }
-            else -> {}
+            is ResponseState.Loading -> {
+                Log.d("PdfReadScreen", "하이라이트 추가 중...")
+            }
+            else -> {
+                Log.d("PdfReadScreen", "addHighlightState - 기타 상태")
+            }
         }
     }
+
+//    LaunchedEffect(addBookmarkState) {
+//        when (addBookmarkState) {
+//            is ResponseState.Success<*> -> {
+//                // 북마크 추가 성공 시 UI 업데이트 처리가 없음
+//                viewModel.loadAllAnnotations()
+//                Log.d("PdfReadScreen", "북마크 추가 성공 - 페이지: $currentPage")
+//            }
+//
+//            is ResponseState.Failed -> {
+//                Log.d(
+//                    "PdfReadScreen",
+//                    "북마크 추가 실패: ${(addBookmarkState as ResponseState.Failed).error}"
+//                )
+//            }
+//
+//            else -> {}
+//        }
+//    }
+
+//    LaunchedEffect(deleteBookmarkState) {
+//        when (deleteBookmarkState) {
+//            is ResponseState.Success<*> -> {
+//                viewModel.loadAllAnnotations()
+//                Log.d("PdfReadScreen", "북마크 삭제 성공 - 페이지: $currentPage")
+//            }
+//
+//            is ResponseState.Failed -> {
+//                Log.e(
+//                    "PdfReadScreen",
+//                    "북마크 삭제 실패: ${(deleteBookmarkState as ResponseState.Failed).error}"
+//                )
+//            }
+//
+//            else -> {}
+//        }
+//    }
 
     // 페이지 정보 자동 숨김
     LaunchedEffect(showPageInfo) {
@@ -175,37 +260,40 @@ fun PdfReadScreen(
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        // Top Bar
-        CustomTopAppBar(
-            title = pdfTitle,
-            navController = navController,
-            actions = {
-                // 북마크 토글 버튼
-                IconButton(onClick = { viewModel.toggleBookmark(currentPage) }) {
-                    Icon(
-                        painter = bookmarkIcon,
-                        contentDescription = "북마크"
-                    )
-                }
-            }
-        )
-
+    Scaffold(
+        topBar = {
+            // Top Bar
+            CustomTopAppBar(
+                title = pdfTitle,
+                navController = navController,
+                isPdfView = true,
+            )
+        }
+    ) { paddingValues ->
         // Content
-        Box(modifier = Modifier.fillMaxSize()) {
+        Box(modifier = Modifier
+            .fillMaxSize()
+            .padding(paddingValues)) {
+            // 기존의 when 문을 다음과 같이 수정하세요
+
             when {
+                // PDF 다운로드 중
                 isLoading -> {
                     Column(
                         modifier = Modifier.fillMaxSize(),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
-                        CircularProgressIndicator()
+                        CircularProgressIndicator(
+                            color = BaseColor,
+                            strokeWidth = 4.dp
+                        )
                         Spacer(modifier = Modifier.height(16.dp))
                         Text("PDF 다운로드 중...")
                     }
                 }
 
+                // PDF 로드 에러
                 pdfLoadError != null -> {
                     Column(
                         modifier = Modifier
@@ -214,107 +302,193 @@ fun PdfReadScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
-                        Text("오류 발생", fontSize = 20.sp, color = Color.Red)
+                        Text("PDF 로드 오류", fontSize = 24.sp, color = Color.Red)
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(pdfLoadError!!, fontSize = 16.sp, textAlign = TextAlign.Center)
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Button(onClick = { navController.popBackStack() }) {
-                            Text("뒤로가기")
+                    }
+                }
+
+                // PDF 렌더링 에러
+                pdfRenderingError != null -> {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text("PDF 렌더링 오류", fontSize = 24.sp, color = Color.Red)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(pdfRenderingError!!, fontSize = 16.sp, textAlign = TextAlign.Center)
+                    }
+                }
+
+                // PDF 파일이 준비되면 AndroidView 생성 (렌더링 완료 여부와 관계없이)
+                pdfReady && pdfFile != null -> {
+                    Log.d("PdfReadScreen", "PDF AndroidView 생성 - 파일: ${pdfFile!!.absolutePath}")
+
+                    // 렌더링이 완료되지 않은 경우 로딩 오버레이 표시
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        AndroidView(
+                            factory = { context ->
+                                Log.d("PdfReadScreen", "AndroidView factory 실행")
+
+                                PDFView(context, null).apply {
+                                    pdfView = this
+                                    attachCoroutineScope(pdfRenderScope)
+
+                                    // 텍스트 선택 옵션 창 연결
+                                    textSelectionOptionsWindow.attachToPdfView(this)
+
+                                    setListener(object : PDFView.Listener {
+                                        override fun onPreparationStarted() {
+                                            Log.d("PdfReadScreen", "PDF 렌더링 시작 - Listener 호출됨")
+                                            viewModel.onPdfRenderingStarted()
+                                        }
+
+                                        override fun onPreparationSuccess() {
+                                            Log.d("PdfReadScreen", "PDF 렌더링 성공 - Listener 호출됨")
+                                            Log.d("PdfReadScreen", "총 페이지: ${getTotalPage()}")
+
+                                            viewModel.updateTotalPages(getTotalPage())
+                                            viewModel.onPdfRenderingSuccess()
+
+                                            // 기존 주석들 로드
+                                            loadAnnotations(annotations.toAnnotationList())
+                                        }
+
+                                        override fun onPreparationFailed(error: String, e: Exception?) {
+                                            Log.e("PdfReadScreen", "PDF 렌더링 실패 - Listener 호출됨: $error", e)
+                                            viewModel.onPdfRenderingFailed(error)
+                                        }
+
+                                        override fun onPageChanged(
+                                            pageIndex: Int,
+                                            paginationPageIndex: Int
+                                        ) {
+                                            viewModel.updateCurrentPage(pageIndex + 1)
+                                            Log.d("PdfReadScreen", "페이지 변경: ${pageIndex + 1}")
+                                        }
+
+                                        override fun onTextSelected(
+                                            selection: TextSelectionData,
+                                            rawPoint: PointF
+                                        ) {
+                                            textSelectionData = selection
+                                            viewModel.showTextSelection(rawPoint)
+                                            textSelectionOptionsWindow.show(
+                                                rawPoint.x,
+                                                rawPoint.y,
+                                                selection
+                                            )
+                                        }
+
+                                        override fun hideTextSelectionOptionWindow() {
+                                            hideTextSelection()
+                                            textSelectionOptionsWindow.dismiss(false)
+                                        }
+
+                                        override fun onTextSelectionCleared() {
+                                            viewModel.hideTextSelection()
+                                            textSelectionData = null
+                                            textSelectionOptionsWindow.dismiss(false)
+                                        }
+
+                                        override fun onNotesStampsClicked(
+                                            comments: List<CommentModel>,
+                                            pointOfNote: PointF
+                                        ) {
+                                            viewModel.showCommentPopup(comments, pointOfNote)
+                                            Log.d("PdfReadScreen", "댓글 클릭: ${comments.size}개")
+                                        }
+
+                                        override fun loadTopPdfChunk(
+                                            mergeId: Int,
+                                            pageIndexToLoad: Int
+                                        ) {}
+
+                                        override fun loadBottomPdfChunk(
+                                            mergedId: Int,
+                                            pageIndexToLoad: Int
+                                        ) {}
+
+                                        override fun onScrolling() {
+                                            hideTextSelection()
+                                            textSelectionOptionsWindow.dismiss(false)
+                                        }
+
+                                        override fun onTap() {
+                                            hideTextSelection()
+                                            textSelectionOptionsWindow.dismiss(false)
+                                        }
+
+                                        override fun onMergeStart(
+                                            mergeId: Int,
+                                            mergeType: PdfFile.MergeType
+                                        ) {}
+
+                                        override fun onMergeEnd(
+                                            mergeId: Int,
+                                            mergeType: PdfFile.MergeType
+                                        ) {}
+
+                                        override fun onMergeFailed(
+                                            mergeId: Int,
+                                            mergeType: PdfFile.MergeType,
+                                            message: String,
+                                            exception: java.lang.Exception?
+                                        ) {}
+                                    })
+
+                                    // PDF 로드
+                                    Log.d("PdfReadScreen", "PDF 파일 로드 시작: ${pdfFile!!.absolutePath}")
+                                    Log.d("PdfReadScreen", "PDF 파일 존재 여부: ${pdfFile!!.exists()}")
+                                    Log.d("PdfReadScreen", "PDF 파일 크기: ${pdfFile!!.length()} bytes")
+
+                                    try {
+                                        fromFile(pdfFile!!).defaultPage(0).load()
+                                        Log.d("PdfReadScreen", "PDF 파일 로드 호출 완료")
+                                    } catch (e: Exception) {
+                                        Log.e("PdfReadScreen", "PDF 파일 로드 중 예외 발생", e)
+                                        viewModel.onPdfRenderingFailed("PDF 로드 중 예외: ${e.message}")
+                                    }
+                                }
+                            },
+                            modifier = Modifier.fillMaxSize()
+                        )
+
+                        // 렌더링이 완료되지 않은 경우 로딩 오버레이 표시
+                        if (!isPdfRenderingComplete) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(Color.White.copy(alpha = 0.8f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    CircularProgressIndicator(
+                                        color = BaseColor,
+                                        strokeWidth = 4.dp
+                                    )
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    Text("PDF 불러오는 중...")
+                                }
+                            }
                         }
                     }
                 }
 
-                pdfReady && pdfFile != null -> {
-                    // PDF 표시
-                    Log.d("PdfReadScreen", "PDF AndroidView 생성 - 파일: ${pdfFile!!.absolutePath}")
-
-                    AndroidView(
-                        factory = { context ->
-                            Log.d("PdfReadScreen", "AndroidView factory 실행")
-
-                            PDFView(context, null).apply {
-                                pdfView = this
-                                attachCoroutineScope(pdfRenderScope)
-
-                                // 텍스트 선택 옵션 창 연결
-                                textSelectionOptionsWindow.attachToPdfView(this)
-
-                                setListener(object : PDFView.Listener {
-                                    override fun onPreparationStarted() {
-                                        Log.d("PdfReadScreen", "PDF 렌더링 시작")
-                                    }
-
-                                    override fun onPreparationSuccess() {
-                                        Log.d("PdfReadScreen", "PDF 렌더링 성공")
-                                        viewModel.updateTotalPages(getTotalPage())
-                                        Log.d("PdfReadScreen", "총 페이지: ${getTotalPage()}")
-
-                                        // 기존 주석들 로드
-                                        loadAnnotations(annotations.toAnnotationList())
-                                    }
-
-                                    override fun onPreparationFailed(error: String, e: Exception?) {
-                                        Log.e("PdfReadScreen", "PDF 렌더링 실패: $error", e)
-                                    }
-
-                                    override fun onPageChanged(pageIndex: Int, paginationPageIndex: Int) {
-                                        viewModel.updateCurrentPage(pageIndex + 1)
-                                        Log.d("PdfReadScreen", "페이지 변경: ${pageIndex + 1}")
-                                    }
-
-                                    override fun onTextSelected(selection: TextSelectionData, rawPoint: PointF) {
-                                        textSelectionData = selection
-                                        viewModel.showTextSelection(rawPoint)
-                                        textSelectionOptionsWindow.show(rawPoint.x, rawPoint.y, selection)
-                                    }
-
-                                    override fun hideTextSelectionOptionWindow() {
-                                        hideTextSelection()
-                                        textSelectionOptionsWindow.dismiss(false)
-                                    }
-
-                                    override fun onTextSelectionCleared() {
-                                        viewModel.hideTextSelection()
-                                        textSelectionData = null
-                                        textSelectionOptionsWindow.dismiss(false)
-                                    }
-
-                                    override fun onNotesStampsClicked(comments: List<CommentModel>, pointOfNote: PointF) {
-                                        viewModel.showCommentPopup(comments, pointOfNote)
-                                        Log.d("PdfReadScreen", "댓글 클릭: ${comments.size}개")
-                                    }
-
-                                    override fun loadTopPdfChunk(mergeId: Int, pageIndexToLoad: Int) {
-                                        // PDF 청크 로딩 로직 (필요시 구현)
-                                    }
-
-                                    override fun loadBottomPdfChunk(mergedId: Int, pageIndexToLoad: Int) {
-                                        // PDF 청크 로딩 로직 (필요시 구현)
-                                    }
-
-                                    override fun onScrolling() {
-                                        hideTextSelection()
-                                        textSelectionOptionsWindow.dismiss(false)
-                                    }
-
-                                    override fun onTap() {
-                                        hideTextSelection()
-                                        textSelectionOptionsWindow.dismiss(false)
-                                    }
-
-                                    override fun onMergeStart(mergeId: Int, mergeType: PdfFile.MergeType) {}
-                                    override fun onMergeEnd(mergeId: Int, mergeType: PdfFile.MergeType) {}
-                                    override fun onMergeFailed(mergeId: Int, mergeType: PdfFile.MergeType, message: String, exception: java.lang.Exception?) {}
-                                })
-
-                                // PDF 로드
-                                Log.d("PdfReadScreen", "PDF 파일 로드 시작: ${pdfFile!!.absolutePath}")
-                                fromFile(pdfFile!!).defaultPage(0).load()
-                                Log.d("PdfReadScreen", "PDF 파일 로드 호출 완료")
-                            }
-                        },
-                        modifier = Modifier.fillMaxSize()
-                    )
+                // PDF 파일이 없는 경우
+                else -> {
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text("PDF를 준비하는 중...", fontSize = 16.sp)
+                    }
                 }
             }
 
@@ -415,7 +589,13 @@ fun PdfReadScreen(
                                 OutlinedTextField(
                                     value = commentText,
                                     onValueChange = { commentText = it },
-                                    placeholder = { Text("댓글을 입력하세요", color = Color.Gray, fontSize = 14.sp) },
+                                    placeholder = {
+                                        Text(
+                                            "댓글을 입력하세요",
+                                            color = Color.Gray,
+                                            fontSize = 14.sp
+                                        )
+                                    },
                                     modifier = Modifier.fillMaxWidth(),
                                     maxLines = 1,
                                     colors = OutlinedTextFieldDefaults.colors(
@@ -437,9 +617,17 @@ fun PdfReadScreen(
                                     Log.d("PdfReadScreen", "- snippet: $snippet")
                                     Log.d("PdfReadScreen", "- commentText: $commentText")
                                     Log.d("PdfReadScreen", "- page: $page")
-                                    Log.d("PdfReadScreen", "- coordinates: startX=${coordinates.startX}, startY=${coordinates.startY}, endX=${coordinates.endX}, endY=${coordinates.endY}")
+                                    Log.d(
+                                        "PdfReadScreen",
+                                        "- coordinates: startX=${coordinates.startX}, startY=${coordinates.startY}, endX=${coordinates.endX}, endY=${coordinates.endY}"
+                                    )
 
-                                    viewModel.addComment(snippet, commentText.trim(), page, coordinates)
+                                    viewModel.addComment(
+                                        snippet,
+                                        commentText.trim(),
+                                        page,
+                                        coordinates
+                                    )
 
                                     showCommentDialog = false
                                     commentDialogData = null
@@ -450,7 +638,12 @@ fun PdfReadScreen(
                             },
                             enabled = commentText.trim().isNotEmpty()
                         ) {
-                            Text("저장", color = if (commentText.trim().isNotEmpty()) BaseColor else Color.Gray)
+                            Text(
+                                "저장",
+                                color = if (commentText.trim()
+                                        .isNotEmpty()
+                                ) BaseColor else Color.Gray
+                            )
                         }
                     },
                     dismissButton = {
@@ -466,7 +659,6 @@ fun PdfReadScreen(
                     }
                 )
             }
-
 
 
         }

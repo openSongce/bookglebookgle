@@ -58,7 +58,7 @@ fun GroupDetailScreen(
         CustomTopAppBar(
             title = title,
             navController = navController,
-            ismygroup = isMyGroup
+            ismygroup = true
         )
 
         when (val currentState = uiState) {

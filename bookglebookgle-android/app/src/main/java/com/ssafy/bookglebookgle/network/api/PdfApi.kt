@@ -126,7 +126,7 @@ interface PdfApi {
     ): Response<DeleteAnnotationResponse>
 
     /**
-     * 페이지와 PDF ID로 북마크 삭제
+     * 페이지와 group ID로 북마크 삭제
      */
     @DELETE("pdf/{groupId}/bookmark/page/{page}")
     suspend fun deleteBookmarkByPage(
@@ -135,11 +135,11 @@ interface PdfApi {
     ): Response<DeleteAnnotationResponse>
 
     /**
-     * 특정 PDF의 모든 주석(댓글, 하이라이트, 북마크) 조회
+     * 특정 그룹 PDF의 모든 주석(댓글, 하이라이트, 북마크) 조회
      */
-    @GET("pdf/{pdfId}/annotations")
+    @GET("pdf/{groupId}/annotations")
     suspend fun getAllAnnotations(
-        @Path("pdfId") pdfId: Long
+        @Path("groupId") groupId: Long
     ): Response<AnnotationListResponse>
 
 }

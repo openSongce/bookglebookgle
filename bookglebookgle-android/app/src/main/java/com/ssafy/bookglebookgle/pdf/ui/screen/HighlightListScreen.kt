@@ -271,7 +271,8 @@ private fun HighlightListItem(
                 ) {
                     Text(
                         text = com.ssafy.bookglebookgle.pdf.tools.DateTimeFormatter.format(
-                            highlight.updatedAt,
+//                            highlight.updatedAt,
+                            highlight.id,
                             com.ssafy.bookglebookgle.pdf.tools.DateTimeFormatter.DATE_AND_TIME_THREE
                         ),
                         fontSize = 15.sp,

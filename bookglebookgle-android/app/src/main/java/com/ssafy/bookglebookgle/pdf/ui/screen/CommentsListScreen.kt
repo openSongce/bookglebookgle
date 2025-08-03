@@ -250,7 +250,8 @@ private fun CommentListItem(
                 ) {
                     Text(
                         text = com.ssafy.bookglebookgle.pdf.tools.DateTimeFormatter.format(
-                            comment.updatedAt,
+//                            comment.updatedAt,
+                           comment.id,
                             com.ssafy.bookglebookgle.pdf.tools.DateTimeFormatter.DATE_AND_TIME_THREE
                         ),
                         fontSize = 15.sp,

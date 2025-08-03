@@ -2055,7 +2055,7 @@ class PDFView(context: Context?, set: AttributeSet?) :
                 if (it.asNote()?.id == commentModel.id){
                     it.asNote()?.apply {
                         text = commentModel.text
-                        updatedAt = commentModel.updatedAt
+//                        updatedAt = commentModel.updatedAt
                     }
                 }
             }

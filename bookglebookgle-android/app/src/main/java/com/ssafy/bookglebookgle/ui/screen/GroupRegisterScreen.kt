@@ -611,7 +611,8 @@ fun GroupRegisterScreen(
                 val originalFileName = getFileNameFromUri(context, it) ?: "선택된 파일"
 
                 context.contentResolver?.openInputStream(it)?.use { input ->
-                    val saveFile = AppFileManager.getNewPdfFile(context)
+//                    val saveFile = AppFileManager.getNewPdfFile(context)
+                    val saveFile = File(context.cacheDir, originalFileName)
                     FileOutputStream(saveFile).use { output ->
                         input.copyTo(output)
                     }

@@ -138,8 +138,9 @@ fun MainNavigation(
                 val isMyGroup = navController.previousBackStackEntry
                     ?.savedStateHandle?.get<Boolean>("isMyGroup") ?: false
 
-                // 디버깅용 로그 추가
-                Log.d("GroupDetail", "groupId: $groupId, isMyGroup: $isMyGroup")
+                LaunchedEffect(Unit) {
+                    Log.d("GroupId", "GroupDetailScreen 전달 - groupId: $groupId, isMyGroup: $isMyGroup")
+                }
 
                 GroupDetailScreen(navController,  groupId, isMyGroup)
             }
@@ -148,8 +149,9 @@ fun MainNavigation(
                 val groupId = navController.previousBackStackEntry
                     ?.savedStateHandle?.get<Long>("groupId") ?: -1L
 
-                // 디버깅용 로그 추가
-                Log.d("GroupDetail", "groupId: $groupId")
+                LaunchedEffect(Unit) {
+                    Log.d("GroupId", "PdfReadScreen 전달 - groupId: $groupId")
+                }
 
                 PdfReadScreen(groupId, navController =  navController)
             }

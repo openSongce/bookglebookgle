@@ -183,7 +183,7 @@ fun CommentViewBottomSheet(
                             snippet = commentModel.snippet,
                             text = text,
                             page = commentModel.page,
-                            updatedAt = 0L,
+//                            updatedAt = 0L,
                             coordinates = commentModel.coordinates
                         )
 

@@ -1,14 +1,15 @@
 package com.ssafy.bookglebookgle.entity.pdf
 
-// Response 모델들
+import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.BookmarkModel
+import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.CommentModel
+import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.HighlightModel
+
+/** Response */
 data class PdfNoteResponse(
     val id: Long,
     val title: String,
     val filePath: String? = null,
     val about: String?,
-    val tagId: Long?,
-    val tag: TagResponse?,
-    val updatedTime: Long,
     val groupId: Long?
 )
 
@@ -17,7 +18,6 @@ data class CommentResponse(
     val snippet: String,
     val text: String,
     val page: Int,
-    val updatedAt: Long,
     val coordinates: CoordinatesResponse
 )
 
@@ -26,20 +26,12 @@ data class HighlightResponse(
     val snippet: String,
     val color: String,
     val page: Int,
-    val updatedAt: Long,
     val coordinates: CoordinatesResponse
 )
 
 data class BookmarkResponse(
     val id: Long,
     val page: Int,
-    val updatedAt: Long
-)
-
-data class TagResponse(
-    val id: Long,
-    val title: String,
-    val colorCode: String
 )
 
 data class CoordinatesResponse(
@@ -47,10 +39,6 @@ data class CoordinatesResponse(
     val startY: Double,
     val endX: Double,
     val endY: Double
-)
-
-data class PdfNotesResponse(
-    val notes: List<PdfNoteResponse>
 )
 
 data class StatusMessageResponse(
@@ -61,12 +49,8 @@ data class DeleteAnnotationResponse(
     val deletedIds: List<Long>
 )
 
-data class RemoveTagResponse(
-    val tagId: Long
-)
-
 data class AnnotationListResponse(
-    val comments: List<CommentResponse> = emptyList(),
-    val highlights: List<HighlightResponse> = emptyList(),
-    val bookmarks: List<BookmarkResponse> = emptyList()
+    val comments: List<CommentModel> = emptyList(),
+    val highlights: List<HighlightModel> = emptyList(),
+    val bookmarks: List<BookmarkModel> = emptyList()
 )
