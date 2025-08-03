@@ -27,10 +27,10 @@ public class OcrService {
                     .pdfFile(pdfFile)
                     .pageNumber(block.getPageNumber())
                     .text(block.getText())
-                    .rectX((int) block.getX0())
-                    .rectY((int) block.getY0())
-                    .rectW((int) (block.getX1() - block.getX0()))
-                    .rectH((int) (block.getY1() - block.getY0()))
+                    .rectX((float) block.getX0())
+                    .rectY((float) block.getY0())
+                    .rectW((float) (block.getX1() - block.getX0()))
+                    .rectH((float) (block.getY1() - block.getY0()))
                     .build();
             results.add(result);
         }
