@@ -16,4 +16,5 @@ public interface GroupService {
     ResponseEntity<Resource> getPdfFileResponse(Long groupId, User user);
     List<MyGroupSummaryDto> getMyGroupList(Long userId);
     void joinGroup(Long groupId, User user);
+    GroupDetailResponse updateGroup(Long groupId, GroupUpdateRequestDto dto, User user);
 }

@@ -85,13 +85,18 @@ public class GroupController {
     public ResponseEntity<GroupDetailResponse> getGroupDetail(@PathVariable("groupId") Long groupId) {
         return ResponseEntity.ok(groupService.getGroupDetail(groupId));
     }
-//
-//    @PutMapping("/{groupId}/edit")
-//    public ResponseEntity<GroupUpdateRequestDto> updateGroup(
-//            @PathVariable("groupId") Long groupId,
-//            @RequestBody GroupUpdateRequestDto groupDto) {
-//
-//    }
+
+    @PutMapping("/{groupId}/edit")
+    public ResponseEntity<GroupDetailResponse> updateGroup(
+            @PathVariable("groupId") Long groupId,
+            @RequestBody GroupUpdateRequestDto dto,
+            @AuthenticationPrincipal CustomUserDetails customUser
+    ) {
+        User user = customUser.getUser();
+        GroupDetailResponse result = groupService.updateGroup(groupId, dto, user);
+        return ResponseEntity.ok(result);
+    }
+
 
     @GetMapping("/{groupId}/pdf")
     public ResponseEntity<Resource> getGroupPdf(
