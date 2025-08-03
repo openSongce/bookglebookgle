@@ -4,14 +4,12 @@ import com.bgbg.ai.grpc.ProcessPdfResponse;
 import com.example.bookglebookgleserver.global.exception.BadRequestException;
 import com.example.bookglebookgleserver.global.exception.ForbiddenException;
 import com.example.bookglebookgleserver.global.exception.NotFoundException;
-import com.example.bookglebookgleserver.group.dto.GroupCreateRequestDto;
-import com.example.bookglebookgleserver.group.dto.GroupDetailResponse;
-import com.example.bookglebookgleserver.group.dto.GroupListResponseDto;
-import com.example.bookglebookgleserver.group.dto.MyGroupSummaryDto;
+import com.example.bookglebookgleserver.group.dto.*;
 import com.example.bookglebookgleserver.group.entity.Group;
 import com.example.bookglebookgleserver.group.entity.GroupMember;
 import com.example.bookglebookgleserver.group.repository.GroupMemberRepository;
 import com.example.bookglebookgleserver.group.repository.GroupRepository;
+import com.example.bookglebookgleserver.ocr.dto.OcrTextBlockDto;
 import com.example.bookglebookgleserver.ocr.grpc.GrpcOcrClient;
 import com.example.bookglebookgleserver.ocr.service.OcrService;
 import com.example.bookglebookgleserver.pdf.entity.PdfFile;
@@ -47,7 +45,7 @@ public class GroupServiceImpl implements GroupService {
 
     @Override
     @Transactional
-    public void createGroup(GroupCreateRequestDto dto, MultipartFile pdfFile, User user) {
+    public GroupCreateResponseDto createGroup(GroupCreateRequestDto dto, MultipartFile pdfFile, User user) {
         String uploadDir = "/home/ubuntu/pdf-uploads/";
 //        String uploadDir = System.getProperty("user.dir") + "/uploads/";
         File uploadDirFile = new File(uploadDir);
@@ -95,12 +93,25 @@ public class GroupServiceImpl implements GroupService {
         pdf.setGroup(group);
         // pdfFileRepository.save(pdf); // ❌ 생략해도 무방 (영속성 컨텍스트 안에서 관리됨)
 
+        List<OcrTextBlockDto> ocrResultList = null;
+
         if (dto.isImageBased()) {
             ProcessPdfResponse response = grpcOcrClient.sendPdf(pdf.getPdfId(), pdfFile);
             if (!response.getSuccess()) {
                 throw new BadRequestException("OCR 실패: " + response.getMessage());
             }
             ocrService.saveOcrResults(pdf, response);
+
+            ocrResultList = response.getTextBlocksList().stream()
+                    .map(block -> OcrTextBlockDto.builder()
+                            .pageNumber(block.getPageNumber())
+                            .text(block.getText())
+                            .rectX((int) block.getX0())
+                            .rectY((int) block.getY0())
+                            .rectW((int) (block.getX1() - block.getX0()))
+                            .rectH((int) (block.getY1() - block.getY0()))
+                            .build())
+                    .collect(Collectors.toList());
         }
 
         GroupMember groupMember = GroupMember.builder()
@@ -112,6 +123,12 @@ public class GroupServiceImpl implements GroupService {
                 .isFollowingHost(false)
                 .build();
         groupMemberRepository.save(groupMember);
+
+        return GroupCreateResponseDto.builder()
+                .groupId(group.getId())
+                .pdfId(pdf.getPdfId())
+                .ocrResultlist(ocrResultList != null ? ocrResultList : List.of())
+                .build();
     }
 
     @Override
