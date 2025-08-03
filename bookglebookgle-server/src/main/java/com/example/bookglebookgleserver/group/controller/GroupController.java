@@ -107,4 +107,14 @@ public class GroupController {
         Long userId = userDetails.getUser().getId();
         return ResponseEntity.ok(groupService.getMyGroupList(userId));
     }
+
+    @PostMapping("/{groupId}/join")
+    public ResponseEntity<String> joinGroup(
+            @PathVariable Long groupId,
+            @AuthenticationPrincipal CustomUserDetails customUser
+    ) {
+        User user = customUser.getUser();
+        groupService.joinGroup(groupId, user);
+        return ResponseEntity.ok("그룹 참가 완료!");
+    }
 }

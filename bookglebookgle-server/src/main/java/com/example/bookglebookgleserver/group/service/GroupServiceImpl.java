@@ -227,4 +227,38 @@ public class GroupServiceImpl implements GroupService {
                 ))
                 .collect(Collectors.toList());
     }
+
+    @Override
+    @Transactional
+    public void joinGroup(Long groupId, User user) {
+        Group group = groupRepository.findById(groupId)
+                .orElseThrow(() -> new NotFoundException("해당 그룹이 존재하지 않습니다."));
+
+        // 이미 참가 여부 확인
+        if (groupMemberRepository.existsByGroupAndUser(group, user)) {
+            throw new BadRequestException("이미 참가한 그룹입니다.");
+        }
+
+        // 정원 초과 여부
+        int currentNum = groupMemberRepository.countByGroup(group);
+        if (currentNum >= group.getGroupMaxNum()) {
+            throw new BadRequestException("그룹 정원이 초과되었습니다.");
+        }
+
+        if (user.getAvgRating() == null || user.getAvgRating() < group.getMinRequiredRating()) {
+            throw new BadRequestException("평점이 낮아 그룹에 참가할 수 없습니다.");
+        }
+
+        // 참가자 추가
+        GroupMember member = GroupMember.builder()
+                .group(group)
+                .user(user)
+                .isHost(false)
+                .lastPageRead(0)
+                .progressPercent(0f)
+                .isFollowingHost(false)
+                .build();
+        groupMemberRepository.save(member);
+    }
+
 }
