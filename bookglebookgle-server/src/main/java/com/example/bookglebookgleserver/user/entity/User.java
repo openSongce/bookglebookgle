@@ -30,4 +30,10 @@ public class User {
     private String profileImageUrl;
 
 
+    @Column(name = "avg_rating")
+    private Float avgRating;
+
+    @Column(name = "rating_cnt")
+    private Integer ratingCnt;
+
 }
