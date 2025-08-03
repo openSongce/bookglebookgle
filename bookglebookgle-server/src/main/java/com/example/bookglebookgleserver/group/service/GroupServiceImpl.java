@@ -302,4 +302,18 @@ public class GroupServiceImpl implements GroupService {
         groupRepository.delete(group);
     }
 
+// GroupServiceImpl.java
+    @Override
+    public List<GroupListResponseDto> searchGroups(String roomTitle, String category) {
+        Group.Category categoryEnum = null;
+        if (category != null && !category.isBlank()) {
+            categoryEnum = Group.Category.valueOf(category.toUpperCase()); // Enum 파싱
+        }
+        List<Group> groups = groupRepository.searchGroups(roomTitle, categoryEnum);
+
+        return groups.stream()
+                .map(GroupListResponseDto::fromEntity)
+                .collect(Collectors.toList());
+    }
+
 }

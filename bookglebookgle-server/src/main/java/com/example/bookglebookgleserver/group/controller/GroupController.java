@@ -206,4 +206,13 @@ public class GroupController {
         return ResponseEntity.ok().build();
     }
 
+    @GetMapping("/search")
+    @Operation(summary = "그룹 검색", description = "방 제목과 카테고리로 그룹을 검색합니다.")
+    public ResponseEntity<List<GroupListResponseDto>> searchGroups(
+            @RequestParam(required = false) String roomTitle,
+            @RequestParam(required = false) String category) {
+        List<GroupListResponseDto> groups = groupService.searchGroups(roomTitle, category);
+        return ResponseEntity.ok(groups);
+    }
+
 }
