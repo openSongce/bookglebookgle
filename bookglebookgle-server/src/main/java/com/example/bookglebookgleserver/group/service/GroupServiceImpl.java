@@ -316,4 +316,20 @@ public class GroupServiceImpl implements GroupService {
                 .collect(Collectors.toList());
     }
 
+    @Override
+    @Transactional
+    public void leaveGroup(Long groupId, User user) {
+        Group group = groupRepository.findById(groupId)
+                .orElseThrow(() -> new NotFoundException("해당 그룹이 존재하지 않습니다."));
+
+        GroupMember member = groupMemberRepository.findByGroupAndUser(group, user)
+                .orElseThrow(() -> new BadRequestException("해당 그룹에 가입되어 있지 않습니다."));
+
+        if (group.getHostUser().getId().equals(user.getId())) {
+            throw new ForbiddenException("그룹장은 직접 탈퇴할 수 없습니다. 그룹장 권한 위임 후 탈퇴하세요.");
+        }
+
+        groupMemberRepository.delete(member);
+    }
+
 }

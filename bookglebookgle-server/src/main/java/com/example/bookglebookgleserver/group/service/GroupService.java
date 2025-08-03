@@ -19,4 +19,5 @@ public interface GroupService {
     GroupDetailResponse updateGroup(Long groupId, GroupUpdateRequestDto dto, User user);
     void deleteGroup(Long groupId, User user);
     List<GroupListResponseDto> searchGroups(String roomTitle, String category);
+    void leaveGroup(Long groupId, User user);
 }

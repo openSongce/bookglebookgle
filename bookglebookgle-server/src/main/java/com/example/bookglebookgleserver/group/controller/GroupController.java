@@ -215,4 +215,13 @@ public class GroupController {
         return ResponseEntity.ok(groups);
     }
 
+    @DeleteMapping("/{groupId}/leave")
+    @Operation(summary = "모임 탈퇴", description = "로그인한 유저가 해당 그룹에서 탈퇴합니다.")
+    public ResponseEntity<Void> leaveGroup(
+            @PathVariable Long groupId,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        groupService.leaveGroup(groupId, userDetails.getUser());
+        return ResponseEntity.noContent().build();
+    }
+
 }
