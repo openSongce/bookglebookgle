@@ -84,12 +84,15 @@ public class AuthService {
         refreshTokenService.saveRefreshToken(user.getEmail(), refreshToken);
 
 
-        return new JwtResponse(accessToken,
+        return new JwtResponse(
+                accessToken,
                 refreshToken,
                 user.getEmail(),
                 user.getNickname(),
-                user.getProfileImageUrl());
-
+                user.getProfileImageUrl(),
+                user.getId(),         // userId
+                user.getAvgRating()   // avgRating
+        );
     }
 
     public JwtResponse refreshToken(String refreshToken) {

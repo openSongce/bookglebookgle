@@ -195,11 +195,15 @@ public class AuthController {
         refreshTokenService.saveRefreshToken(user.getEmail(), refreshToken);
 
 
-        JwtResponse response = new JwtResponse(accessToken,
+        JwtResponse response = new JwtResponse(
+                accessToken,
                 refreshToken,
                 user.getEmail(),
                 user.getNickname(),
-                user.getProfileImageUrl());
+                user.getProfileImageUrl(),
+                user.getId(),            // userId 추가
+                user.getAvgRating()      // avgRating 추가
+        );
         return ResponseEntity.ok(response);
 
     }
