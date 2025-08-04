@@ -55,6 +55,7 @@ fun CustomTopAppBar(
     title: String,
     navController: NavHostController,
     ismygroup: Boolean = false,
+    isHost: Boolean = false,
     isDetailScreen: Boolean = false,
     isPdfView: Boolean = false,
     onBackPressed: (() -> Unit)? = null, // 뒤로가기 버튼 클릭 콜백
@@ -191,13 +192,22 @@ fun CustomTopAppBar(
                     modifier = Modifier
                         .fillMaxWidth()
                 )
-            } else if (ismygroup) {
+            } else if (ismygroup && isHost) {
                 Text(
                     text = title,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
                     modifier = Modifier
                         .fillMaxWidth()
+                )
+            } else if(ismygroup && !isHost) {
+                Text(
+                    text = title,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(end = 40.dp)
                 )
             } else if (isDetailScreen) {
                 Text(
@@ -319,7 +329,7 @@ fun CustomTopAppBar(
                         .clip(CircleShape)
 
                 )
-            } else if (ismygroup) {
+            } else if (ismygroup && isHost) {
                 Icon(
                     painter = painterResource(id = R.drawable.ic_edit),
                     contentDescription = "모임수정",

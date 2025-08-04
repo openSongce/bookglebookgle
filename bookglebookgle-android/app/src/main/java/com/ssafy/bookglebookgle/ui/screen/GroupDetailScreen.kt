@@ -96,16 +96,6 @@ fun GroupDetailScreen(
             else -> "모임 상세"
         }
 
-        CustomTopAppBar(
-            title = title,
-            navController = navController,
-            ismygroup = isMyGroup,
-            isDetailScreen = true,
-            onEditClick = if (currentIsMyGroup) {
-                { showEditDialog = true }
-            } else null
-        )
-
         when (val currentState = uiState) {
             is GroupDetailUiState.Loading -> {
                 Box(
@@ -119,6 +109,16 @@ fun GroupDetailScreen(
             }
 
             is GroupDetailUiState.Success -> {
+                CustomTopAppBar(
+                    title = title,
+                    navController = navController,
+                    ismygroup = isMyGroup,
+                    isHost = currentState.groupDetail.isHost,
+                    isDetailScreen = true,
+                    onEditClick = if (currentIsMyGroup) {
+                        { showEditDialog = true }
+                    } else null
+                )
                 GroupDetailContent(
                     groupDetail = currentState.groupDetail,
                     isMyGroup = currentIsMyGroup,
