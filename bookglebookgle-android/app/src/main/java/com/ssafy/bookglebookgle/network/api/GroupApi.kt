@@ -91,4 +91,12 @@ interface GroupApi {
     suspend fun searchGroups(
         @Query("roomTitle") roomTitle: String
     ): Response<List<GroupListResponse>>
+
+    /**
+     * 모임 탈퇴
+     * */
+    @DELETE("group/{groupId}/leave")
+    suspend fun leaveGroup(
+        @Path("groupId") groupId: Long
+    ): Response<ResponseBody>
 }

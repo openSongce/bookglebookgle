@@ -265,4 +265,30 @@ class GroupRepositoryImpl @Inject constructor(
             throw Exception("모임 검색 중 오류가 발생했습니다: ${e.message}", e)
         }
     }
+
+    /**
+     * 모임 탈퇴
+     * @param groupId 그룹 ID
+     * @return API 응답
+     */
+    override suspend fun leaveGroup(groupId: Long): Response<ResponseBody> {
+        return try {
+            Log.d(TAG, "모임 탈퇴 요청 시작 - groupId: $groupId")
+
+            val response = groupApi.leaveGroup(groupId)
+
+            if (response.isSuccessful) {
+                Log.d(TAG, "모임 탈퇴 성공 - 응답코드: ${response.code()}")
+            } else {
+                val errorBody = response.errorBody()?.string()
+                Log.d(TAG, "모임 탈퇴 실패 - 응답코드: ${response.code()}, 메시지: ${response.message()}")
+                Log.d(TAG, "서버 에러 메시지: $errorBody")
+            }
+
+            response
+        } catch (e: Exception) {
+            Log.e(TAG, "모임 탈퇴 실패 - 네트워크 오류: ${e.message}")
+            throw Exception("모임 탈퇴 중 오류가 발생했습니다: ${e.message}", e)
+        }
+    }
 }

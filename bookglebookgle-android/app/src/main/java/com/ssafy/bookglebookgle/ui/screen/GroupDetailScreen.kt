@@ -129,7 +129,10 @@ fun GroupDetailScreen(
                     onDeleteClick = {
                         viewModel.deleteGroup(groupId)
                         navController.popBackStack() },
-                    onLeaveClick = { /* Todo: 탈퇴 로직 구현 */ }
+                    onLeaveClick = {
+                        viewModel.leaveGroup(groupId)
+                        navController.popBackStack()
+                    }
                 )
 
                 // 수정 다이얼로그 - 항상 렌더링되도록 수정

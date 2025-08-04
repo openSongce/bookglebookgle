@@ -35,4 +35,6 @@ interface GroupRepository {
     ): Response<ResponseBody>
 
     suspend fun searchGroups(roomTitle: String): Response<List<GroupListResponse>>
+
+    suspend fun leaveGroup(groupId: Long): Response<ResponseBody>
 }

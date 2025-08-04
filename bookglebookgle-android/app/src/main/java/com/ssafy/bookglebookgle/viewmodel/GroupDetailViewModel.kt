@@ -230,6 +230,30 @@ class GroupDetailViewModel @Inject constructor(
     }
 
     /**
+     * 모임 탈퇴
+     */
+    fun leaveGroup(groupId: Long) {
+        Log.d(TAG, "그룹 탈퇴 시작 - groupId: $groupId")
+
+        viewModelScope.launch {
+            try {
+                val response = groupRepositoryImpl.leaveGroup(groupId)
+
+                Log.d(TAG, "그룹 탈퇴 응답 - 성공여부: ${response.isSuccessful}, 코드: ${response.code()}")
+
+                if (response.isSuccessful) {
+                    Log.d(TAG, "그룹 탈퇴 성공 - 코드: ${response.code()}")
+                    _isMyGroup.value = false
+                } else {
+                    Log.e(TAG, "그룹 탈퇴 실패 - 코드: ${response.code()}, 메시지: ${response.message()}")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "그룹 탈퇴 중 예외 발생: ${e.message}", e)
+            }
+        }
+    }
+
+    /**
      * 모임 수정 상태 초기화
      */
     fun resetEditGroupState() {
