@@ -21,6 +21,7 @@ services:
       - "8081:8081"
     depends_on:
       - mysql
+      - redis                 # ⭐️ spring이 redis보다 나중에 뜨도록!
     environment:
       DB_USERNAME: root
       DB_PASSWORD: ${DB_PASSWORD}
@@ -52,16 +53,16 @@ services:
   grafana:
     image: grafana/grafana:10.4.2
     container_name: grafana
-    restart: always  # 🔁 재시작 시 자동 복구
+    restart: always
     ports:
       - "3001:3000"
     depends_on:
       - loki
     volumes:
-      - grafana-storage:/var/lib/grafana  # 💾 설정 및 세션 유지
+      - grafana-storage:/var/lib/grafana
     environment:
       - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin1234  # 🔐 원하는 비밀번호로 변경
+      - GF_SECURITY_ADMIN_PASSWORD=admin1234
       - GF_AUTH_ANONYMOUS_ENABLED=false
       - GF_SESSION_PROVIDER=file
       - GF_SESSION_PROVIDER_CONFIG=session.db
@@ -78,8 +79,20 @@ services:
     networks:
       - test-net
 
+  redis:                                    # ⭐️ 추가
+    image: redis:7.2
+    container_name: redis
+    restart: always
+    ports:
+      - "6479:6379"                         # 호스트 6479 → 컨테이너 6379
+    volumes:
+      - redis-data:/data                    # (선택) 데이터 유지
+    networks:
+      - test-net                            # 네트워크 연결
+
 volumes:
-  grafana-storage:  # 🔧 Grafana 데이터 유지용 볼륨
+  grafana-storage:
+  redis-data:                               # ⭐️ redis 데이터 유지용 볼륨
 
 networks:
   test-net:
