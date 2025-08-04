@@ -1,6 +1,7 @@
 package com.example.bookglebookgleserver.group.controller;
 
 import com.example.bookglebookgleserver.auth.security.CustomUserDetails;
+import com.example.bookglebookgleserver.global.exception.ForbiddenException;
 import com.example.bookglebookgleserver.group.dto.*;
 import com.example.bookglebookgleserver.group.service.GroupService;
 import com.example.bookglebookgleserver.user.entity.User;
@@ -241,4 +242,27 @@ public class GroupController {
         return ResponseEntity.noContent().build();
     }
 
+    @Operation(
+            summary = "참여자의 마지막으로 본 페이지 조회",
+            description = "해당 그룹에서 본인이 마지막으로 확인한 페이지(DB 기준)를 조회한다.",
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "조회 성공",
+                            content = @Content(schema = @Schema(implementation = LastPageReadResponseDto.class))),
+                    @ApiResponse(responseCode = "401", description = "인증 필요"),
+                    @ApiResponse(responseCode = "403", description = "본인만 조회 가능")
+            }
+    )
+
+    @GetMapping("/{groupId}/members/{userId}/last-page")
+    public ResponseEntity<LastPageReadResponseDto> getLastPageRead(
+            @PathVariable Long groupId,
+            @PathVariable Long userId,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        if (!userDetails.getUser().getId().equals(userId)) {
+            throw new ForbiddenException("본인만 조회할 수 있습니다.");
+        }
+        int page = groupService.getLastPageRead(groupId, userId);
+        return ResponseEntity.ok(new LastPageReadResponseDto(page));
+    }
 }

@@ -22,4 +22,5 @@ public interface GroupService {
     void leaveGroup(Long groupId, User user);
     boolean isMember(Long groupId, Long userId);
     boolean isLeader(Long groupId, Long userId);
+    int getLastPageRead(Long groupId, Long userId);
 }
