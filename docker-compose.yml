@@ -32,6 +32,7 @@ services:
     volumes:
       - ./backend-logs:/logs
       - /home/ubuntu/bookglebookgle-server/uploads:/home/ubuntu/pdf-uploads
+      - ./application.yml:/app/config/application.yml
     networks:
       - test-net
 
