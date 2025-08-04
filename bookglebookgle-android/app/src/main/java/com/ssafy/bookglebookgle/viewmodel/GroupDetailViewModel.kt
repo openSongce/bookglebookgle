@@ -14,6 +14,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
+import retrofit2.HttpException
+import java.io.IOException
 import javax.inject.Inject
 
 private const val TAG = "싸피_GroupDetailViewModel"
@@ -175,34 +177,48 @@ class GroupDetailViewModel @Inject constructor(
             try {
                 _editGroupState.value = EditGroupUiState.Loading
                 Log.d(TAG, "모임 수정 시작 - groupId: $groupId")
+                Log.d(TAG, "입력 데이터: $editData")
 
-                // GroupEditData를 서버에서 요구하는 JSON 형식으로 변환
+                // 모든 필드가 non-null이므로 직접 사용
                 val groupUpdateRequest = mapOf(
                     "roomTitle" to editData.roomTitle,
                     "description" to editData.description,
                     "category" to editData.category,
                     "minRequiredRating" to editData.minRequiredRating,
                     "schedule" to editData.schedule,
-                    "groupMaxNum" to editData.maxMemberCount,
+                    "groupMaxNum" to editData.maxMemberCount
                 )
 
-                // JSON 문자열로 변환
+                // 데이터 유효성 검사 추가
+                if (editData.roomTitle.isBlank()) {
+                    _editGroupState.value = EditGroupUiState.Error("모임 제목을 입력해주세요.")
+                    return@launch
+                }
+
+                if (editData.maxMemberCount < 1) {
+                    _editGroupState.value = EditGroupUiState.Error("최대 인원은 1명 이상이어야 합니다.")
+                    return@launch
+                }
+
+                if (editData.minRequiredRating < 0 || editData.minRequiredRating > 5) {
+                    _editGroupState.value = EditGroupUiState.Error("최소 요구 평점은 0~5 사이여야 합니다.")
+                    return@launch
+                }
+
                 val gson = Gson()
                 val jsonString = gson.toJson(groupUpdateRequest)
                 Log.d(TAG, "전송할 JSON 데이터: $jsonString")
 
-                // RequestBody 생성
                 val requestBody = jsonString.toRequestBody("application/json".toMediaType())
-
-                // API 호출
                 val response = groupRepositoryImpl.editGroup(groupId, requestBody)
 
                 if (response.isSuccessful) {
-                    Log.d(TAG, "모임 수정 성공!")
+                    Log.d(TAG, "모임 수정 성공! 응답코드: ${response.code()}")
                     _editGroupState.value = EditGroupUiState.Success
                 } else {
                     val errorMessage = response.errorBody()?.string() ?: "알 수 없는 오류"
-                    Log.e(TAG, "모임 수정 실패: $errorMessage")
+                    Log.e(TAG, "모임 수정 실패 - 응답코드: ${response.code()}")
+                    Log.e(TAG, "에러 메시지: $errorMessage")
                     _editGroupState.value = EditGroupUiState.Error("모임 수정에 실패했습니다: $errorMessage")
                 }
 

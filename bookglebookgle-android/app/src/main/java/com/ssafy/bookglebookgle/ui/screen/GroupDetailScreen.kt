@@ -67,7 +67,6 @@ fun GroupDetailScreen(
             }
             is JoinGroupUiState.Error -> {
                 Log.e("GroupDetailScreen", "그룹 가입 실패: ${(joinGroupState as JoinGroupUiState.Error).message}")
-                // 여기서 사용자에게 에러 메시지를 보여줄 수 있습니다 (Toast, Snackbar 등)
             }
             else -> {}
         }
@@ -84,7 +83,6 @@ fun GroupDetailScreen(
             }
             is EditGroupUiState.Error -> {
                 Log.e("GroupDetailScreen", "그룹 수정 실패: ${(editGroupState as EditGroupUiState.Error).message}")
-                // TODO: 사용자에게 에러 메시지 표시 (Toast, Snackbar 등)
             }
             else -> {}
         }
@@ -201,7 +199,7 @@ private fun GroupDetailContent(
             InfoRow("시작 시간", "매주 ${groupDetail.schedule}")
             InfoRow("참여 인원", "${groupDetail.memberCount}/${groupDetail.maxMemberCount}명")
             InfoRow("모임 설명", groupDetail.description)
-            InfoRow("최소 평점", "4점")
+            InfoRow("최소 평점", "${groupDetail.minRequiredRating}점")
             Spacer(modifier = Modifier.height(ScreenSize.height * 0.01f))
             // 구분선 추가
             Divider(

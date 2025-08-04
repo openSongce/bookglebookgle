@@ -3,6 +3,8 @@ package com.ssafy.bookglebookgle.ui.component
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
@@ -14,6 +16,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -59,7 +62,7 @@ fun GroupEditDialog(
     var groupDescription by remember { mutableStateOf(groupDetail.description) }
     var maxMembers by remember { mutableIntStateOf(groupDetail.maxMemberCount) }
     var selectedDateTime by remember { mutableStateOf(groupDetail.schedule) }
-    var minRequiredRating by remember { mutableIntStateOf(4) } // 기본값
+    var minRequiredRating by remember { mutableIntStateOf(groupDetail.minRequiredRating) } // 기본값
     var showDateTimePicker by remember { mutableStateOf(false) }
 
     val categories = listOf("독서", "학습", "첨삭")
@@ -341,7 +344,7 @@ fun GroupEditDialog(
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "💡설정한 평점 이상의 사용자만 모임에 참여할 수 있습니다",
+                            text = "설정한 평점 이상의 사용자만 모임에 참여할 수 있습니다",
                             fontSize = 12.sp,
                             color = Color.Gray
                         )
@@ -427,7 +430,6 @@ fun GroupEditDialog(
     }
 }
 
-// Register 화면에서 가져온 RatingSlider 컴포넌트
 @Composable
 private fun RatingSlider(
     value: Int,
@@ -481,7 +483,36 @@ private fun RatingSlider(
                     .fillMaxWidth()
                     .height(32.dp)
                     .padding(horizontal = 16.dp)
+                    .pointerInput(Unit) {
+                        detectDragGestures(
+                            onDragStart = { offset ->
+                                isDragging = true
+                                val touchX = offset.x
+                                dragPosition = getPositionFromTouch(touchX)
+                            },
+                            onDragEnd = {
+                                isDragging = false
+                                val snappedValue = snapToNearestInteger(dragPosition)
+                                onValueChange(snappedValue)
+                            },
+                            onDrag = { _, dragAmount ->
+                                val newPosition = dragPosition + (dragAmount.x / containerWidthPx * 5f)
+                                dragPosition = newPosition.coerceIn(0f, 5f)
+                            }
+                        )
+                    }
+                    .pointerInput(Unit) {
+                        detectTapGestures { offset ->
+                            if (!isDragging) {
+                                val touchX = offset.x
+                                val newPosition = getPositionFromTouch(touchX)
+                                val snappedValue = snapToNearestInteger(newPosition)
+                                onValueChange(snappedValue)
+                            }
+                        }
+                    }
             ) {
+                // 배경 트랙
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -493,6 +524,7 @@ private fun RatingSlider(
                         )
                 )
 
+                // 진행된 부분
                 Box(
                     modifier = Modifier
                         .width(stepWidth * displayPosition)
@@ -504,6 +536,7 @@ private fun RatingSlider(
                         )
                 )
 
+                // 드래그 핸들
                 Box(
                     modifier = Modifier
                         .size(if (isDragging) 28.dp else 24.dp)
@@ -518,15 +551,6 @@ private fun RatingSlider(
                             if (isDragging) MainColor else Color(0xFFE2E8F0),
                             CircleShape
                         )
-                        .clickable {
-                            // 클릭으로도 값 변경 가능
-                            val nearestValue = snapToNearestInteger(displayPosition)
-                            if (nearestValue < 5) {
-                                onValueChange(nearestValue + 1)
-                            } else {
-                                onValueChange(0)
-                            }
-                        }
                 ) {
                     Box(
                         modifier = Modifier
@@ -542,3 +566,117 @@ private fun RatingSlider(
         }
     }
 }
+//@Composable
+//private fun RatingSlider(
+//    value: Int,
+//    onValueChange: (Int) -> Unit,
+//    modifier: Modifier = Modifier
+//) {
+//    var isDragging by remember { mutableStateOf(false) }
+//    var dragPosition by remember { mutableFloatStateOf(value.toFloat()) }
+//    val density = LocalDensity.current
+//
+//    val displayPosition = if (isDragging) dragPosition else value.toFloat()
+//
+//    BoxWithConstraints(
+//        modifier = modifier.height(60.dp)
+//    ) {
+//        val sliderWidth = maxWidth - 32.dp
+//        val stepWidth = sliderWidth / 5f
+//        val containerWidthPx = with(density) { sliderWidth.toPx() }
+//
+//        fun getPositionFromTouch(touchX: Float): Float {
+//            val ratio = (touchX / containerWidthPx).coerceIn(0f, 1f)
+//            return ratio * 5f
+//        }
+//
+//        fun snapToNearestInteger(position: Float): Int {
+//            return position.roundToInt().coerceIn(0, 5)
+//        }
+//
+//        Column {
+//            Row(
+//                modifier = Modifier
+//                    .fillMaxWidth()
+//                    .padding(horizontal = 16.dp),
+//                horizontalArrangement = Arrangement.SpaceBetween
+//            ) {
+//                (0..5).forEach { rating ->
+//                    val nearestValue = snapToNearestInteger(displayPosition)
+//                    Text(
+//                        text = rating.toString(),
+//                        fontSize = 12.sp,
+//                        fontWeight = if (nearestValue == rating) FontWeight.Bold else FontWeight.Normal,
+//                        color = if (nearestValue == rating) MainColor else Color(0xFF64748B)
+//                    )
+//                }
+//            }
+//
+//            Spacer(modifier = Modifier.height(8.dp))
+//
+//            Box(
+//                modifier = Modifier
+//                    .fillMaxWidth()
+//                    .height(32.dp)
+//                    .padding(horizontal = 16.dp)
+//            ) {
+//                Box(
+//                    modifier = Modifier
+//                        .fillMaxWidth()
+//                        .height(6.dp)
+//                        .align(Alignment.Center)
+//                        .background(
+//                            Color(0xFFE2E8F0),
+//                            RoundedCornerShape(3.dp)
+//                        )
+//                )
+//
+//                Box(
+//                    modifier = Modifier
+//                        .width(stepWidth * displayPosition)
+//                        .height(6.dp)
+//                        .align(Alignment.CenterStart)
+//                        .background(
+//                            MainColor,
+//                            RoundedCornerShape(3.dp)
+//                        )
+//                )
+//
+//                Box(
+//                    modifier = Modifier
+//                        .size(if (isDragging) 28.dp else 24.dp)
+//                        .offset(x = (stepWidth * displayPosition) - if (isDragging) 14.dp else 12.dp)
+//                        .align(Alignment.CenterStart)
+//                        .background(
+//                            Color.White,
+//                            CircleShape
+//                        )
+//                        .border(
+//                            if (isDragging) 3.dp else 2.dp,
+//                            if (isDragging) MainColor else Color(0xFFE2E8F0),
+//                            CircleShape
+//                        )
+//                        .clickable {
+//                            // 클릭으로도 값 변경 가능
+//                            val nearestValue = snapToNearestInteger(displayPosition)
+//                            if (nearestValue < 5) {
+//                                onValueChange(nearestValue + 1)
+//                            } else {
+//                                onValueChange(0)
+//                            }
+//                        }
+//                ) {
+//                    Box(
+//                        modifier = Modifier
+//                            .size(if (isDragging) 10.dp else 8.dp)
+//                            .align(Alignment.Center)
+//                            .background(
+//                                MainColor,
+//                                CircleShape
+//                            )
+//                    )
+//                }
+//            }
+//        }
+//    }
+//}

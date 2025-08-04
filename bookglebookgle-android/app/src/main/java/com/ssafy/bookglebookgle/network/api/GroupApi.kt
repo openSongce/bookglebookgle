@@ -8,6 +8,7 @@ import okhttp3.MultipartBody
 import okhttp3.RequestBody
 import okhttp3.ResponseBody
 import retrofit2.Response
+import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.Multipart
@@ -80,7 +81,7 @@ interface GroupApi {
     @PUT("group/{groupId}/edit")
     suspend fun editGroup(
         @Path("groupId") groupId: Long,
-        @Part("groupInfo") groupInfo: RequestBody,
+        @Body groupInfo: RequestBody,
     ): Response<ResponseBody>
 
     /**

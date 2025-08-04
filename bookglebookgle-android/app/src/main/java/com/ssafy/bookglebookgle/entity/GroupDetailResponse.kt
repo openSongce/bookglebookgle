@@ -8,5 +8,6 @@ data class GroupDetailResponse(
     val maxMemberCount: Int,
     val description: String,
     val photoUrl: String?,
-    val isHost : Boolean
+    val isHost : Boolean,
+    val minRequiredRating: Int
 )
