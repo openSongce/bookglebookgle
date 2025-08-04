@@ -10,6 +10,8 @@ services:
       - "3306:3306"
     volumes:
       - ./mysql-data:/var/lib/mysql
+    networks:
+      - test-net
 
   spring:
     build:
