@@ -20,6 +20,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
@@ -42,6 +43,7 @@ public class GroupServiceImpl implements GroupService {
     private final PdfFileRepository pdfFileRepository;
     private final GrpcOcrClient grpcOcrClient;
     private final OcrService ocrService;
+    private final StringRedisTemplate redisTemplate;
 
     @Override
     @Transactional
@@ -347,4 +349,17 @@ public class GroupServiceImpl implements GroupService {
         groupMemberRepository.delete(member);
     }
 
+    @Override
+    public boolean isMember(Long groupId, Long userId) {
+        return groupRepository.existsByIdAndMembers_Id(groupId, userId);
+        // 또는 group.getMembers().contains(userId) 등 상황에 맞게!
+    }
+
+    // 리더(그룹장) 여부 체크
+    @Override
+    public boolean isLeader(Long groupId, Long userId) {
+        Group group = groupRepository.findById(groupId)
+                .orElseThrow(() -> new NotFoundException("해당 그룹이 존재하지 않습니다."));
+        return group.getHostUser().getId().equals(userId);
+    }
 }
