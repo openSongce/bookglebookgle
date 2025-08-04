@@ -138,13 +138,20 @@ public class GroupServiceImpl implements GroupService {
     }
 
     @Override
-    public List<GroupListResponseDto> getGroupList() {
-        log.info("📌 [GroupService] 그룹 목록 조회 시작");
+    public List<GroupListResponseDto> getNotJoinedGroupList(Long userId) {
+        log.info("📌 [GroupService] (미가입자용) 그룹 목록 조회 시작");
 
+        // 1. 전체 그룹 조회
         List<Group> groups = groupRepository.findAll();
-        log.info("📌 [GroupService] 조회된 그룹 수: {}", groups.size());
+        log.info("📌 [GroupService] 전체 그룹 수: {}", groups.size());
 
+        // 2. 사용자가 가입한 그룹 ID 목록 조회
+        List<Long> joinedGroupIds = groupMemberRepository.findGroupIdsByUserId(userId);
+        log.info("📌 [GroupService] 사용자가 가입한 그룹 수: {}", joinedGroupIds.size());
+
+        // 3. 가입하지 않은 그룹만 필터링
         return groups.stream()
+                .filter(group -> !joinedGroupIds.contains(group.getId()))
                 .map(group -> {
                     try {
                         log.info("📌 그룹 ID: {}, 제목: {}", group.getId(), group.getRoomTitle());
@@ -168,6 +175,7 @@ public class GroupServiceImpl implements GroupService {
                 })
                 .collect(java.util.stream.Collectors.toList());
     }
+
 
     @Override
     public GroupDetailResponse getGroupDetail(Long groupId, User user) {

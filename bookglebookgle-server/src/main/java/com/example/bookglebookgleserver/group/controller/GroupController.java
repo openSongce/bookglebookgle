@@ -67,8 +67,20 @@ public class GroupController {
     }
 
     @GetMapping("/list")
-    public ResponseEntity<List<GroupListResponseDto>> getGroupList() {
-        List<GroupListResponseDto> groupList = groupService.getGroupList();
+    @Operation(
+            summary = "미가입 그룹 전체 목록 조회",
+            description = "현재 로그인한 사용자가 가입되어 있지 않은 스터디 그룹 전체 목록을 조회합니다.",
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "조회 성공"),
+                    @ApiResponse(responseCode = "401", description = "인증 필요"),
+                    @ApiResponse(responseCode = "500", description = "서버 오류")
+            }
+    )
+    public ResponseEntity<List<GroupListResponseDto>> getGroupList(
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        User user = userDetails.getUser();
+        List<GroupListResponseDto> groupList = groupService.getNotJoinedGroupList(user.getId());
         return ResponseEntity.ok(groupList);
     }
 
