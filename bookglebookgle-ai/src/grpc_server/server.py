@@ -21,10 +21,15 @@ from src.services.vector_db import VectorDBManager  # Import VectorDBManager
 class GRPCServer:
     """Manages the gRPC server lifecycle"""
     
-    def __init__(self, vector_db_manager: VectorDBManager):
+    def __init__(self, vector_db_manager: VectorDBManager, redis_manager=None, llm_client=None,
+                 quiz_service=None, proofreading_service=None):
         self.settings = get_settings()
         self.server = None
         self.vector_db_manager = vector_db_manager  # Store the initialized manager
+        self.redis_manager = redis_manager
+        self.llm_client = llm_client
+        self.quiz_service = quiz_service
+        self.proofreading_service = proofreading_service
         logger.info("gRPC Server object created.")
         
     def _is_port_available(self, host: str, port: int) -> bool:
@@ -70,8 +75,20 @@ class GRPCServer:
                     options=server_options
                 )
                 
-                # Pass the initialized vector_db_manager to the servicer
-                ai_servicer = AIServicer(self.vector_db_manager)
+                # Pass the initialized services to the servicer
+                ai_servicer = AIServicer(
+                    vector_db_manager=self.vector_db_manager,
+                    redis_manager=self.redis_manager,
+                    llm_client=self.llm_client,
+                    quiz_service=self.quiz_service,
+                    proofreading_service=self.proofreading_service
+                )
+                
+                # Initialize all services asynchronously
+                services_init_success = await ai_servicer.initialize_services()
+                if not services_init_success:
+                    logger.warning("⚠️ Some services initialization failed, continuing with limited functionality")
+                
                 ai_service_pb2_grpc.add_AIServiceServicer_to_server(ai_servicer, self.server)
                 
                 self.server.add_insecure_port(f"[::]:{self.settings.SERVER_PORT}")

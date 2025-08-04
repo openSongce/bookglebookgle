@@ -29,7 +29,7 @@ def is_port_in_use(port: int, host: str = "localhost") -> bool:
         return False
 
 
-def find_free_port(start_port: int = 50052, max_attempts: int = 100) -> Optional[int]:
+def find_free_port(start_port: int = 50505, max_attempts: int = 100) -> Optional[int]:
     """
     Find a free port starting from start_port.
     
@@ -228,5 +228,5 @@ def print_ports_report(ports: List[int]) -> None:
 
 if __name__ == "__main__":
     # Example usage
-    common_ports = [50052, 8000, 8081]
+    common_ports = [50505, 8126, 6379]  # 내부 Redis 포트로 변경
     print_ports_report(common_ports)

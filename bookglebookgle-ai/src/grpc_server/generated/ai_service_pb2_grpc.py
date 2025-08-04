@@ -40,6 +40,16 @@ class AIServiceStub(object):
                 request_serializer=ai__service__pb2.DiscussionEndRequest.SerializeToString,
                 response_deserializer=ai__service__pb2.DiscussionEndResponse.FromString,
                 )
+        self.GetChatHistory = channel.unary_unary(
+                '/bgbg.ai.AIService/GetChatHistory',
+                request_serializer=ai__service__pb2.GetChatHistoryRequest.SerializeToString,
+                response_deserializer=ai__service__pb2.GetChatHistoryResponse.FromString,
+                )
+        self.GetChatSessionStats = channel.unary_unary(
+                '/bgbg.ai.AIService/GetChatSessionStats',
+                request_serializer=ai__service__pb2.ChatSessionStatsRequest.SerializeToString,
+                response_deserializer=ai__service__pb2.ChatSessionStatsResponse.FromString,
+                )
         self.ProcessStructuredDocument = channel.unary_unary(
                 '/bgbg.ai.AIService/ProcessStructuredDocument',
                 request_serializer=ai__service__pb2.ProcessDocumentRequest.SerializeToString,
@@ -89,6 +99,19 @@ class AIServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GetChatHistory(self, request, context):
+        """Chat History Management
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetChatSessionStats(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def ProcessStructuredDocument(self, request, context):
         """Document Processing
         """
@@ -130,6 +153,16 @@ def add_AIServiceServicer_to_server(servicer, server):
                     servicer.EndDiscussion,
                     request_deserializer=ai__service__pb2.DiscussionEndRequest.FromString,
                     response_serializer=ai__service__pb2.DiscussionEndResponse.SerializeToString,
+            ),
+            'GetChatHistory': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetChatHistory,
+                    request_deserializer=ai__service__pb2.GetChatHistoryRequest.FromString,
+                    response_serializer=ai__service__pb2.GetChatHistoryResponse.SerializeToString,
+            ),
+            'GetChatSessionStats': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetChatSessionStats,
+                    request_deserializer=ai__service__pb2.ChatSessionStatsRequest.FromString,
+                    response_serializer=ai__service__pb2.ChatSessionStatsResponse.SerializeToString,
             ),
             'ProcessStructuredDocument': grpc.unary_unary_rpc_method_handler(
                     servicer.ProcessStructuredDocument,
@@ -234,6 +267,40 @@ class AIService(object):
         return grpc.experimental.unary_unary(request, target, '/bgbg.ai.AIService/EndDiscussion',
             ai__service__pb2.DiscussionEndRequest.SerializeToString,
             ai__service__pb2.DiscussionEndResponse.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def GetChatHistory(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/bgbg.ai.AIService/GetChatHistory',
+            ai__service__pb2.GetChatHistoryRequest.SerializeToString,
+            ai__service__pb2.GetChatHistoryResponse.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def GetChatSessionStats(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/bgbg.ai.AIService/GetChatSessionStats',
+            ai__service__pb2.ChatSessionStatsRequest.SerializeToString,
+            ai__service__pb2.ChatSessionStatsResponse.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 

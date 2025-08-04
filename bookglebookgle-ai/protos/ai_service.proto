@@ -17,6 +17,10 @@ service AIService {
   rpc InitializeDiscussion(DiscussionInitRequest) returns (DiscussionInitResponse);
   rpc ProcessChatMessage(stream ChatMessageRequest) returns (stream ChatMessageResponse);
   rpc EndDiscussion(DiscussionEndRequest) returns (DiscussionEndResponse);
+  
+  // Chat History Management
+  rpc GetChatHistory(GetChatHistoryRequest) returns (GetChatHistoryResponse);
+  rpc GetChatSessionStats(ChatSessionStatsRequest) returns (ChatSessionStatsResponse);
 
   // Document Processing
   rpc ProcessStructuredDocument(ProcessDocumentRequest) returns (DocumentResponse);
@@ -110,11 +114,64 @@ message DiscussionEndResponse {
     string message = 2;
 }
 
+// Chat History Messages
+message ChatHistoryMessage {
+  string message_id = 1;
+  string session_id = 2;
+  User sender = 3;
+  string content = 4;
+  int64 timestamp = 5;
+  string message_type = 6; // USER, AI, SYSTEM
+  map<string, string> metadata = 7;
+}
+
+message GetChatHistoryRequest {
+  string session_id = 1;
+  optional int32 limit = 2; // Maximum number of messages to retrieve
+  optional int64 since_timestamp = 3; // Get messages since this timestamp
+  optional string user_id = 4; // Get messages from specific user only
+}
+
+message GetChatHistoryResponse {
+  bool success = 1;
+  string message = 2;
+  repeated ChatHistoryMessage messages = 3;
+  int32 total_count = 4;
+  bool has_more = 5; // Whether there are more messages available
+}
+
+message ChatSessionStatsRequest {
+  string session_id = 1;
+}
+
+message ParticipantStats {
+  User participant = 1;
+  int32 message_count = 2;
+  int64 last_activity = 3;
+  double engagement_level = 4; // 0.0 to 1.0
+}
+
+message ChatSessionStatsResponse {
+  bool success = 1;
+  string message = 2;
+  string session_id = 3;
+  int32 total_messages = 4;
+  int32 total_participants = 5;
+  repeated ParticipantStats participant_stats = 6;
+  int64 session_start_time = 7;
+  int64 last_activity_time = 8;
+  bool chat_history_enabled = 9;
+}
+
 message ChatMessageRequest {
   string discussion_session_id = 1;
   User sender = 2;
   string message = 3;
   int64 timestamp = 4;
+  // Chat history context options
+  optional bool use_chat_context = 5; // Whether to use chat history context
+  optional int32 context_window_size = 6; // Number of recent messages to include
+  optional bool store_in_history = 7; // Whether to store this message in history
 }
 
 message ChatMessageResponse {
@@ -123,6 +180,10 @@ message ChatMessageResponse {
   optional string ai_response = 3; // AI moderator response
   repeated string suggested_topics = 4;
   bool requires_moderation = 5;
+  // Chat history context information
+  optional int32 context_messages_used = 6; // Number of context messages used
+  optional bool chat_history_enabled = 7; // Whether chat history is enabled
+  repeated ChatHistoryMessage recent_context = 8; // Recent messages for context (optional)
 }
 
 
@@ -162,7 +223,8 @@ message ProcessPdfRequest {
 message PdfInfo {
   string document_id = 1;
   string file_name = 2;
-  map<string, string> metadata = 3;
+  string meeting_id = 3;
+  map<string, string> metadata = 4;
 }
 
 message TextBlock {

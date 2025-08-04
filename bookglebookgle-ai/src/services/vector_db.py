@@ -426,6 +426,8 @@ class VectorDBManager:
             logger.error(f"Progress range search failed: {e}")
             return []
 
+
+
     async def process_document(self, document_id: str, text: str, metadata: Dict[str, Any] = None) -> List[str]:
         """Process document into chunks and store embeddings"""
         try:
@@ -806,18 +808,22 @@ class VectorDBManager:
             for page_num, blocks in pages.items():
                 page_text = " ".join([block.text for block in blocks])
                 
-                # 위치 정보를 메타데이터에 포함
+                # 위치 정보를 메타데이터에 포함 (JSON 문자열로 변환)
+                import json
+                blocks_data = [
+                    {
+                        "text": block.text,
+                        "x0": block.bbox.x0, "y0": block.bbox.y0,
+                        "x1": block.bbox.x1, "y1": block.bbox.y1,
+                        "confidence": block.confidence
+                    } for block in blocks
+                ]
+                
                 page_metadata = {
                     "document_id": document_id,
                     "page_number": page_num,
-                    "blocks": [
-                        {
-                            "text": block.text,
-                            "x0": block.x0, "y0": block.y0,
-                            "x1": block.x1, "y1": block.y1,
-                            "confidence": block.confidence
-                        } for block in blocks
-                    ],
+                    "blocks_count": len(blocks_data),
+                    "blocks_json": json.dumps(blocks_data, ensure_ascii=False),
                     **(metadata or {})
                 }
                 

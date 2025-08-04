@@ -18,9 +18,14 @@ class DatabaseSettings(BaseModel):
     MYSQL_PASSWORD: str = Field(default="", description="MySQL password")
     MYSQL_DATABASE: str = Field(default="bgbg_ai", description="MySQL database name")
 
-    REDIS_HOST: str = Field(default="localhost", description="Redis host")
+    # Redis configuration
+    REDIS_HOST: str = Field(default="redis", description="Redis host")
     REDIS_PORT: int = Field(default=6379, description="Redis port")
     REDIS_DB: int = Field(default=0, description="Redis database number")
+    REDIS_PASSWORD: Optional[str] = Field(default=None, description="Redis password")
+    REDIS_MAX_CONNECTIONS: int = Field(default=20, description="Redis max connections")
+    REDIS_SOCKET_TIMEOUT: int = Field(default=5, description="Redis socket timeout in seconds")
+    REDIS_SOCKET_CONNECT_TIMEOUT: int = Field(default=5, description="Redis socket connect timeout in seconds")
 
 
 class AISettings(BaseModel):
@@ -35,6 +40,12 @@ class AISettings(BaseModel):
     GEMINI_API_KEY: Optional[str] = Field(default=None, description="Google Gemini API key")
     GEMINI_MODEL: str = Field(default="gemini-1.5-flash", description="Default Gemini model")
     GEMINI_BASE_URL: str = Field(default="https://generativelanguage.googleapis.com/v1beta", description="Gemini base URL")
+    
+    # GMS API settings (SSAFY Anthropic proxy)
+    GMS_API_KEY: Optional[str] = Field(default=None, description="GMS API key")
+    GMS_BASE_URL: str = Field(default="https://gms.ssafy.io/gmsapi/api.anthropic.com/v1", description="GMS API base URL")
+    GMS_DEV_MODEL: str = Field(default="claude-3-5-haiku-latest", description="GMS development model")
+    GMS_PROD_MODEL: str = Field(default="claude-3-5-sonnet-latest", description="GMS production model")
 
     # Feature flags
     ENABLE_QUIZ_GENERATION: bool = Field(default=True, description="Enable quiz generation")
@@ -54,6 +65,43 @@ class VectorDBSettings(BaseModel):
     CHROMA_PERSIST_DIRECTORY: str = Field(default="./data/chroma", description="Chroma persistence directory")
     PINECONE_API_KEY: Optional[str] = Field(default=None, description="Pinecone API key")
     PINECONE_ENVIRONMENT: Optional[str] = Field(default=None, description="Pinecone environment")
+
+
+class ChatHistorySettings(BaseModel):
+    """Chat history and context configuration"""
+    # Feature toggle
+    CHAT_HISTORY_ENABLED: bool = Field(default=True, description="Enable chat history context feature")
+    
+    # TTL settings (in hours)
+    CHAT_MESSAGE_TTL_HOURS: int = Field(default=24, description="Chat message TTL in hours")
+    CHAT_CONTEXT_TTL_HOURS: int = Field(default=1, description="Chat context TTL in hours")
+    CHAT_PARTICIPANT_TTL_HOURS: int = Field(default=2, description="Chat participant TTL in hours")
+    CHAT_META_TTL_HOURS: int = Field(default=168, description="Chat metadata TTL in hours (7 days)")
+    
+    # Context window settings
+    CHAT_CONTEXT_WINDOW_SIZE: int = Field(default=10, description="Maximum messages in context window")
+    CHAT_MAX_TOKENS: int = Field(default=2000, description="Maximum tokens for context")
+    CHAT_TIME_WINDOW_HOURS: int = Field(default=2, description="Time window for recent messages in hours")
+    CHAT_MAX_BOOK_CHUNKS: int = Field(default=3, description="Maximum book context chunks")
+    
+    # Summarization settings
+    CHAT_ENABLE_SUMMARIZATION: bool = Field(default=True, description="Enable context summarization")
+    CHAT_SUMMARIZATION_THRESHOLD: int = Field(default=1500, description="Token threshold for summarization")
+    
+    # Performance settings
+    CHAT_REDIS_MEMORY_LIMIT_MB: int = Field(default=512, description="Redis memory limit in MB")
+    CHAT_SESSION_CLEANUP_INTERVAL_MINUTES: int = Field(default=30, description="Session cleanup interval in minutes")
+    CHAT_INACTIVE_THRESHOLD_MINUTES: int = Field(default=30, description="Inactive participant threshold in minutes")
+    
+    # Analysis settings
+    CHAT_ENABLE_SENTIMENT_ANALYSIS: bool = Field(default=True, description="Enable sentiment analysis")
+    CHAT_ENABLE_TOPIC_DETECTION: bool = Field(default=True, description="Enable topic change detection")
+    CHAT_TOPIC_CHANGE_THRESHOLD: float = Field(default=0.7, description="Topic change detection threshold")
+    
+    # Intervention settings
+    CHAT_ENABLE_AI_INTERVENTION: bool = Field(default=True, description="Enable AI intervention suggestions")
+    CHAT_INTERVENTION_COOLDOWN_MINUTES: int = Field(default=5, description="AI intervention cooldown in minutes")
+    CHAT_MAX_INTERVENTIONS_PER_HOUR: int = Field(default=10, description="Maximum AI interventions per hour")
 
 
 class GRPCSettings(BaseModel):
@@ -85,6 +133,7 @@ class Settings(BaseSettings):
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
     ai: AISettings = Field(default_factory=AISettings)
     vector_db: VectorDBSettings = Field(default_factory=VectorDBSettings)
+    chat_history: ChatHistorySettings = Field(default_factory=ChatHistorySettings)
     grpc: GRPCSettings = Field(default_factory=GRPCSettings)
     
     class Config:

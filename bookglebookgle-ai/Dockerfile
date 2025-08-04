@@ -53,7 +53,10 @@ RUN pip install --upgrade pip setuptools wheel
 # 8. Python 의존성 파일 복사 및 설치 (단계별 설치로 최적화)
 COPY requirements.txt .
 
-# Python 의존성 설치
+# 중요: paddlepaddle을 먼저 설치하여 의존성 충돌 최소화
+RUN pip install --no-cache-dir paddlepaddle>=2.6.0
+
+# 나머지 Python 의존성 설치
 RUN pip install --no-cache-dir -r requirements.txt
 
 # 9. 소스 코드 복사
