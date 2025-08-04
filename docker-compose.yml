@@ -30,6 +30,8 @@ services:
     volumes:
       - ./backend-logs:/logs
       - /home/ubuntu/bookglebookgle-server/uploads:/home/ubuntu/pdf-uploads
+    networks:
+      - test-net
 
   loki:
     image: grafana/loki:2.9.4
