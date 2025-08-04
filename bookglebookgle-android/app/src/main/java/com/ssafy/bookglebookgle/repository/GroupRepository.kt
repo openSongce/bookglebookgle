@@ -24,4 +24,7 @@ interface GroupRepository {
     suspend fun getGroupDetail(groupId: Long): Response<GroupDetailResponse>
 
     suspend fun getMyGroups(): Response<List<MyGroupResponse>>
+
+    suspend fun joinGroup(groupId: Long): Response<ResponseBody>
+
 }

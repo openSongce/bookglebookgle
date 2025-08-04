@@ -7,6 +7,7 @@ import okhttp3.MultipartBody
 import okhttp3.RequestBody
 import okhttp3.ResponseBody
 import retrofit2.Response
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.Multipart
 import retrofit2.http.POST
@@ -54,4 +55,13 @@ interface GroupApi {
      * */
     @GET("group/my")
     suspend fun getMyGroups(): Response<List<MyGroupResponse>>
+
+    /**
+     * 모임 가입
+     * */
+    @POST("group/{groupId}/join")
+    suspend fun joinGroup(
+        @Path("groupId") groupId: Long
+    ): Response<ResponseBody>
+
 }

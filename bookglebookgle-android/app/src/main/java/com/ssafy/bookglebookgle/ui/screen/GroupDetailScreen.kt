@@ -32,6 +32,7 @@ import com.ssafy.bookglebookgle.ui.theme.MainColor
 import com.ssafy.bookglebookgle.util.ScreenSize
 import com.ssafy.bookglebookgle.viewmodel.GroupDetailUiState
 import com.ssafy.bookglebookgle.viewmodel.GroupDetailViewModel
+import com.ssafy.bookglebookgle.viewmodel.JoinGroupUiState
 
 @Composable
 fun GroupDetailScreen(
@@ -41,10 +42,40 @@ fun GroupDetailScreen(
     viewModel: GroupDetailViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val joinGroupState by viewModel.joinGroupState.collectAsStateWithLifecycle()
+    val currentIsMyGroup by viewModel.isMyGroup.collectAsStateWithLifecycle()
+
+    // 임시로 그룹 방장 여부를 판단하는 변수 (실제로는 API 응답에서 받아와야 함)
+    var isGroupLeader by remember { mutableStateOf(false) }
 
     // 컴포넌트가 처음 생성될 때 그룹 상세 정보 조회
-    LaunchedEffect(groupId) {
+    LaunchedEffect(groupId, isMyGroup) {
+        viewModel.setInitialMyGroupState(isMyGroup)
         viewModel.getGroupDetail(groupId)
+    }
+
+    // 그룹 상세 정보 로드 완료 시 방장 여부 설정
+    LaunchedEffect(uiState) {
+        if (uiState is GroupDetailUiState.Success) {
+            // Todo: 실제로는 API 응답에서 isLeader 또는 createdBy 등의 필드로 판단해야 함
+            isGroupLeader = true
+        }
+    }
+
+    // 가입 성공 시 처리
+    LaunchedEffect(joinGroupState) {
+        when (joinGroupState) {
+            is JoinGroupUiState.Success -> {
+                Log.d("GroupDetailScreen", "그룹 가입 성공!")
+                // 성공 처리 후 상태 초기화
+                viewModel.resetJoinGroupState()
+            }
+            is JoinGroupUiState.Error -> {
+                Log.e("GroupDetailScreen", "그룹 가입 실패: ${(joinGroupState as JoinGroupUiState.Error).message}")
+                // 여기서 사용자에게 에러 메시지를 보여줄 수 있습니다 (Toast, Snackbar 등)
+            }
+            else -> {}
+        }
     }
 
     Column(
@@ -76,9 +107,14 @@ fun GroupDetailScreen(
             is GroupDetailUiState.Success -> {
                 GroupDetailContent(
                     groupDetail = currentState.groupDetail,
-                    isMyGroup = isMyGroup,
-                    navController,
-                    groupId
+                    isMyGroup = currentIsMyGroup,
+                    isGroupLeader = isGroupLeader,
+                    isJoining = joinGroupState is JoinGroupUiState.Loading,
+                    navController = navController,
+                    groupId = groupId,
+                    onJoinClick = { viewModel.joinGroup(groupId) },
+                    onDeleteClick = { /* Todo: 삭제 로직 구현 */ },
+                    onLeaveClick = { /* Todo: 탈퇴 로직 구현 */ }
                 )
             }
 
@@ -93,8 +129,13 @@ fun GroupDetailScreen(
 private fun GroupDetailContent(
     groupDetail: GroupDetailResponse,
     isMyGroup: Boolean,
+    isGroupLeader: Boolean,
+    isJoining: Boolean,
     navController: NavHostController,
-    groupId: Long
+    groupId: Long,
+    onJoinClick: () -> Unit,
+    onDeleteClick: () -> Unit,
+    onLeaveClick: () -> Unit
 ) {
     val dummyMembers = listOf(
         "허지명" to 80,
@@ -228,8 +269,8 @@ private fun GroupDetailContent(
                         .height(ScreenSize.height * 0.065f)
                         .clip(RoundedCornerShape(ScreenSize.width * 0.03f))
                         .background(Color(0xFFDED0BB))
-                        .clickable {
-                            /* Todo: 참여 로직 추가 필요 */
+                        .clickable(enabled = !isJoining) {
+                            onJoinClick()
                         },
                     contentAlignment = Alignment.Center
                 ) {
@@ -247,8 +288,35 @@ private fun GroupDetailContent(
                     fontSize = ScreenSize.width.value.times(0.045f).sp
                 )
                 ProgressStatusCard(75, 10, dummyMembers)
-            }
 
+                Spacer(modifier = Modifier.height(ScreenSize.height * 0.05f))
+
+                // 방장이면 모임 삭제, 일반 멤버면 모임 탈퇴 버튼
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(ScreenSize.height * 0.065f)
+                        .clip(RoundedCornerShape(ScreenSize.width * 0.03f))
+                        .background(
+                            if (isGroupLeader) Color(0xFFD32F2F) else Color(0xFF757575)
+                        )
+                        .clickable {
+                            if (isGroupLeader) {
+                                onDeleteClick()
+                            } else {
+                                onLeaveClick()
+                            }
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = if (isGroupLeader) "모임 삭제" else "모임 탈퇴",
+                        color = Color.White,
+                        fontSize = ScreenSize.width.value.times(0.04f).sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
             Spacer(modifier = Modifier.height(ScreenSize.height * 0.05f))
         }
     }
