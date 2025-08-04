@@ -39,8 +39,10 @@ fun CustomTopAppBar(
     title: String,
     navController : NavHostController,
     ismygroup : Boolean = false,
+    isDetailScreen: Boolean = false,
     isPdfView : Boolean = false,
     onBackPressed: (() -> Unit)? = null, // 뒤로가기 버튼 클릭 콜백
+    onEditClick: (() -> Unit)? = null
 ) {
     TopAppBar(
         title = {
@@ -108,12 +110,21 @@ fun CustomTopAppBar(
                     textAlign = TextAlign.Center,
                     modifier = Modifier
                         .fillMaxWidth()
+                )
+            }
+            else if (isDetailScreen){
+                Text(
+                    text = title,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
                         .padding(end = 40.dp)
                 )
             }
         },
         navigationIcon = {
-            if(isPdfView || ismygroup) {
+            if(isPdfView || ismygroup || isDetailScreen) {
                 Icon(
                     painter = painterResource(id = R.drawable.ic_back_arrow_left),
                     contentDescription = "뒤로가기",
@@ -183,6 +194,16 @@ fun CustomTopAppBar(
                         .size(32.dp)
                         .clip(CircleShape)
 
+                )
+            }
+            else if(ismygroup){
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_edit),
+                    contentDescription = "모임수정",
+                    modifier = Modifier
+                        .padding(end = 16.dp)
+                        .size(24.dp)
+                        .clickable { onEditClick?.invoke() ?: navController.popBackStack() }
                 )
             }
         },

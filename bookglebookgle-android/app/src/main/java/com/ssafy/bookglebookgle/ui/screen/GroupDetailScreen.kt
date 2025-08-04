@@ -28,6 +28,7 @@ import com.ssafy.bookglebookgle.R
 import com.ssafy.bookglebookgle.entity.GroupDetailResponse
 import com.ssafy.bookglebookgle.navigation.Screen
 import com.ssafy.bookglebookgle.ui.component.CustomTopAppBar
+import com.ssafy.bookglebookgle.ui.component.GroupEditDialog
 import com.ssafy.bookglebookgle.ui.theme.MainColor
 import com.ssafy.bookglebookgle.util.ScreenSize
 import com.ssafy.bookglebookgle.viewmodel.GroupDetailUiState
@@ -44,6 +45,9 @@ fun GroupDetailScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val joinGroupState by viewModel.joinGroupState.collectAsStateWithLifecycle()
     val currentIsMyGroup by viewModel.isMyGroup.collectAsStateWithLifecycle()
+
+    // 수정 다이얼로그 상태
+    var showEditDialog by remember { mutableStateOf(false) }
 
     // 컴포넌트가 처음 생성될 때 그룹 상세 정보 조회
     LaunchedEffect(groupId, isMyGroup) {
@@ -78,7 +82,11 @@ fun GroupDetailScreen(
         CustomTopAppBar(
             title = title,
             navController = navController,
-            ismygroup = true
+            ismygroup = isMyGroup,
+            isDetailScreen = true,
+            onEditClick = if (currentIsMyGroup) {
+                { showEditDialog = true }
+            } else null
         )
 
         when (val currentState = uiState) {
@@ -106,6 +114,24 @@ fun GroupDetailScreen(
                         navController.popBackStack() },
                     onLeaveClick = { /* Todo: 탈퇴 로직 구현 */ }
                 )
+
+                // 수정 다이얼로그 - 항상 렌더링되도록 수정
+                if (showEditDialog) {
+                    GroupEditDialog(
+                        groupDetail = currentState.groupDetail,
+                        onDismiss = {
+                            showEditDialog = false
+                        },
+                        onSave = { editData ->
+                            Log.d("GroupDetailScreen", "모임 수정 데이터: $editData")
+                            // TODO: ViewModel에 수정 로직 추가
+                            // viewModel.updateGroup(groupId, editData)
+                            showEditDialog = false
+                            // 수정 완료 후 화면 새로고침
+                            viewModel.getGroupDetail(groupId)
+                        }
+                    )
+                }
             }
 
             is GroupDetailUiState.Error -> {
@@ -160,6 +186,7 @@ private fun GroupDetailContent(
             InfoRow("시작 시간", "매주 ${groupDetail.schedule}")
             InfoRow("참여 인원", "${groupDetail.memberCount}/${groupDetail.maxMemberCount}명")
             InfoRow("모임 설명", groupDetail.description)
+            InfoRow("최소 평점", "4점")
             Spacer(modifier = Modifier.height(ScreenSize.height * 0.01f))
             // 구분선 추가
             Divider(
