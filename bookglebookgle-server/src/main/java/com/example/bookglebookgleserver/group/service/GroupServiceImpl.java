@@ -193,7 +193,8 @@ public class GroupServiceImpl implements GroupService {
                 group.getGroupMaxNum(),
                 group.getDescription(),
                 null,
-                isHost
+                isHost,
+                group.getMinRequiredRating()
         );
     }
 
@@ -300,7 +301,8 @@ public class GroupServiceImpl implements GroupService {
                 group.getGroupMaxNum(),
                 group.getDescription(),
                 null,
-                isHost
+                isHost,
+                group.getMinRequiredRating()
         );
     }
 

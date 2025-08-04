@@ -26,5 +26,8 @@ public record GroupDetailResponse(
         String photoUrl,
 
         @Schema(description = "방장 여부", example = "true")
-        boolean isHost
+        boolean isHost,
+
+        @Schema(description = "최소 요구 평점", example = "3")
+        int minRequiredRating
 ) {}
