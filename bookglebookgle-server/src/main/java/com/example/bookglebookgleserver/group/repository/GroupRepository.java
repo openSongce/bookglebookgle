@@ -16,4 +16,6 @@ public interface GroupRepository extends JpaRepository<Group, Long> {
             @Param("roomTitle") String roomTitle,
             @Param("category") com.example.bookglebookgleserver.group.entity.Group.Category category
     );
+
+    boolean existsByIdAndMembers_Id(Long groupId, Long userId);
 }

@@ -20,4 +20,6 @@ public interface GroupService {
     void deleteGroup(Long groupId, User user);
     List<GroupListResponseDto> searchGroups(String roomTitle, String category);
     void leaveGroup(Long groupId, User user);
+    boolean isMember(Long groupId, Long userId);
+    boolean isLeader(Long groupId, Long userId);
 }
