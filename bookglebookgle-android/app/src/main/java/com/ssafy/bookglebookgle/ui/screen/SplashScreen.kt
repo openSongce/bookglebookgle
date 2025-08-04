@@ -49,7 +49,7 @@ fun SplashScreen(navController: NavController) {
                 }
             }
             is SplashViewModel.UiState.GoLogin -> {
-                navController.navigate(Screen.MainScreen.route) {
+                navController.navigate(Screen.LoginScreen.route) {
                     popUpTo(Screen.SplashScreen.route) { inclusive = true }
                 }
             }
