@@ -89,7 +89,7 @@ services:
     container_name: redis
     restart: always
     ports:
-      - "6479:6379"                         # 호스트 6479 → 컨테이너 6379
+      - "6379:6379"                         # 호스트 6479 → 컨테이너 6379
     volumes:
       - redis-data:/data                    # (선택) 데이터 유지
     networks:
