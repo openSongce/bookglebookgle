@@ -27,4 +27,6 @@ interface GroupRepository {
 
     suspend fun joinGroup(groupId: Long): Response<ResponseBody>
 
+    suspend fun deleteGroup(groupId: Long): Response<ResponseBody>
+
 }

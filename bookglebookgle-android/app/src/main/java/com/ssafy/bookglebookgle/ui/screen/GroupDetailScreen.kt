@@ -113,7 +113,7 @@ fun GroupDetailScreen(
                     navController = navController,
                     groupId = groupId,
                     onJoinClick = { viewModel.joinGroup(groupId) },
-                    onDeleteClick = { /* Todo: 삭제 로직 구현 */ },
+                    onDeleteClick = { viewModel.deleteGroup(groupId) },
                     onLeaveClick = { /* Todo: 탈퇴 로직 구현 */ }
                 )
             }

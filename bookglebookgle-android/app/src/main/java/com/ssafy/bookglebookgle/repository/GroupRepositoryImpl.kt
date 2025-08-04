@@ -176,4 +176,25 @@ class GroupRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun deleteGroup(groupId: Long): Response<ResponseBody> {
+        return try {
+            Log.d(TAG, "모임 삭제 요청 시작 - groupId: $groupId")
+
+            val response = groupApi.deleteGroup(groupId)
+
+            if (response.isSuccessful) {
+                Log.d(TAG, "모임 삭제 성공 - 응답코드: ${response.code()}")
+            } else {
+                val errorBody = response.errorBody()?.string()
+                Log.d(TAG, "모임 삭제 실패 - 응답코드: ${response.code()}, 메시지: ${response.message()}")
+                Log.d(TAG, "서버 에러 메시지: $errorBody")
+            }
+
+            response
+        } catch (e: Exception) {
+            Log.e(TAG, "모임 삭제 실패 - 네트워크 오류: ${e.message}")
+            throw Exception("모임 삭제 중 오류가 발생했습니다: ${e.message}", e)
+        }
+    }
+
 }
