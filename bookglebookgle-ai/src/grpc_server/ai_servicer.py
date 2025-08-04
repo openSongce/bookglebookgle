@@ -16,6 +16,7 @@ from .generated import ai_service_pb2, ai_service_pb2_grpc
 from src.services.discussion_service import DiscussionService
 from src.services.simplified_ocr_service import SimplifiedOCRService
 from src.services.vector_db import VectorDBManager
+from src.services.meeting_service import MeetingService
 from src.config.settings import get_settings
 
 
@@ -26,6 +27,7 @@ class AIServicer(ai_service_pb2_grpc.AIServiceServicer):
                  quiz_service=None, proofreading_service=None):
         self.settings = get_settings()
         self.discussion_service = DiscussionService()
+        self.meeting_service = MeetingService()  # 새로 추가
         
         # Initialize SimplifiedOCRService with LLM post-processing enabled
         self.ocr_service = SimplifiedOCRService(enable_llm_postprocessing=True)
@@ -44,6 +46,9 @@ class AIServicer(ai_service_pb2_grpc.AIServiceServicer):
         try:
             # Initialize discussion service with vector DB
             await self.discussion_service.initialize_manager(self.vector_db_manager)
+            
+            # Initialize meeting service with vector DB and discussion service
+            await self.meeting_service.initialize(self.vector_db_manager, self.discussion_service)
             
             # Initialize OCR service
             ocr_success = await self.initialize_ocr_service()
@@ -246,6 +251,48 @@ class AIServicer(ai_service_pb2_grpc.AIServiceServicer):
 
         except Exception as e:
             logger.error(f"Failed to end discussion: {e}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(f"Internal error: {str(e)}")
+            return None
+    
+    async def EndMeeting(self, request, context):
+        """통합 모임 종료 API - 모든 모임 타입 지원"""
+        try:
+            logger.info(f"🏁 Ending {request.meeting_type} meeting: {request.meeting_id}")
+            
+            # MeetingService 초기화 확인
+            if not self.meeting_service.is_initialized():
+                context.set_code(grpc.StatusCode.UNAVAILABLE)
+                context.set_details("MeetingService is not initialized")
+                return None
+            
+            # 모임 타입별 파라미터 준비
+            kwargs = {}
+            if request.meeting_type == "discussion" and request.HasField("session_id"):
+                kwargs["session_id"] = request.session_id
+            
+            # 통합 모임 종료 처리
+            result = await self.meeting_service.end_meeting(
+                meeting_id=request.meeting_id,
+                meeting_type=request.meeting_type,
+                **kwargs
+            )
+            
+            if result["success"]:
+                logger.info(f"✅ {request.meeting_type.title()} meeting ended: {request.meeting_id}")
+                return ai_service_pb2.MeetingEndResponse(
+                    success=True,
+                    message=result.get("message", f"{request.meeting_type.title()} meeting ended successfully"),
+                    meeting_type=request.meeting_type
+                )
+            else:
+                logger.error(f"❌ Failed to end {request.meeting_type} meeting {request.meeting_id}: {result.get('message')}")
+                context.set_code(grpc.StatusCode.INTERNAL)
+                context.set_details(result.get("message", "Failed to end meeting"))
+                return None
+                
+        except Exception as e:
+            logger.error(f"Failed to end {request.meeting_type} meeting {request.meeting_id}: {e}")
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details(f"Internal error: {str(e)}")
             return None

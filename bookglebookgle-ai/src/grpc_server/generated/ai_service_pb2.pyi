@@ -141,6 +141,28 @@ class DiscussionEndResponse(_message.Message):
     message: str
     def __init__(self, success: bool = ..., message: _Optional[str] = ...) -> None: ...
 
+class MeetingEndRequest(_message.Message):
+    __slots__ = ("meeting_id", "meeting_type", "ended_at", "session_id")
+    MEETING_ID_FIELD_NUMBER: _ClassVar[int]
+    MEETING_TYPE_FIELD_NUMBER: _ClassVar[int]
+    ENDED_AT_FIELD_NUMBER: _ClassVar[int]
+    SESSION_ID_FIELD_NUMBER: _ClassVar[int]
+    meeting_id: str
+    meeting_type: str
+    ended_at: int
+    session_id: str
+    def __init__(self, meeting_id: _Optional[str] = ..., meeting_type: _Optional[str] = ..., ended_at: _Optional[int] = ..., session_id: _Optional[str] = ...) -> None: ...
+
+class MeetingEndResponse(_message.Message):
+    __slots__ = ("success", "message", "meeting_type")
+    SUCCESS_FIELD_NUMBER: _ClassVar[int]
+    MESSAGE_FIELD_NUMBER: _ClassVar[int]
+    MEETING_TYPE_FIELD_NUMBER: _ClassVar[int]
+    success: bool
+    message: str
+    meeting_type: str
+    def __init__(self, success: bool = ..., message: _Optional[str] = ..., meeting_type: _Optional[str] = ...) -> None: ...
+
 class ChatHistoryMessage(_message.Message):
     __slots__ = ("message_id", "session_id", "sender", "content", "timestamp", "message_type", "metadata")
     class MetadataEntry(_message.Message):
