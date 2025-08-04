@@ -25,11 +25,21 @@ public class GroupSyncService {
         }
     }
 
-
     // 리더 페이지를 Redis에서 조회
     public int getLeaderPage(Long groupId) {
         String key = "group:" + groupId + ":leaderPage";
         String value = redisTemplate.opsForValue().get(key);
         return value != null ? Integer.parseInt(value) : 1; // 없으면 1페이지 반환
+    }
+
+    public void updateMemberPage(Long groupId, Long userId, int page) {
+        String key = "group:" + groupId + ":user:" + userId + ":page";
+        redisTemplate.opsForValue().set(key, String.valueOf(page));
+    }
+
+    public int getMemberPage(Long groupId, Long userId) {
+        String key = "group:" + groupId + ":user:" + userId + ":page";
+        String value = redisTemplate.opsForValue().get(key);
+        return value != null ? Integer.parseInt(value) : 1;
     }
 }

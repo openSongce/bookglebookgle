@@ -7,6 +7,7 @@ import com.example.bookglebookgleserver.group.dto.UpdateLeaderPageRequestDto;
 import com.example.bookglebookgleserver.group.service.GroupService;
 import com.example.bookglebookgleserver.group.service.GroupSyncService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -54,6 +55,47 @@ public class GroupSyncController {
             throw new ForbiddenException("그룹 멤버만 리더 페이지를 조회할 수 있습니다.");
         }
         int page = groupSyncService.getLeaderPage(groupId);
+        return ResponseEntity.ok(new LeaderPageResponseDto(page));
+    }
+
+    @Operation(
+            summary = "참여자 개별 페이지 저장",
+            description = "따라가기 OFF 모드에서 참여자가 자신의 페이지 위치를 저장한다.",
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "저장 성공"),
+                    @ApiResponse(responseCode = "401", description = "인증 필요"),
+                    @ApiResponse(responseCode = "403", description = "본인만 저장 가능")
+            }
+    )
+    @PostMapping("/{groupId}/members/{userId}/page")
+    public ResponseEntity<?> updateMemberPage(
+            @PathVariable Long groupId,
+            @PathVariable Long userId,
+            @RequestBody UpdateLeaderPageRequestDto dto,
+            @AuthenticationPrincipal CustomUserDetails customUser
+    ) {
+        if (!customUser.getUser().getId().equals(userId)) {
+            throw new ForbiddenException("본인만 자신의 페이지를 수정할 수 있습니다.");
+        }
+        groupSyncService.updateMemberPage(groupId, userId, dto.page());
+        return ResponseEntity.ok().body("{\"success\":true}");
+    }
+
+    @Operation(
+            summary = "멤버 페이지 조회",
+            description = "현재 그룹에 속한 자신의 페이지를 반환합니다.)"
+    )
+    @GetMapping("/{groupId}/members/{userId}/page")
+    public ResponseEntity<LeaderPageResponseDto> getMemberPage(
+            @PathVariable Long groupId,
+            @PathVariable Long userId,
+            @AuthenticationPrincipal CustomUserDetails customUser
+    ) {
+        if (!customUser.getUser().getId().equals(userId)) {
+            throw new ForbiddenException("본인만 자신의 페이지를 조회할 수 있습니다.");
+        }
+
+        int page = groupSyncService.getMemberPage(groupId, userId);
         return ResponseEntity.ok(new LeaderPageResponseDto(page));
     }
 }
