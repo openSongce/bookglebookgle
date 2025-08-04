@@ -29,4 +29,9 @@ interface GroupRepository {
 
     suspend fun deleteGroup(groupId: Long): Response<ResponseBody>
 
+    suspend fun editGroup(
+        groupId: Long,
+        groupInfo: RequestBody,
+    ): Response<ResponseBody>
+
 }

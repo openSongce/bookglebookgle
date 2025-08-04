@@ -11,6 +11,7 @@ import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.Multipart
 import retrofit2.http.POST
+import retrofit2.http.PUT
 import retrofit2.http.Part
 import retrofit2.http.Path
 import retrofit2.http.Query
@@ -70,6 +71,15 @@ interface GroupApi {
     @DELETE("group/{groupId}")
     suspend fun deleteGroup(
         @Path("groupId") groupId: Long
+    ): Response<ResponseBody>
+
+    /**
+     * 모임 수정
+     * */
+    @PUT("group/{groupId}/edit")
+    suspend fun editGroup(
+        @Path("groupId") groupId: Long,
+        @Part("groupInfo") groupInfo: RequestBody,
     ): Response<ResponseBody>
 
 }

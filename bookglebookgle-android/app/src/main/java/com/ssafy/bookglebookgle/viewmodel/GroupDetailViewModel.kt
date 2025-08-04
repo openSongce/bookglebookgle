@@ -3,13 +3,17 @@ package com.ssafy.bookglebookgle.viewmodel
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.gson.Gson
 import com.ssafy.bookglebookgle.entity.GroupDetailResponse
 import com.ssafy.bookglebookgle.repository.GroupRepositoryImpl
+import com.ssafy.bookglebookgle.ui.component.GroupEditData
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import javax.inject.Inject
 
 private const val TAG = "싸피_GroupDetailViewModel"
@@ -27,6 +31,14 @@ sealed class JoinGroupUiState {
     data class Error(val message: String) : JoinGroupUiState()
 }
 
+// 모임 수정 상태
+sealed class EditGroupUiState {
+    object Idle : EditGroupUiState()
+    object Loading : EditGroupUiState()
+    object Success : EditGroupUiState()
+    data class Error(val message: String) : EditGroupUiState()
+}
+
 @HiltViewModel
 class GroupDetailViewModel @Inject constructor(
     private val groupRepositoryImpl: GroupRepositoryImpl
@@ -41,6 +53,10 @@ class GroupDetailViewModel @Inject constructor(
     // 현재 그룹의 내가 참여한 상태를 관리
     private val _isMyGroup = MutableStateFlow(false)
     val isMyGroup: StateFlow<Boolean> = _isMyGroup.asStateFlow()
+
+    // 모임 수정 상태
+    private val _editGroupState = MutableStateFlow<EditGroupUiState>(EditGroupUiState.Idle)
+    val editGroupState: StateFlow<EditGroupUiState> = _editGroupState.asStateFlow()
 
     /**
      * 초기 상태 설정
@@ -147,6 +163,61 @@ class GroupDetailViewModel @Inject constructor(
                 Log.e(TAG, "그룹 삭제 중 예외 발생: ${e.message}", e)
             }
         }
+    }
+
+    /**
+     * 모임 수정
+     * @param groupId 그룹 ID
+     * @param editData 수정할 데이터
+     */
+    fun updateGroup(groupId: Long, editData: GroupEditData) {
+        viewModelScope.launch {
+            try {
+                _editGroupState.value = EditGroupUiState.Loading
+                Log.d(TAG, "모임 수정 시작 - groupId: $groupId")
+
+                // GroupEditData를 서버에서 요구하는 JSON 형식으로 변환
+                val groupUpdateRequest = mapOf(
+                    "roomTitle" to editData.roomTitle,
+                    "description" to editData.description,
+                    "category" to editData.category,
+                    "minRequiredRating" to editData.minRequiredRating,
+                    "schedule" to editData.schedule,
+                    "groupMaxNum" to editData.maxMemberCount,
+                )
+
+                // JSON 문자열로 변환
+                val gson = Gson()
+                val jsonString = gson.toJson(groupUpdateRequest)
+                Log.d(TAG, "전송할 JSON 데이터: $jsonString")
+
+                // RequestBody 생성
+                val requestBody = jsonString.toRequestBody("application/json".toMediaType())
+
+                // API 호출
+                val response = groupRepositoryImpl.editGroup(groupId, requestBody)
+
+                if (response.isSuccessful) {
+                    Log.d(TAG, "모임 수정 성공!")
+                    _editGroupState.value = EditGroupUiState.Success
+                } else {
+                    val errorMessage = response.errorBody()?.string() ?: "알 수 없는 오류"
+                    Log.e(TAG, "모임 수정 실패: $errorMessage")
+                    _editGroupState.value = EditGroupUiState.Error("모임 수정에 실패했습니다: $errorMessage")
+                }
+
+            } catch (e: Exception) {
+                Log.e(TAG, "모임 수정 중 예외 발생", e)
+                _editGroupState.value = EditGroupUiState.Error("모임 수정 중 오류가 발생했습니다: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * 모임 수정 상태 초기화
+     */
+    fun resetEditGroupState() {
+        _editGroupState.value = EditGroupUiState.Idle
     }
 
     /**

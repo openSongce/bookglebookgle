@@ -155,6 +155,11 @@ class GroupRepositoryImpl @Inject constructor(
         }
     }
 
+    /**
+     * 모임 가입
+     * @param groupId 그룹 ID
+     * @return API 응답
+     */
     override suspend fun joinGroup(groupId: Long): Response<ResponseBody> {
         return try {
             Log.d(TAG, "모임 가입 요청 시작 - groupId: $groupId")
@@ -176,6 +181,11 @@ class GroupRepositoryImpl @Inject constructor(
         }
     }
 
+    /**
+     * 모임 삭제
+     * @param groupId 그룹 ID
+     * @return API 응답
+     */
     override suspend fun deleteGroup(groupId: Long): Response<ResponseBody> {
         return try {
             Log.d(TAG, "모임 삭제 요청 시작 - groupId: $groupId")
@@ -197,4 +207,33 @@ class GroupRepositoryImpl @Inject constructor(
         }
     }
 
+    /**
+     * 모임 수정
+     * @param groupId 그룹 ID
+     * @param groupInfo 수정할 그룹 정보 JSON
+     * @return API 응답
+     */
+    override suspend fun editGroup(
+        groupId: Long,
+        groupInfo: RequestBody,
+    ): Response<ResponseBody> {
+        return try {
+            Log.d(TAG, "모임 수정 요청 시작 - groupId: $groupId")
+
+            val response = groupApi.editGroup(groupId, groupInfo)
+
+            if (response.isSuccessful) {
+                Log.d(TAG, "모임 수정 성공 - 응답코드: ${response.code()}")
+            } else {
+                val errorBody = response.errorBody()?.string()
+                Log.d(TAG, "모임 수정 실패 - 응답코드: ${response.code()}, 메시지: ${response.message()}")
+                Log.d(TAG, "서버 에러 메시지: $errorBody")
+            }
+
+            response
+        } catch (e: Exception) {
+            Log.e(TAG, "모임 수정 실패 - 네트워크 오류: ${e.message}")
+            throw Exception("모임 수정 중 오류가 발생했습니다: ${e.message}", e)
+        }
+    }
 }

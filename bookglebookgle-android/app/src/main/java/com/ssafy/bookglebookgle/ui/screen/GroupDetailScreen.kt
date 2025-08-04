@@ -31,6 +31,7 @@ import com.ssafy.bookglebookgle.ui.component.CustomTopAppBar
 import com.ssafy.bookglebookgle.ui.component.GroupEditDialog
 import com.ssafy.bookglebookgle.ui.theme.MainColor
 import com.ssafy.bookglebookgle.util.ScreenSize
+import com.ssafy.bookglebookgle.viewmodel.EditGroupUiState
 import com.ssafy.bookglebookgle.viewmodel.GroupDetailUiState
 import com.ssafy.bookglebookgle.viewmodel.GroupDetailViewModel
 import com.ssafy.bookglebookgle.viewmodel.JoinGroupUiState
@@ -44,6 +45,7 @@ fun GroupDetailScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val joinGroupState by viewModel.joinGroupState.collectAsStateWithLifecycle()
+    val editGroupState by viewModel.editGroupState.collectAsStateWithLifecycle()
     val currentIsMyGroup by viewModel.isMyGroup.collectAsStateWithLifecycle()
 
     // 수정 다이얼로그 상태
@@ -66,6 +68,23 @@ fun GroupDetailScreen(
             is JoinGroupUiState.Error -> {
                 Log.e("GroupDetailScreen", "그룹 가입 실패: ${(joinGroupState as JoinGroupUiState.Error).message}")
                 // 여기서 사용자에게 에러 메시지를 보여줄 수 있습니다 (Toast, Snackbar 등)
+            }
+            else -> {}
+        }
+    }
+
+    LaunchedEffect(editGroupState) {
+        when (editGroupState) {
+            is EditGroupUiState.Success -> {
+                Log.d("GroupDetailScreen", "그룹 수정 성공!")
+                viewModel.resetEditGroupState()
+                showEditDialog = false
+                // 수정 완료 후 화면 새로고침
+                viewModel.getGroupDetail(groupId)
+            }
+            is EditGroupUiState.Error -> {
+                Log.e("GroupDetailScreen", "그룹 수정 실패: ${(editGroupState as EditGroupUiState.Error).message}")
+                // TODO: 사용자에게 에러 메시지 표시 (Toast, Snackbar 등)
             }
             else -> {}
         }
@@ -124,11 +143,7 @@ fun GroupDetailScreen(
                         },
                         onSave = { editData ->
                             Log.d("GroupDetailScreen", "모임 수정 데이터: $editData")
-                            // TODO: ViewModel에 수정 로직 추가
-                            // viewModel.updateGroup(groupId, editData)
-                            showEditDialog = false
-                            // 수정 완료 후 화면 새로고침
-                            viewModel.getGroupDetail(groupId)
+                            viewModel.updateGroup(groupId, editData)
                         }
                     )
                 }
