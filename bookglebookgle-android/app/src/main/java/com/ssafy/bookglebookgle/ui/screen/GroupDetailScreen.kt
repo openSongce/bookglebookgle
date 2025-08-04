@@ -291,14 +291,14 @@ private fun GroupDetailContent(
 
                 Spacer(modifier = Modifier.height(ScreenSize.height * 0.05f))
 
-                // 방장이면 모임 삭제, 일반 멤버면 모임 탈퇴 버튼
+                // 모임장이면 모임 삭제, 일반 멤버면 모임 탈퇴 버튼
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(ScreenSize.height * 0.065f)
                         .clip(RoundedCornerShape(ScreenSize.width * 0.03f))
                         .background(
-                            if (isGroupLeader) Color(0xFFD32F2F) else Color(0xFF757575)
+                            Color(0xFFD32F2F)
                         )
                         .clickable {
                             if (isGroupLeader) {
