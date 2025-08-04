@@ -351,7 +351,7 @@ public class GroupServiceImpl implements GroupService {
 
     @Override
     public boolean isMember(Long groupId, Long userId) {
-        return groupRepository.existsByIdAndMembers_Id(groupId, userId);
+        return groupRepository.existsByIdAndGroupMembers_Id(groupId, userId);
         // 또는 group.getMembers().contains(userId) 등 상황에 맞게!
     }
 
