@@ -170,11 +170,12 @@ public class GroupServiceImpl implements GroupService {
     }
 
     @Override
-    public GroupDetailResponse getGroupDetail(Long groupId) {
+    public GroupDetailResponse getGroupDetail(Long groupId, User user) {
         Group group = groupRepository.findById(groupId)
                 .orElseThrow(() -> new NotFoundException("해당 모임이 존재하지 않습니다."));
 
         int memberCount = groupMemberRepository.countByGroup(group);
+        boolean isHost = group.getHostUser().getId().equals(user.getId());
 
         return new GroupDetailResponse(
                 group.getRoomTitle(),
@@ -183,7 +184,8 @@ public class GroupServiceImpl implements GroupService {
                 memberCount,
                 group.getGroupMaxNum(),
                 group.getDescription(),
-                null
+                null,
+                isHost
         );
     }
 
@@ -280,6 +282,8 @@ public class GroupServiceImpl implements GroupService {
         if (dto.getReadingMode() != null) group.setReadingMode(Group.ReadingMode.valueOf(dto.getReadingMode().toUpperCase()));
 
         int memberCount = groupMemberRepository.countByGroup(group);
+        boolean isHost = group.getHostUser().getId().equals(user.getId());
+
         return new GroupDetailResponse(
                 group.getRoomTitle(),
                 group.getCategory().name(),
@@ -287,7 +291,8 @@ public class GroupServiceImpl implements GroupService {
                 memberCount,
                 group.getGroupMaxNum(),
                 group.getDescription(),
-                null
+                null,
+                isHost
         );
     }
 
