@@ -8,7 +8,7 @@ import jakarta.annotation.PostConstruct;
 @Component
 public class RedisConfigCheck {
 
-    @Value("${spring.redis.host}")
+    @Value("${spring.data.redis.host}")
     private String redisHost;
 
     @PostConstruct
