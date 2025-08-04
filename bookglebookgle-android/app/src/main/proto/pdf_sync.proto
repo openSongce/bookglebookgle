@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+package pdfsync;
+
+option java_package = "com.ssafy.bookglebookgle.grpc";
+option java_multiple_files = true;
+
+service PdfSyncService {
+  rpc JoinRoom(JoinRequest) returns (stream SyncMessage);
+  rpc SendMessage(SyncMessage) returns (Ack);
+}
+
+message JoinRequest {
+  int64 groupId = 1;
+  string userId = 2;
+}
+
+message SyncMessage {
+  string userId = 1;
+  int32 currentPage = 2;
+  Annotation annotation = 3;
+}
+
+message Annotation {
+  enum Type {
+    COMMENT = 0;
+    HIGHLIGHT = 1;
+    DELETE = 2;
+  }
+  Type type = 1;
+  string snippet = 2;
+  string text = 3;
+  int32 page = 4;
+  Coordinates coordinates = 5;
+}
+
+message Coordinates {
+  double startX = 1;
+  double startY = 2;
+  double endX = 3;
+  double endY = 4;
+}
+
+message Ack {
+  string message = 1;
+}
