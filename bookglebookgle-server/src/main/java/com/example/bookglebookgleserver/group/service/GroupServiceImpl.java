@@ -15,12 +15,12 @@ import com.example.bookglebookgleserver.ocr.service.OcrService;
 import com.example.bookglebookgleserver.pdf.entity.PdfFile;
 import com.example.bookglebookgleserver.pdf.repository.PdfFileRepository;
 import com.example.bookglebookgleserver.user.entity.User;
+import com.example.bookglebookgleserver.user.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
@@ -43,7 +43,7 @@ public class GroupServiceImpl implements GroupService {
     private final PdfFileRepository pdfFileRepository;
     private final GrpcOcrClient grpcOcrClient;
     private final OcrService ocrService;
-    private final StringRedisTemplate redisTemplate;
+    private final UserRepository userRepository;
 
     @Override
     @Transactional
@@ -362,4 +362,18 @@ public class GroupServiceImpl implements GroupService {
                 .orElseThrow(() -> new NotFoundException("해당 그룹이 존재하지 않습니다."));
         return group.getHostUser().getId().equals(userId);
     }
+
+    @Override
+    public int getLastPageRead(Long groupId, Long userId) {
+        Group group = groupRepository.findById(groupId)
+                .orElseThrow(() -> new NotFoundException("그룹을 찾을 수 없습니다."));
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("유저를 찾을 수 없습니다."));
+
+        GroupMember member = groupMemberRepository.findByGroupAndUser(group, user)
+                .orElseThrow(() -> new NotFoundException("해당 그룹 멤버를 찾을 수 없습니다."));
+
+        return member.getLastPageRead();
+    }
+
 }
