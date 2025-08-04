@@ -12,7 +12,7 @@ public interface GroupService {
     GroupCreateResponseDto createGroup(GroupCreateRequestDto dto, MultipartFile pdfFile, User user);
     void createGroupWithoutOcr(GroupCreateRequestDto dto, MultipartFile pdfFile, User user);
     List<GroupListResponseDto> getGroupList();
-    GroupDetailResponse getGroupDetail(Long groupId);
+    GroupDetailResponse getGroupDetail(Long groupId, User user);
     ResponseEntity<Resource> getPdfFileResponse(Long groupId, User user);
     List<MyGroupSummaryDto> getMyGroupList(Long userId);
     void joinGroup(Long groupId, User user);
