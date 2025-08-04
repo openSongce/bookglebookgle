@@ -67,7 +67,7 @@ interface GroupApi {
     /**
      * 모임 삭제
      * */
-    @DELETE("groups/{groupId}")
+    @DELETE("group/{groupId}")
     suspend fun deleteGroup(
         @Path("groupId") groupId: Long
     ): Response<ResponseBody>

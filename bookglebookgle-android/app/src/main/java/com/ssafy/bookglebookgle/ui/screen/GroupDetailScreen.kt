@@ -45,21 +45,10 @@ fun GroupDetailScreen(
     val joinGroupState by viewModel.joinGroupState.collectAsStateWithLifecycle()
     val currentIsMyGroup by viewModel.isMyGroup.collectAsStateWithLifecycle()
 
-    // 임시로 그룹 방장 여부를 판단하는 변수 (실제로는 API 응답에서 받아와야 함)
-    var isGroupLeader by remember { mutableStateOf(false) }
-
     // 컴포넌트가 처음 생성될 때 그룹 상세 정보 조회
     LaunchedEffect(groupId, isMyGroup) {
         viewModel.setInitialMyGroupState(isMyGroup)
         viewModel.getGroupDetail(groupId)
-    }
-
-    // 그룹 상세 정보 로드 완료 시 방장 여부 설정
-    LaunchedEffect(uiState) {
-        if (uiState is GroupDetailUiState.Success) {
-            // Todo: 실제로는 API 응답에서 isLeader 또는 createdBy 등의 필드로 판단해야 함
-            isGroupLeader = true
-        }
     }
 
     // 가입 성공 시 처리
@@ -108,12 +97,13 @@ fun GroupDetailScreen(
                 GroupDetailContent(
                     groupDetail = currentState.groupDetail,
                     isMyGroup = currentIsMyGroup,
-                    isGroupLeader = isGroupLeader,
                     isJoining = joinGroupState is JoinGroupUiState.Loading,
                     navController = navController,
                     groupId = groupId,
                     onJoinClick = { viewModel.joinGroup(groupId) },
-                    onDeleteClick = { viewModel.deleteGroup(groupId) },
+                    onDeleteClick = {
+                        viewModel.deleteGroup(groupId)
+                        navController.popBackStack() },
                     onLeaveClick = { /* Todo: 탈퇴 로직 구현 */ }
                 )
             }
@@ -129,7 +119,6 @@ fun GroupDetailScreen(
 private fun GroupDetailContent(
     groupDetail: GroupDetailResponse,
     isMyGroup: Boolean,
-    isGroupLeader: Boolean,
     isJoining: Boolean,
     navController: NavHostController,
     groupId: Long,
@@ -301,7 +290,7 @@ private fun GroupDetailContent(
                             Color(0xFFD32F2F)
                         )
                         .clickable {
-                            if (isGroupLeader) {
+                            if (groupDetail.isHost) {
                                 onDeleteClick()
                             } else {
                                 onLeaveClick()
@@ -310,7 +299,7 @@ private fun GroupDetailContent(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = if (isGroupLeader) "모임 삭제" else "모임 탈퇴",
+                        text = if (groupDetail.isHost) "모임 삭제" else "모임 탈퇴",
                         color = Color.White,
                         fontSize = ScreenSize.width.value.times(0.04f).sp,
                         fontWeight = FontWeight.Bold

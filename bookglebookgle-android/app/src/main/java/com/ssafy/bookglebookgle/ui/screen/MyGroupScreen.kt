@@ -56,6 +56,10 @@ fun MyGroupScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
+    LaunchedEffect(Unit) {
+        viewModel.loadMyGroups()
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
