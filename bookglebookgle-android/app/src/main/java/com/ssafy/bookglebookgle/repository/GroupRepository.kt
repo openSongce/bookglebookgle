@@ -34,4 +34,5 @@ interface GroupRepository {
         groupInfo: RequestBody,
     ): Response<ResponseBody>
 
+    suspend fun searchGroups(roomTitle: String): Response<List<GroupListResponse>>
 }

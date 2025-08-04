@@ -41,10 +41,22 @@ fun MainScreen(navController: NavHostController, viewModel: MainViewModel = hilt
     val readingGroups = viewModel.readingGroups.value
     val studyGroups = viewModel.studyGroups.value
     val reviewGroups = viewModel.reviewGroups.value
-    val groups = when (selectedTab) {
-        "독서" -> readingGroups
-        "학습" -> studyGroups
-        else -> reviewGroups
+    val searchResults = viewModel.searchResults.value
+    val isSearching = viewModel.isSearching.value
+    val isInSearchMode = viewModel.isInSearchMode()
+
+    val groups = if (isInSearchMode) {
+        when (selectedTab) {
+            "독서" -> viewModel.getSearchResultsByCategory("READING")
+            "학습" -> viewModel.getSearchResultsByCategory("STUDY")
+            else -> viewModel.getSearchResultsByCategory("REVIEW")
+        }
+    } else {
+        when (selectedTab) {
+            "독서" -> readingGroups
+            "학습" -> studyGroups
+            else -> reviewGroups
+        }
     }
 
     val tabs = listOf("독서", "학습", "첨삭")
@@ -58,42 +70,86 @@ fun MainScreen(navController: NavHostController, viewModel: MainViewModel = hilt
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .imePadding()
     ) {
-        CustomTopAppBar(title = "main_home", navController = navController)
+        CustomTopAppBar(
+            title = "main_home",
+            navController = navController,
+            onSearchPerformed = { query ->
+                viewModel.searchGroups(query)
+            },
+            onSearchCancelled = {
+                viewModel.clearSearchResults()
+            }
+
+        )
 
         LazyColumn(
             modifier = Modifier.fillMaxSize()
         ) {
-            // 카테고리 추천 섹션
-            item {
-                Text(
-                    text = "추천 모임",
-                    fontSize = ScreenSize.width.value.times(0.06f).sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(start = horizontalPadding, top = verticalPadding)
-                )
-            }
-
-            item {
-                LazyRow(
-                    contentPadding = PaddingValues(
-                        horizontal = horizontalPadding,
-                        vertical = verticalPadding
-                    )
-                ) {
-                    items(meetingCard) { card ->
-                        RecommendCard(
-                            title = card.first,
-                            description = card.second,
-                            imageRes = card.third,
-                            width = ScreenSize.width * 0.8f,
-                            height = ScreenSize.height * 0.2f,
-                            rightMargin = horizontalPadding
+            // 검색 모드가 아닐 때만 추천 섹션 표시
+            if (!isInSearchMode) {
+                // 카테고리 추천 섹션
+                item {
+                    Text(
+                        text = "추천 모임",
+                        fontSize = ScreenSize.width.value.times(0.06f).sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(
+                            start = horizontalPadding,
+                            top = verticalPadding
                         )
+                    )
+                }
+
+                item {
+                    LazyRow(
+                        contentPadding = PaddingValues(
+                            horizontal = horizontalPadding,
+                            vertical = verticalPadding
+                        )
+                    ) {
+                        items(meetingCard) { card ->
+                            RecommendCard(
+                                title = card.first,
+                                description = card.second,
+                                imageRes = card.third,
+                                width = ScreenSize.width * 0.8f,
+                                height = ScreenSize.height * 0.2f,
+                                rightMargin = horizontalPadding
+                            )
+                        }
                     }
                 }
             }
+//            // 카테고리 추천 섹션
+//            item {
+//                Text(
+//                    text = "추천 모임",
+//                    fontSize = ScreenSize.width.value.times(0.06f).sp,
+//                    fontWeight = FontWeight.Bold,
+//                    modifier = Modifier.padding(start = horizontalPadding, top = verticalPadding)
+//                )
+//            }
+//
+//            item {
+//                LazyRow(
+//                    contentPadding = PaddingValues(
+//                        horizontal = horizontalPadding,
+//                        vertical = verticalPadding
+//                    )
+//                ) {
+//                    items(meetingCard) { card ->
+//                        RecommendCard(
+//                            title = card.first,
+//                            description = card.second,
+//                            imageRes = card.third,
+//                            width = ScreenSize.width * 0.8f,
+//                            height = ScreenSize.height * 0.2f,
+//                            rightMargin = horizontalPadding
+//                        )
+//                    }
+//                }
+//            }
 
             // 카테고리별 모임 헤더 - 스크롤 시 상단에 고정
             stickyHeader {
@@ -108,8 +164,14 @@ fun MainScreen(navController: NavHostController, viewModel: MainViewModel = hilt
                             .padding(vertical = verticalPadding)
 
                     ) {
+//                        Text(
+//                            text = "카테고리별 모임",
+//                            fontSize = ScreenSize.width.value.times(0.06f).sp,
+//                            fontWeight = FontWeight.Bold,
+//                            modifier = Modifier.padding(horizontal = horizontalPadding)
+//                        )
                         Text(
-                            text = "카테고리별 모임",
+                            text = if (isInSearchMode) "검색 결과" else "카테고리별 모임",
                             fontSize = ScreenSize.width.value.times(0.06f).sp,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(horizontal = horizontalPadding)
@@ -152,43 +214,108 @@ fun MainScreen(navController: NavHostController, viewModel: MainViewModel = hilt
             }
 
             // 모임 리스트
-                if (groups.isEmpty()) {
-                    item {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(ScreenSize.height * 0.3f),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "생성된 모임이 없습니다\n" +
-                                        "모임을 생성해보세요!",
-                                color = Color.Gray,
-                                textAlign = TextAlign.Center,
-                                fontSize = ScreenSize.width.value.times(0.04f).sp
-                            )
-                        }
-                    }
-                } else {
-                    itemsIndexed(groups) { index, group ->
-                        MeetingCard(
-                            group = group,
-                        ) {
-                            navController.currentBackStackEntry?.savedStateHandle?.set("groupId", group.groupId)
-                            navController.currentBackStackEntry?.savedStateHandle?.set("isMyGroup", false)
-                            navController.navigate(Screen.GroupDetailScreen.route)
-                        }
-
-                        // 마지막 아이템이 아닐 때만 구분선 추가
-                        if (index < groups.size - 1) {
-                            HorizontalDivider(
-                                color = Color(0xFFE0E0E0),
-                                thickness = 0.5.dp,
-                                modifier = Modifier.padding(horizontal = horizontalPadding)
-                            )
-                        }
+            if (groups.isEmpty() && !isSearching) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(ScreenSize.height * 0.3f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = if (isInSearchMode) {
+                                "검색 결과가 없습니다\n" +
+                                        "다른 검색어를 시도해보세요"
+                            } else {
+                                "생성된 모임이 없습니다\n" +
+                                        "모임을 생성해보세요!"
+                            },
+                            color = Color.Gray,
+                            textAlign = TextAlign.Center,
+                            fontSize = ScreenSize.width.value.times(0.04f).sp
+                        )
                     }
                 }
+            } else {
+                itemsIndexed(groups) { index, group ->
+                    MeetingCard(
+                        group = group,
+                    ) {
+                        navController.currentBackStackEntry?.savedStateHandle?.set(
+                            "groupId",
+                            group.groupId
+                        )
+                        navController.currentBackStackEntry?.savedStateHandle?.set(
+                            "isMyGroup",
+                            false
+                        )
+                        navController.navigate(Screen.GroupDetailScreen.route)
+                    }
+
+                    // 마지막 아이템이 아닐 때만 구분선 추가
+                    if (index < groups.size - 1) {
+                        HorizontalDivider(
+                            color = Color(0xFFE0E0E0),
+                            thickness = 0.5.dp,
+                            modifier = Modifier.padding(horizontal = horizontalPadding)
+                        )
+                    }
+                }
+            }
+
+            // 검색 모드일 때 전체 검색 결과 수 표시
+            if (isInSearchMode && searchResults.isNotEmpty()) {
+                item {
+                    Text(
+                        text = "총 ${searchResults.size}개의 모임이 검색되었습니다",
+                        color = Color.Gray,
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(
+                            horizontal = horizontalPadding,
+                            vertical = 8.dp
+                        )
+                    )
+                }
+            }
+
+//            // 모임 리스트
+//                if (groups.isEmpty()) {
+//                    item {
+//                        Box(
+//                            modifier = Modifier
+//                                .fillMaxWidth()
+//                                .height(ScreenSize.height * 0.3f),
+//                            contentAlignment = Alignment.Center
+//                        ) {
+//                            Text(
+//                                text = "생성된 모임이 없습니다\n" +
+//                                        "모임을 생성해보세요!",
+//                                color = Color.Gray,
+//                                textAlign = TextAlign.Center,
+//                                fontSize = ScreenSize.width.value.times(0.04f).sp
+//                            )
+//                        }
+//                    }
+//                } else {
+//                    itemsIndexed(groups) { index, group ->
+//                        MeetingCard(
+//                            group = group,
+//                        ) {
+//                            navController.currentBackStackEntry?.savedStateHandle?.set("groupId", group.groupId)
+//                            navController.currentBackStackEntry?.savedStateHandle?.set("isMyGroup", false)
+//                            navController.navigate(Screen.GroupDetailScreen.route)
+//                        }
+//
+//                        // 마지막 아이템이 아닐 때만 구분선 추가
+//                        if (index < groups.size - 1) {
+//                            HorizontalDivider(
+//                                color = Color(0xFFE0E0E0),
+//                                thickness = 0.5.dp,
+//                                modifier = Modifier.padding(horizontal = horizontalPadding)
+//                            )
+//                        }
+//                    }
+//                }
 
             // 하단 여백
             item {
@@ -263,12 +390,14 @@ fun MeetingCard(group: GroupListResponse, onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = when (group.category) {
-                    "STUDY" -> "스터디"
-                    "READING" -> "독서"
-                    "REVIEW" -> "첨삭"
-                    else -> group.category // 예외 처리: 혹시 다른 값이 있을 경우 그대로 출력
-                }, fontSize = screenWidth.value.times(0.03f).sp, color = Color(0xFFD2B48C))
+                Text(
+                    text = when (group.category) {
+                        "STUDY" -> "스터디"
+                        "READING" -> "독서"
+                        "REVIEW" -> "첨삭"
+                        else -> group.category // 예외 처리: 혹시 다른 값이 있을 경우 그대로 출력
+                    }, fontSize = screenWidth.value.times(0.03f).sp, color = Color(0xFFD2B48C)
+                )
                 Text(group.roomTitle, fontWeight = FontWeight.Bold)
                 Text(
                     group.description,
@@ -292,12 +421,16 @@ fun MeetingCard(group: GroupListResponse, onClick: () -> Unit) {
             }
             Spacer(modifier = Modifier.width(screenWidth * 0.03f))
             Image(
-                painter = painterResource(id = when (group.category) {
-                    "READING" -> R.drawable.book_group
-                    "STUDY" -> R.drawable.study_group
-                    "REVIEW" -> R.drawable.editing_group
-                    else -> { R.drawable.profile_example}
-                }),
+                painter = painterResource(
+                    id = when (group.category) {
+                        "READING" -> R.drawable.book_group
+                        "STUDY" -> R.drawable.study_group
+                        "REVIEW" -> R.drawable.editing_group
+                        else -> {
+                            R.drawable.profile_example
+                        }
+                    }
+                ),
                 contentDescription = null,
                 modifier = Modifier
                     .size(imageSize)

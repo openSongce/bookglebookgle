@@ -236,4 +236,33 @@ class GroupRepositoryImpl @Inject constructor(
             throw Exception("모임 수정 중 오류가 발생했습니다: ${e.message}", e)
         }
     }
+
+    /**
+     * 모임 검색
+     * @param roomTitle 검색할 방 제목
+     * @return 검색된 그룹 리스트
+     */
+    override suspend fun searchGroups(roomTitle: String): Response<List<GroupListResponse>> {
+        return try {
+            Log.d(TAG, "모임 검색 요청 시작 - roomTitle: $roomTitle")
+
+            val response = groupApi.searchGroups(roomTitle)
+
+            if (response.isSuccessful) {
+                Log.d(TAG, "모임 검색 성공 - 응답코드: ${response.code()}")
+                response.body()?.let { groups ->
+                    Log.d(TAG, "검색 결과 - 총 ${groups.size}개 모임 발견")
+                }
+            } else {
+                val errorBody = response.errorBody()?.string()
+                Log.d(TAG, "모임 검색 실패 - 응답코드: ${response.code()}, 메시지: ${response.message()}")
+                Log.d(TAG, "서버 에러 메시지: $errorBody")
+            }
+
+            response
+        } catch (e: Exception) {
+            Log.e(TAG, "모임 검색 실패 - 네트워크 오류: ${e.message}")
+            throw Exception("모임 검색 중 오류가 발생했습니다: ${e.message}", e)
+        }
+    }
 }

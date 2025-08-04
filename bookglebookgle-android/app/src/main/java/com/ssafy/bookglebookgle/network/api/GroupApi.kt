@@ -1,5 +1,6 @@
 package com.ssafy.bookglebookgle.network.api
 
+import androidx.constraintlayout.widget.Group
 import com.ssafy.bookglebookgle.entity.GroupDetailResponse
 import com.ssafy.bookglebookgle.entity.GroupListResponse
 import com.ssafy.bookglebookgle.entity.MyGroupResponse
@@ -82,4 +83,11 @@ interface GroupApi {
         @Part("groupInfo") groupInfo: RequestBody,
     ): Response<ResponseBody>
 
+    /**
+     * 모임 검색
+     * */
+    @GET("group/search")
+    suspend fun searchGroups(
+        @Query("roomTitle") roomTitle: String
+    ): Response<List<GroupListResponse>>
 }

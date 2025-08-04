@@ -26,6 +26,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -35,6 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -57,10 +59,24 @@ fun CustomTopAppBar(
     isPdfView: Boolean = false,
     onBackPressed: (() -> Unit)? = null, // 뒤로가기 버튼 클릭 콜백
     onEditClick: (() -> Unit)? = null,
-    onSearchPerformed: ((String) -> Unit)? = null // 검색 실행 콜백
+    onSearchPerformed: ((String) -> Unit)? = null, // 검색 실행 콜백
+    onSearchCancelled: (() -> Unit)? = null // 검색 취소 콜백 추가
 ) {
     var isSearchMode by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    // 디바운스를 위한 LaunchedEffect
+    LaunchedEffect(searchQuery) {
+        if (searchQuery.isNotBlank()) {
+            // 0.3초 지연 후 검색 실행
+            kotlinx.coroutines.delay(300)
+            onSearchPerformed?.invoke(searchQuery.trim())
+        } else if (searchQuery.isEmpty()) {
+            // 검색어가 비어있으면 즉시 검색 결과 초기화
+            onSearchCancelled?.invoke()
+        }
+    }
 
     TopAppBar(
         title = {
@@ -80,7 +96,9 @@ fun CustomTopAppBar(
                     ) {
                         BasicTextField(
                             value = searchQuery,
-                            onValueChange = { searchQuery = it },
+                            onValueChange = { newValue ->
+                                searchQuery = newValue
+                            },
                             singleLine = true,
                             textStyle = TextStyle(
                                 fontSize = 12.sp,
@@ -93,7 +111,8 @@ fun CustomTopAppBar(
                             keyboardActions = KeyboardActions(
                                 onSearch = {
                                     if (searchQuery.isNotBlank()) {
-                                        onSearchPerformed?.invoke(searchQuery)
+                                        onSearchPerformed?.invoke(searchQuery.trim())
+                                        keyboardController?.hide()
                                     }
                                 }
                             ),
@@ -219,6 +238,9 @@ fun CustomTopAppBar(
                             .clickable {
                                 isSearchMode = false
                                 searchQuery = ""
+                                keyboardController?.hide()
+                                // 검색 취소 시 결과 초기화
+                                onSearchCancelled?.invoke()
                             }
                     )
                     Spacer(modifier = Modifier.width(12.dp))
@@ -230,7 +252,8 @@ fun CustomTopAppBar(
                             .size(20.dp)
                             .clickable {
                                 if (searchQuery.isNotBlank()) {
-                                    onSearchPerformed?.invoke(searchQuery)
+                                    onSearchPerformed?.invoke(searchQuery.trim())
+                                    keyboardController?.hide()
                                 }
                             }
                     )
