@@ -12,8 +12,10 @@ from loguru import logger
 
 from src.config.settings import get_settings
 from src.services.discussion_service import DiscussionService
+from src.services.simplified_ocr_service import SimplifiedOCRService
 from src.services.vector_db import VectorDBManager
 from src.models.schemas import OcrBlock, ProcessDocumentRequest
+from src.api.monitoring_routes import router as monitoring_router
 
 
 router = APIRouter()
@@ -25,6 +27,10 @@ def get_vector_db():
 
 def get_discussion_service():
     return DiscussionService()
+
+def get_simplified_ocr_service():
+    # Create and initialize SimplifiedOCRService with PaddleOCR (no LLM postprocessing)
+    return SimplifiedOCRService(enable_llm_postprocessing=False)
 
 # 모바일 앱용 간단한 요청 모델들
 
@@ -184,5 +190,72 @@ async def process_structured_document(
 
 # Removed /mobile/store-progress-document endpoint - now handled automatically in ProcessPdf and ProcessDocument
 
+# SimplifiedOCRService 테스트 엔드포인트들
+
+class OCRTestRequest(BaseModel):
+    """OCR 테스트 요청 모델"""
+    document_id: str
+    enable_llm_postprocessing: bool = True
+
+@router.post("/test/ocr")
+async def test_simplified_ocr(
+    request: OCRTestRequest,
+    ocr_service: SimplifiedOCRService = Depends(get_simplified_ocr_service)
+):
+    """SimplifiedOCRService 테스트 엔드포인트 (개발용)"""
+    try:
+        # OCR 서비스 초기화
+        init_success = await ocr_service.initialize()
+        if not init_success:
+            raise HTTPException(status_code=500, detail="OCR service initialization failed")
+        
+        # 서비스 정보 반환 (실제 PDF 처리 없이 테스트)
+        service_info = ocr_service.get_service_info()
+        processing_stats = ocr_service.get_processing_statistics()
+        
+        return {
+            "success": True,
+            "message": "SimplifiedOCRService test completed",
+            "service_info": service_info,
+            "processing_statistics": processing_stats,
+            "test_config": {
+                "document_id": request.document_id,
+                "llm_postprocessing_enabled": request.enable_llm_postprocessing
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"OCR service test failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/ocr/info")
+async def get_ocr_service_info(
+    ocr_service: SimplifiedOCRService = Depends(get_simplified_ocr_service)
+):
+    """OCR 서비스 정보 조회"""
+    try:
+        # 초기화 시도
+        await ocr_service.initialize()
+        
+        service_info = ocr_service.get_service_info()
+        processing_stats = ocr_service.get_processing_statistics()
+        
+        return {
+            "service_info": service_info,
+            "processing_statistics": processing_stats,
+            "endpoints": {
+                "test_ocr": "/api/v1/test/ocr",
+                "ocr_info": "/api/v1/ocr/info",
+                "health": "/api/v1/health"
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get OCR service info: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # 진도율 기반 퀴즈 생성 API는 나중에 구현 예정
 # 위치 기반 토론 주제 생성은 모바일 앱에서 불필요하므로 제거
+
+# Include monitoring routes
+router.include_router(monitoring_router)

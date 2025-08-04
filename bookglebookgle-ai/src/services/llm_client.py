@@ -33,6 +33,29 @@ class LLMClient:
         self.gemini_client: Optional[genai.GenerativeModel] = None
         self.openrouter_client: Optional[openai.AsyncOpenAI] = None  
 
+    def _is_valid_api_key(self, api_key: Optional[str]) -> bool:
+        """Check if API key is valid (not empty or placeholder)"""
+        if not api_key:
+            return False
+        
+        # Check for common placeholder patterns
+        placeholder_patterns = [
+            "YOUR_", "ENTER_", "INSERT_", "ADD_", "REPLACE_",
+            "_HERE", "_KEY_HERE", "sk-...", "sk-xxx", "your-", "placeholder"
+        ]
+        
+        api_key_upper = api_key.upper()
+        for pattern in placeholder_patterns:
+            if pattern in api_key_upper:
+                return False
+        
+        # Check minimum length (most API keys are at least 20 characters)
+        # Exception for Gemini keys which can be shorter but valid
+        if api_key.startswith("AIza"):
+            return len(api_key) >= 35  # Gemini API keys are typically 39 characters
+        
+        return len(api_key) >= 20
+
     async def initialize(self):
         """Initialize LLM clients"""
         try:
@@ -40,34 +63,43 @@ class LLMClient:
             logger.info(f"🔍 Debug - Mock Responses: {self.settings.ai.MOCK_AI_RESPONSES}")
             
             # Initialize OpenAI client
-            if self.settings.ai.OPENAI_API_KEY:
+            if self._is_valid_api_key(self.settings.ai.OPENAI_API_KEY):
                 self.openai_client = openai.AsyncOpenAI(
                     api_key=self.settings.ai.OPENAI_API_KEY
                 )
-                logger.info("OpenAI client initialized")
+                logger.info("✅ OpenAI client initialized")
+            else:
+                logger.info("⚠️ OpenAI API key not configured or invalid")
             
             # Initialize Anthropic client
-            if self.settings.ai.ANTHROPIC_API_KEY:
+            if self._is_valid_api_key(self.settings.ai.ANTHROPIC_API_KEY):
                 self.anthropic_client = anthropic.AsyncAnthropic(
                     api_key=self.settings.ai.ANTHROPIC_API_KEY
                 )
-                logger.info("Anthropic client initialized")
+                logger.info("✅ Anthropic client initialized")
+            else:
+                logger.info("⚠️ Anthropic API key not configured or invalid")
             
             # Initialize Gemini client
-            if self.settings.ai.GEMINI_API_KEY:
+            if self._is_valid_api_key(self.settings.ai.GEMINI_API_KEY):
                 genai.configure(api_key=self.settings.ai.GEMINI_API_KEY)
                 self.gemini_client = genai.GenerativeModel(self.settings.ai.GEMINI_MODEL)
-                logger.info(f"Gemini client initialized with model: {self.settings.ai.GEMINI_MODEL}")
+                logger.info(f"✅ Gemini client initialized with model: {self.settings.ai.GEMINI_MODEL}")
+            else:
+                logger.info("⚠️ Gemini API key not configured or invalid")
 
-            if self.settings.ai.OPENROUTER_API_KEY:
+            if self._is_valid_api_key(self.settings.ai.OPENROUTER_API_KEY):
                 self.openrouter_client = openai.AsyncOpenAI(
                     api_key=self.settings.ai.OPENROUTER_API_KEY,
                     base_url=self.settings.ai.OPENROUTER_BASE_URL
             )
-                logger.info("OpenRouter client initialized")
+                logger.info("✅ OpenRouter client initialized")
+            else:
+                logger.info("⚠️ OpenRouter API key not configured or invalid")
             
             if not any([self.openai_client, self.anthropic_client, self.gemini_client, self.openrouter_client]):
-                logger.warning("No LLM clients initialized - using mock responses")
+                logger.warning("❌ No valid LLM clients initialized - using mock responses")
+                logger.info("💡 To use real LLM services, configure valid API keys in .env file")
                 
         except Exception as e:
             logger.error(f"Failed to initialize LLM clients: {e}")
@@ -87,7 +119,7 @@ class LLMClient:
         if self.settings.ai.MOCK_AI_RESPONSES:
             return await self._mock_completion(prompt)
         
-        # Determine provider
+        # Determine provider - prioritize GMS if available
         if not provider:
             provider = self._get_preferred_provider()
         
@@ -100,12 +132,21 @@ class LLMClient:
                 return await self._gemini_completion(prompt, system_message, max_tokens, temperature)
             elif provider == LLMProvider.OPENROUTER and self.openrouter_client:
                 return await self._openrouter_completion(prompt, system_message, max_tokens, temperature, model)
+            elif self._is_valid_api_key(self.settings.ai.GMS_API_KEY):
+                # Use GMS as fallback or primary choice
+                return await self._gms_completion(prompt, system_message, max_tokens, temperature)
             else:
                 logger.warning("Falling back to mock completion")
                 return await self._mock_completion(prompt)
                 
         except Exception as e:
             logger.error(f"LLM completion failed with {provider.value}: {e}")
+            # Try GMS as fallback if not already tried
+            if provider != "GMS" and self._is_valid_api_key(self.settings.ai.GMS_API_KEY):
+                try:
+                    return await self._gms_completion(prompt, system_message, max_tokens, temperature)
+                except Exception as gms_e:
+                    logger.error(f"GMS fallback also failed: {gms_e}")
             return await self._mock_completion(prompt)
     
     async def _openai_completion(
@@ -178,27 +219,80 @@ class LLMClient:
             if system_message:
                 full_prompt = f"{system_message}\n\n{prompt}"
             
+            logger.debug(f"Gemini API call - Prompt length: {len(full_prompt)}")
+            
+            # Safety settings to prevent blocking
+            safety_settings = [
+                {
+                    "category": "HARM_CATEGORY_HARASSMENT",
+                    "threshold": "BLOCK_NONE"
+                },
+                {
+                    "category": "HARM_CATEGORY_HATE_SPEECH", 
+                    "threshold": "BLOCK_NONE"
+                },
+                {
+                    "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                    "threshold": "BLOCK_NONE"
+                },
+                {
+                    "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+                    "threshold": "BLOCK_NONE"
+                }
+            ]
+            
             # Gemini generation configuration
             generation_config = genai.types.GenerationConfig(
                 max_output_tokens=max_tokens,
                 temperature=temperature,
             )
             
-            # Generate content asynchronously
+            # Generate content asynchronously with safety settings
             response = await self.gemini_client.generate_content_async(
                 full_prompt,
-                generation_config=generation_config
+                generation_config=generation_config,
+                safety_settings=safety_settings
             )
             
-            # Extract text from response
-            if response and response.text:
-                return response.text.strip()
+            logger.debug(f"Gemini API response received")
+            
+            # Detailed response checking
+            if response:
+                logger.debug(f"Response object exists")
+                
+                # Check for blocked content first
+                if hasattr(response, 'prompt_feedback') and response.prompt_feedback:
+                    if response.prompt_feedback.block_reason:
+                        logger.warning(f"Gemini blocked content: {response.prompt_feedback.block_reason}")
+                        return ""
+                
+                # Check candidates
+                if hasattr(response, 'candidates') and response.candidates:
+                    candidate = response.candidates[0]
+                    if hasattr(candidate, 'finish_reason'):
+                        logger.debug(f"Finish reason: {candidate.finish_reason}")
+                    
+                    if hasattr(candidate, 'safety_ratings'):
+                        for rating in candidate.safety_ratings:
+                            logger.debug(f"Safety rating - {rating.category}: {rating.probability}")
+                
+                # Extract text from response
+                if hasattr(response, 'text') and response.text:
+                    result_text = response.text.strip()
+                    logger.debug(f"Gemini response length: {len(result_text)}")
+                    return result_text
+                else:
+                    logger.warning("Gemini response has no text content")
+                    logger.debug(f"Response attributes: {dir(response)}")
+                    return ""
             else:
-                logger.warning("Gemini returned empty response")
+                logger.warning("Gemini returned None response")
                 return ""
             
         except Exception as e:
             logger.error(f"Gemini completion failed: {e}")
+            logger.error(f"Error type: {type(e)}")
+            logger.error(f"Prompt preview: {full_prompt[:200]}...")
             raise
     
     async def _openrouter_completion(
@@ -243,6 +337,56 @@ class LLMClient:
             logger.error(f"OpenRouter completion failed: {e}")
             raise
     
+    async def _gms_completion(
+        self,
+        prompt: str,
+        system_message: Optional[str],
+        max_tokens: int,
+        temperature: float
+    ) -> str:
+        """Generate completion using GMS (SSAFY Anthropic proxy)"""
+        import httpx
+        
+        try:
+            logger.info("Using GMS for completion")
+            
+            headers = {
+                "Content-Type": "application/json",
+                "x-api-key": self.settings.ai.GMS_API_KEY,
+                "anthropic-version": "2023-06-01"
+            }
+            
+            # 개발/프로덕션 모델 선택
+            model = self.settings.ai.GMS_DEV_MODEL if self.settings.DEBUG else self.settings.ai.GMS_PROD_MODEL
+            logger.info(f"Using GMS model: {model}")
+            
+            data = {
+                "model": model,
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+                "messages": [{"role": "user", "content": prompt}]
+            }
+            
+            if system_message:
+                data["system"] = system_message
+            
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    f"{self.settings.ai.GMS_BASE_URL}/messages",
+                    headers=headers,
+                    json=data
+                )
+                response.raise_for_status()
+                result = response.json()
+                
+                content = result["content"][0]["text"]
+                logger.info(f"GMS response received (length: {len(content)} chars)")
+                return content.strip()
+                
+        except Exception as e:
+            logger.error(f"GMS completion failed: {e}")
+            raise
+    
     async def _mock_completion(self, prompt: str) -> str:
         """Generate mock completion for development/testing"""
         logger.debug("Using mock LLM completion")
@@ -275,6 +419,168 @@ D) 소셜 네트워킹
         
         else:
             return f"Mock response for: {prompt[:100]}..."
+
+    async def generate_completion_stream(
+        self,
+        prompt: str,
+        system_message: Optional[str] = None,
+        max_tokens: int = 1000,
+        temperature: float = 0.7,
+        provider: Optional[LLMProvider] = None,
+        model: Optional[str] = None
+    ):
+        """Generate streaming text completion using specified LLM provider"""
+        
+        if self.settings.ai.MOCK_AI_RESPONSES:
+            async for chunk in self._mock_completion_stream(prompt):
+                yield chunk
+            return
+        
+        # Determine provider
+        if not provider:
+            provider = self._get_preferred_provider()
+        
+        try:
+            if provider == LLMProvider.GEMINI and self.gemini_client:
+                async for chunk in self._gemini_completion_stream(prompt, system_message, max_tokens, temperature):
+                    yield chunk
+            elif provider == LLMProvider.OPENAI and self.openai_client:
+                async for chunk in self._openai_completion_stream(prompt, system_message, max_tokens, temperature):
+                    yield chunk
+            elif provider == LLMProvider.OPENROUTER and self.openrouter_client:
+                async for chunk in self._openrouter_completion_stream(prompt, system_message, max_tokens, temperature, model):
+                    yield chunk
+            else:
+                logger.warning("Falling back to mock streaming completion")
+                async for chunk in self._mock_completion_stream(prompt):
+                    yield chunk
+                    
+        except Exception as e:
+            logger.error(f"LLM streaming completion failed with {provider.value}: {e}")
+            async for chunk in self._mock_completion_stream(prompt):
+                yield chunk
+
+    async def _gemini_completion_stream(
+        self,
+        prompt: str,
+        system_message: Optional[str],
+        max_tokens: int,
+        temperature: float
+    ):
+        """Generate streaming completion using Gemini"""
+        try:
+            # Gemini API에서 시스템 메시지와 사용자 프롬프트 결합
+            full_prompt = prompt
+            if system_message:
+                full_prompt = f"{system_message}\n\n사용자: {prompt}\n\n어시스턴트:"
+            
+            # Gemini 스트리밍은 generate_content_async 메서드 사용
+            response = self.gemini_client.generate_content(
+                full_prompt,
+                generation_config=genai.types.GenerationConfig(
+                    max_output_tokens=max_tokens,
+                    temperature=temperature
+                ),
+                stream=True
+            )
+            
+            for chunk in response:
+                if chunk.text:
+                    yield chunk.text
+                    
+        except Exception as e:
+            logger.error(f"Gemini streaming completion failed: {e}")
+            raise
+
+    async def _openai_completion_stream(
+        self,
+        prompt: str,
+        system_message: Optional[str],
+        max_tokens: int,
+        temperature: float
+    ):
+        """Generate streaming completion using OpenAI"""
+        try:
+            messages = []
+            
+            if system_message:
+                messages.append({"role": "system", "content": system_message})
+            
+            messages.append({"role": "user", "content": prompt})
+            
+            response = await self.openai_client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=messages,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                stream=True
+            )
+            
+            async for chunk in response:
+                if chunk.choices[0].delta.content:
+                    yield chunk.choices[0].delta.content
+                    
+        except Exception as e:
+            logger.error(f"OpenAI streaming completion failed: {e}")
+            raise
+
+    async def _openrouter_completion_stream(
+        self,
+        prompt: str,
+        system_message: Optional[str],
+        max_tokens: int,
+        temperature: float,
+        model: Optional[str] = None
+    ):
+        """Generate streaming completion using OpenRouter"""
+        try:
+            messages = []
+            
+            if system_message:
+                messages.append({"role": "system", "content": system_message})
+            
+            messages.append({"role": "user", "content": prompt})
+            
+            selected_model = model or self.settings.ai.OPENROUTER_MODEL
+            
+            response = await self.openrouter_client.chat.completions.create(
+                model=selected_model,
+                messages=messages,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                stream=True,
+                extra_headers={
+                    "HTTP-Referer": "https://your-app.com",
+                    "X-Title": "BGBG AI Server"
+                }
+            )
+            
+            async for chunk in response:
+                if chunk.choices[0].delta.content:
+                    yield chunk.choices[0].delta.content
+                    
+        except Exception as e:
+            logger.error(f"OpenRouter streaming completion failed: {e}")
+            raise
+
+    async def _mock_completion_stream(self, prompt: str):
+        """Generate mock streaming completion for development/testing"""
+        logger.debug("Using mock LLM streaming completion")
+        
+        # Mock response based on prompt content
+        if "토론" in prompt or "discussion" in prompt.lower():
+            mock_response = """그 의견 정말 흥미롭네요! 특히 말씀하신 부분에 대해서 더 자세히 들어보고 싶습니다. 다른 참여자분들은 어떻게 생각하시나요?"""
+        else:
+            mock_response = f"이것은 '{prompt[:50]}...'에 대한 Mock 스트리밍 응답입니다."
+        
+        # Simulate streaming by yielding chunks
+        words = mock_response.split()
+        for i in range(0, len(words), 2):  # Send 2 words at a time
+            chunk = " ".join(words[i:i+2])
+            if i > 0:
+                chunk = " " + chunk
+            yield chunk
+            await asyncio.sleep(0.1)  # Simulate network delay
     
     def _get_preferred_provider(self) -> LLMProvider:
         """Get preferred LLM provider based on availability"""

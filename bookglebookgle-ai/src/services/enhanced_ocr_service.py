@@ -141,9 +141,7 @@ class PaddleOCREngine(BaseOCREngine):
             
             self.ocr_instance = PaddleOCR(
                 use_angle_cls=True,  # Enable angle classification
-                lang=lang,
-                use_gpu=self.config.use_gpu,
-                show_log=False
+                lang=lang
             )
             
             self.is_initialized = True

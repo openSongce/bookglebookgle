@@ -141,31 +141,134 @@ class DiscussionEndResponse(_message.Message):
     message: str
     def __init__(self, success: bool = ..., message: _Optional[str] = ...) -> None: ...
 
+class ChatHistoryMessage(_message.Message):
+    __slots__ = ("message_id", "session_id", "sender", "content", "timestamp", "message_type", "metadata")
+    class MetadataEntry(_message.Message):
+        __slots__ = ("key", "value")
+        KEY_FIELD_NUMBER: _ClassVar[int]
+        VALUE_FIELD_NUMBER: _ClassVar[int]
+        key: str
+        value: str
+        def __init__(self, key: _Optional[str] = ..., value: _Optional[str] = ...) -> None: ...
+    MESSAGE_ID_FIELD_NUMBER: _ClassVar[int]
+    SESSION_ID_FIELD_NUMBER: _ClassVar[int]
+    SENDER_FIELD_NUMBER: _ClassVar[int]
+    CONTENT_FIELD_NUMBER: _ClassVar[int]
+    TIMESTAMP_FIELD_NUMBER: _ClassVar[int]
+    MESSAGE_TYPE_FIELD_NUMBER: _ClassVar[int]
+    METADATA_FIELD_NUMBER: _ClassVar[int]
+    message_id: str
+    session_id: str
+    sender: User
+    content: str
+    timestamp: int
+    message_type: str
+    metadata: _containers.ScalarMap[str, str]
+    def __init__(self, message_id: _Optional[str] = ..., session_id: _Optional[str] = ..., sender: _Optional[_Union[User, _Mapping]] = ..., content: _Optional[str] = ..., timestamp: _Optional[int] = ..., message_type: _Optional[str] = ..., metadata: _Optional[_Mapping[str, str]] = ...) -> None: ...
+
+class GetChatHistoryRequest(_message.Message):
+    __slots__ = ("session_id", "limit", "since_timestamp", "user_id")
+    SESSION_ID_FIELD_NUMBER: _ClassVar[int]
+    LIMIT_FIELD_NUMBER: _ClassVar[int]
+    SINCE_TIMESTAMP_FIELD_NUMBER: _ClassVar[int]
+    USER_ID_FIELD_NUMBER: _ClassVar[int]
+    session_id: str
+    limit: int
+    since_timestamp: int
+    user_id: str
+    def __init__(self, session_id: _Optional[str] = ..., limit: _Optional[int] = ..., since_timestamp: _Optional[int] = ..., user_id: _Optional[str] = ...) -> None: ...
+
+class GetChatHistoryResponse(_message.Message):
+    __slots__ = ("success", "message", "messages", "total_count", "has_more")
+    SUCCESS_FIELD_NUMBER: _ClassVar[int]
+    MESSAGE_FIELD_NUMBER: _ClassVar[int]
+    MESSAGES_FIELD_NUMBER: _ClassVar[int]
+    TOTAL_COUNT_FIELD_NUMBER: _ClassVar[int]
+    HAS_MORE_FIELD_NUMBER: _ClassVar[int]
+    success: bool
+    message: str
+    messages: _containers.RepeatedCompositeFieldContainer[ChatHistoryMessage]
+    total_count: int
+    has_more: bool
+    def __init__(self, success: bool = ..., message: _Optional[str] = ..., messages: _Optional[_Iterable[_Union[ChatHistoryMessage, _Mapping]]] = ..., total_count: _Optional[int] = ..., has_more: bool = ...) -> None: ...
+
+class ChatSessionStatsRequest(_message.Message):
+    __slots__ = ("session_id",)
+    SESSION_ID_FIELD_NUMBER: _ClassVar[int]
+    session_id: str
+    def __init__(self, session_id: _Optional[str] = ...) -> None: ...
+
+class ParticipantStats(_message.Message):
+    __slots__ = ("participant", "message_count", "last_activity", "engagement_level")
+    PARTICIPANT_FIELD_NUMBER: _ClassVar[int]
+    MESSAGE_COUNT_FIELD_NUMBER: _ClassVar[int]
+    LAST_ACTIVITY_FIELD_NUMBER: _ClassVar[int]
+    ENGAGEMENT_LEVEL_FIELD_NUMBER: _ClassVar[int]
+    participant: User
+    message_count: int
+    last_activity: int
+    engagement_level: float
+    def __init__(self, participant: _Optional[_Union[User, _Mapping]] = ..., message_count: _Optional[int] = ..., last_activity: _Optional[int] = ..., engagement_level: _Optional[float] = ...) -> None: ...
+
+class ChatSessionStatsResponse(_message.Message):
+    __slots__ = ("success", "message", "session_id", "total_messages", "total_participants", "participant_stats", "session_start_time", "last_activity_time", "chat_history_enabled")
+    SUCCESS_FIELD_NUMBER: _ClassVar[int]
+    MESSAGE_FIELD_NUMBER: _ClassVar[int]
+    SESSION_ID_FIELD_NUMBER: _ClassVar[int]
+    TOTAL_MESSAGES_FIELD_NUMBER: _ClassVar[int]
+    TOTAL_PARTICIPANTS_FIELD_NUMBER: _ClassVar[int]
+    PARTICIPANT_STATS_FIELD_NUMBER: _ClassVar[int]
+    SESSION_START_TIME_FIELD_NUMBER: _ClassVar[int]
+    LAST_ACTIVITY_TIME_FIELD_NUMBER: _ClassVar[int]
+    CHAT_HISTORY_ENABLED_FIELD_NUMBER: _ClassVar[int]
+    success: bool
+    message: str
+    session_id: str
+    total_messages: int
+    total_participants: int
+    participant_stats: _containers.RepeatedCompositeFieldContainer[ParticipantStats]
+    session_start_time: int
+    last_activity_time: int
+    chat_history_enabled: bool
+    def __init__(self, success: bool = ..., message: _Optional[str] = ..., session_id: _Optional[str] = ..., total_messages: _Optional[int] = ..., total_participants: _Optional[int] = ..., participant_stats: _Optional[_Iterable[_Union[ParticipantStats, _Mapping]]] = ..., session_start_time: _Optional[int] = ..., last_activity_time: _Optional[int] = ..., chat_history_enabled: bool = ...) -> None: ...
+
 class ChatMessageRequest(_message.Message):
-    __slots__ = ("discussion_session_id", "sender", "message", "timestamp")
+    __slots__ = ("discussion_session_id", "sender", "message", "timestamp", "use_chat_context", "context_window_size", "store_in_history")
     DISCUSSION_SESSION_ID_FIELD_NUMBER: _ClassVar[int]
     SENDER_FIELD_NUMBER: _ClassVar[int]
     MESSAGE_FIELD_NUMBER: _ClassVar[int]
     TIMESTAMP_FIELD_NUMBER: _ClassVar[int]
+    USE_CHAT_CONTEXT_FIELD_NUMBER: _ClassVar[int]
+    CONTEXT_WINDOW_SIZE_FIELD_NUMBER: _ClassVar[int]
+    STORE_IN_HISTORY_FIELD_NUMBER: _ClassVar[int]
     discussion_session_id: str
     sender: User
     message: str
     timestamp: int
-    def __init__(self, discussion_session_id: _Optional[str] = ..., sender: _Optional[_Union[User, _Mapping]] = ..., message: _Optional[str] = ..., timestamp: _Optional[int] = ...) -> None: ...
+    use_chat_context: bool
+    context_window_size: int
+    store_in_history: bool
+    def __init__(self, discussion_session_id: _Optional[str] = ..., sender: _Optional[_Union[User, _Mapping]] = ..., message: _Optional[str] = ..., timestamp: _Optional[int] = ..., use_chat_context: bool = ..., context_window_size: _Optional[int] = ..., store_in_history: bool = ...) -> None: ...
 
 class ChatMessageResponse(_message.Message):
-    __slots__ = ("success", "message", "ai_response", "suggested_topics", "requires_moderation")
+    __slots__ = ("success", "message", "ai_response", "suggested_topics", "requires_moderation", "context_messages_used", "chat_history_enabled", "recent_context")
     SUCCESS_FIELD_NUMBER: _ClassVar[int]
     MESSAGE_FIELD_NUMBER: _ClassVar[int]
     AI_RESPONSE_FIELD_NUMBER: _ClassVar[int]
     SUGGESTED_TOPICS_FIELD_NUMBER: _ClassVar[int]
     REQUIRES_MODERATION_FIELD_NUMBER: _ClassVar[int]
+    CONTEXT_MESSAGES_USED_FIELD_NUMBER: _ClassVar[int]
+    CHAT_HISTORY_ENABLED_FIELD_NUMBER: _ClassVar[int]
+    RECENT_CONTEXT_FIELD_NUMBER: _ClassVar[int]
     success: bool
     message: str
     ai_response: str
     suggested_topics: _containers.RepeatedScalarFieldContainer[str]
     requires_moderation: bool
-    def __init__(self, success: bool = ..., message: _Optional[str] = ..., ai_response: _Optional[str] = ..., suggested_topics: _Optional[_Iterable[str]] = ..., requires_moderation: bool = ...) -> None: ...
+    context_messages_used: int
+    chat_history_enabled: bool
+    recent_context: _containers.RepeatedCompositeFieldContainer[ChatHistoryMessage]
+    def __init__(self, success: bool = ..., message: _Optional[str] = ..., ai_response: _Optional[str] = ..., suggested_topics: _Optional[_Iterable[str]] = ..., requires_moderation: bool = ..., context_messages_used: _Optional[int] = ..., chat_history_enabled: bool = ..., recent_context: _Optional[_Iterable[_Union[ChatHistoryMessage, _Mapping]]] = ...) -> None: ...
 
 class DocumentChunk(_message.Message):
     __slots__ = ("chunk_id", "text", "start_position", "end_position", "embedding", "metadata")
@@ -237,7 +340,7 @@ class ProcessPdfRequest(_message.Message):
     def __init__(self, info: _Optional[_Union[PdfInfo, _Mapping]] = ..., chunk: _Optional[bytes] = ...) -> None: ...
 
 class PdfInfo(_message.Message):
-    __slots__ = ("document_id", "file_name", "metadata")
+    __slots__ = ("document_id", "file_name", "meeting_id", "metadata")
     class MetadataEntry(_message.Message):
         __slots__ = ("key", "value")
         KEY_FIELD_NUMBER: _ClassVar[int]
@@ -247,11 +350,13 @@ class PdfInfo(_message.Message):
         def __init__(self, key: _Optional[str] = ..., value: _Optional[str] = ...) -> None: ...
     DOCUMENT_ID_FIELD_NUMBER: _ClassVar[int]
     FILE_NAME_FIELD_NUMBER: _ClassVar[int]
+    MEETING_ID_FIELD_NUMBER: _ClassVar[int]
     METADATA_FIELD_NUMBER: _ClassVar[int]
     document_id: str
     file_name: str
+    meeting_id: str
     metadata: _containers.ScalarMap[str, str]
-    def __init__(self, document_id: _Optional[str] = ..., file_name: _Optional[str] = ..., metadata: _Optional[_Mapping[str, str]] = ...) -> None: ...
+    def __init__(self, document_id: _Optional[str] = ..., file_name: _Optional[str] = ..., meeting_id: _Optional[str] = ..., metadata: _Optional[_Mapping[str, str]] = ...) -> None: ...
 
 class TextBlock(_message.Message):
     __slots__ = ("text", "page_number", "x0", "y0", "x1", "y1", "block_type", "confidence")
