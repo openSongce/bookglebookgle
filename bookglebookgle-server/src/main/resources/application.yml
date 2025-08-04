@@ -29,7 +29,7 @@ spring:
 
 
   redis:
-    host: localhost
+    host: redis
     port: 6379
 
 
