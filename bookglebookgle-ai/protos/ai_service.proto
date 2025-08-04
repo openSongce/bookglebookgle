@@ -18,6 +18,9 @@ service AIService {
   rpc ProcessChatMessage(stream ChatMessageRequest) returns (stream ChatMessageResponse);
   rpc EndDiscussion(DiscussionEndRequest) returns (DiscussionEndResponse);
   
+  // Meeting Management (통합 모임 종료)
+  rpc EndMeeting(MeetingEndRequest) returns (MeetingEndResponse);
+  
   // Chat History Management
   rpc GetChatHistory(GetChatHistoryRequest) returns (GetChatHistoryResponse);
   rpc GetChatSessionStats(ChatSessionStatsRequest) returns (ChatSessionStatsResponse);
@@ -91,7 +94,7 @@ message ProofreadResponse {
 message DiscussionInitRequest {
   string document_id = 1;
   string meeting_id = 2;
-  string session_id = 3; // 클라이언트(서버)가 생성한 세션 ID
+  string session_id = 3;
   repeated User participants = 4;
   int64 started_at = 5; 
 }
@@ -105,13 +108,27 @@ message DiscussionInitResponse {
 
 message DiscussionEndRequest {
     string meeting_id = 1;
-    string session_id = 2; // ai_servicer가 알고 있다면 생략 가능
+    string session_id = 2; 
     int64 ended_at = 3; // 종료 타임스탬프
 }
 
 message DiscussionEndResponse {
     bool success = 1;
     string message = 2;
+}
+
+// Meeting Management Messages (통합 모임 종료)
+message MeetingEndRequest {
+    string meeting_id = 1;
+    string meeting_type = 2; // "discussion", "quiz", "proofreading"
+    int64 ended_at = 3; // 종료 타임스탬프
+    optional string session_id = 4; // 토론 모임의 경우 세션 ID 필요
+}
+
+message MeetingEndResponse {
+    bool success = 1;
+    string message = 2;
+    string meeting_type = 3; // 종료된 모임 타입 확인용
 }
 
 // Chat History Messages
@@ -210,7 +227,6 @@ message DocumentResponse {
   map<string, string> analysis_results = 4;
 }
 
-// 사용자 분석 관련 메시지는 모바일 앱에서 불필요하므로 제거
 
 // PDF Processing Messages
 message ProcessPdfRequest {
@@ -235,7 +251,7 @@ message TextBlock {
   double x1 = 5;
   double y1 = 6;
   string block_type = 7;
-  double confidence = 8;  // 추가: OCR 신뢰도
+  double confidence = 8;  
 }
 
 message ProcessPdfResponse {
@@ -246,7 +262,6 @@ message ProcessPdfResponse {
   repeated TextBlock text_blocks = 5;
 }
 
-// Note: PDF processing now includes automatic vector DB storage
 
 // Error Handling
 message ErrorDetails {

@@ -857,6 +857,88 @@ class VectorDBManager:
         except Exception as e:
             logger.error(f"Vector DB cleanup failed: {e}")
     
+    async def delete_meeting_collection(self, meeting_id: str) -> bool:
+        """독서 모임별 컬렉션 삭제"""
+        try:
+            collection_name = f"bookclub_{meeting_id}_documents"
+            
+            logger.info(f"Deleting collection: {collection_name}")
+            
+            # ChromaDB에서 컬렉션 삭제
+            try:
+                self.client.delete_collection(name=collection_name)
+                logger.info(f"Successfully deleted collection from ChromaDB: {collection_name}")
+            except Exception as e:
+                # 컬렉션이 존재하지 않는 경우는 경고로만 처리
+                if "does not exist" in str(e).lower():
+                    logger.warning(f"Collection {collection_name} does not exist, skipping deletion")
+                else:
+                    raise e
+            
+            # 메모리 캐시에서도 제거
+            if collection_name in self.collections:
+                del self.collections[collection_name]
+                logger.info(f"Removed collection from memory cache: {collection_name}")
+            
+            logger.info(f"Successfully deleted meeting collection: {collection_name}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to delete collection for meeting {meeting_id}: {e}")
+            return False
+    
+    async def get_collection_info(self, meeting_id: str) -> Dict[str, Any]:
+        """컬렉션 정보 조회 (삭제 전 메타데이터 수집용)"""
+        try:
+            collection_name = f"bookclub_{meeting_id}_documents"
+            
+            # 컬렉션이 존재하는지 확인
+            try:
+                collection = await self.get_bookclub_collection(meeting_id)
+                
+                # 컬렉션 통계 정보 수집
+                count = collection.count()
+                
+                return {
+                    "collection_name": collection_name,
+                    "document_count": count,
+                    "meeting_id": meeting_id,
+                    "exists": True
+                }
+            except Exception as e:
+                logger.warning(f"Collection {collection_name} not found: {e}")
+                return {
+                    "collection_name": collection_name,
+                    "meeting_id": meeting_id,
+                    "exists": False,
+                    "document_count": 0,
+                    "error": str(e)
+                }
+                
+        except Exception as e:
+            logger.error(f"Failed to get collection info for meeting {meeting_id}: {e}")
+            return {
+                "collection_name": f"bookclub_{meeting_id}_documents",
+                "meeting_id": meeting_id,
+                "exists": False,
+                "document_count": 0,
+                "error": str(e)
+            }
+    
+    async def list_meeting_collections(self) -> List[str]:
+        """독서 모임 관련 컬렉션 목록 조회"""
+        try:
+            all_collections = self.client.list_collections()
+            meeting_collections = [
+                col.name for col in all_collections 
+                if col.name.startswith("bookclub_") and col.name.endswith("_documents")
+            ]
+            logger.info(f"Found {len(meeting_collections)} meeting collections")
+            return meeting_collections
+        except Exception as e:
+            logger.error(f"Failed to list meeting collections: {e}")
+            return []
+    
     async def process_pdf_document(
         self, 
         document_id: str, 

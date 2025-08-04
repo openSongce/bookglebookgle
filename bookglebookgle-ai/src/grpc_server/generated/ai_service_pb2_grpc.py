@@ -40,6 +40,11 @@ class AIServiceStub(object):
                 request_serializer=ai__service__pb2.DiscussionEndRequest.SerializeToString,
                 response_deserializer=ai__service__pb2.DiscussionEndResponse.FromString,
                 )
+        self.EndMeeting = channel.unary_unary(
+                '/bgbg.ai.AIService/EndMeeting',
+                request_serializer=ai__service__pb2.MeetingEndRequest.SerializeToString,
+                response_deserializer=ai__service__pb2.MeetingEndResponse.FromString,
+                )
         self.GetChatHistory = channel.unary_unary(
                 '/bgbg.ai.AIService/GetChatHistory',
                 request_serializer=ai__service__pb2.GetChatHistoryRequest.SerializeToString,
@@ -99,6 +104,13 @@ class AIServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def EndMeeting(self, request, context):
+        """Meeting Management (통합 모임 종료)
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def GetChatHistory(self, request, context):
         """Chat History Management
         """
@@ -153,6 +165,11 @@ def add_AIServiceServicer_to_server(servicer, server):
                     servicer.EndDiscussion,
                     request_deserializer=ai__service__pb2.DiscussionEndRequest.FromString,
                     response_serializer=ai__service__pb2.DiscussionEndResponse.SerializeToString,
+            ),
+            'EndMeeting': grpc.unary_unary_rpc_method_handler(
+                    servicer.EndMeeting,
+                    request_deserializer=ai__service__pb2.MeetingEndRequest.FromString,
+                    response_serializer=ai__service__pb2.MeetingEndResponse.SerializeToString,
             ),
             'GetChatHistory': grpc.unary_unary_rpc_method_handler(
                     servicer.GetChatHistory,
@@ -267,6 +284,23 @@ class AIService(object):
         return grpc.experimental.unary_unary(request, target, '/bgbg.ai.AIService/EndDiscussion',
             ai__service__pb2.DiscussionEndRequest.SerializeToString,
             ai__service__pb2.DiscussionEndResponse.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def EndMeeting(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/bgbg.ai.AIService/EndMeeting',
+            ai__service__pb2.MeetingEndRequest.SerializeToString,
+            ai__service__pb2.MeetingEndResponse.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 

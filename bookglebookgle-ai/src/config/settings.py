@@ -65,6 +65,28 @@ class VectorDBSettings(BaseModel):
     CHROMA_PERSIST_DIRECTORY: str = Field(default="./data/chroma", description="Chroma persistence directory")
     PINECONE_API_KEY: Optional[str] = Field(default=None, description="Pinecone API key")
     PINECONE_ENVIRONMENT: Optional[str] = Field(default=None, description="Pinecone environment")
+    
+    # 벡터 데이터베이스 정리 관련 설정
+    ENABLE_CLEANUP_ON_MEETING_END: bool = Field(
+        default=True, 
+        description="독서 모임 종료 시 벡터 DB 자동 정리 활성화"
+    )
+    CLEANUP_DELAY_SECONDS: int = Field(
+        default=30, 
+        description="정리 작업 지연 시간 (초)"
+    )
+    CLEANUP_RETRY_ATTEMPTS: int = Field(
+        default=3, 
+        description="정리 작업 재시도 횟수"
+    )
+    CLEANUP_RETRY_DELAY: int = Field(
+        default=5, 
+        description="재시도 간격 (초)"
+    )
+    SUPPORTED_MEETING_TYPES: list[str] = Field(
+        default=["discussion", "quiz", "proofreading"], 
+        description="지원하는 모임 타입 목록"
+    )
 
 
 class ChatHistorySettings(BaseModel):
