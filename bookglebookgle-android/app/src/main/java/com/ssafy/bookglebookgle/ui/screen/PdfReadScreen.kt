@@ -41,6 +41,7 @@ import kotlinx.coroutines.Dispatchers
 @Composable
 fun PdfReadScreen(
     groupId: Long? = null,
+    userId: String,
     navController: NavHostController,
     viewModel: PdfViewModel = hiltViewModel()
 ) {
@@ -152,6 +153,16 @@ fun PdfReadScreen(
             viewModel.loadAllAnnotations()
         }
     }
+
+    //gRPC
+
+    LaunchedEffect(Unit) {
+        if (groupId != null && userId != null) {
+            viewModel.connectToSync(groupId, userId)
+        }
+
+    }
+
 
     // 댓글 추가 결과 처리
     LaunchedEffect(addCommentState) {
@@ -366,8 +377,14 @@ fun PdfReadScreen(
                                             pageIndex: Int,
                                             paginationPageIndex: Int
                                         ) {
-                                            viewModel.updateCurrentPage(pageIndex + 1)
+                                            val newPage = pageIndex + 1
+                                            viewModel.updateCurrentPage(newPage)
                                             Log.d("PdfReadScreen", "페이지 변경: ${pageIndex + 1}")
+
+                                            // gRPC로 현재 페이지 broadcast
+                                            viewModel.notifyPageChange(userId, newPage)
+
+                                            Log.d("PdfReadScreen", "페이지 변경 & broadcast: $newPage")
                                         }
 
                                         override fun onTextSelected(

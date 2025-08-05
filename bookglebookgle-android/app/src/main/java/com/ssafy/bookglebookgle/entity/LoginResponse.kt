@@ -6,7 +6,8 @@ data class LoginResponse(
     val email: String,
     val nickname: String,
     val profileImageUrl: String,
-    val averageScore: Float,
+    val avgRating: Float,
     val reviewCount: Int,
-    val loginProvider: String
+    val loginProvider: String,
+    val userId: Int
 )

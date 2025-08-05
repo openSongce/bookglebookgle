@@ -11,6 +11,7 @@ import com.ssafy.bookglebookgle.pdf.tools.OperationsStateHandler
 import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.CommentModel
 import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.Coordinates
 import com.ssafy.bookglebookgle.repository.PdfRepository
+import com.ssafy.bookglebookgle.util.PdfSyncClientManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -581,6 +582,23 @@ class PdfViewModel @Inject constructor(
 
         _annotations.value = currentAnnotations.copy(highlights = ArrayList(updatedHighlights))
         Log.d(TAG, "하이라이트 제거 완료 - 이전: ${beforeCount}개, 현재: ${updatedHighlights.size}개")
+    }
+
+
+    //gRPC
+
+    fun connectToSync(groupId: Long, userId: String) {
+        PdfSyncClientManager.connect(groupId, userId) { message ->
+            if (message.currentPage > 0) {
+                _currentPage.value = message.currentPage
+                _showPageInfo.value = true
+            }
+            // TODO: message.annotation 도 처리 가능
+        }
+    }
+
+    fun notifyPageChange(userId: String, page: Int) {
+        PdfSyncClientManager.sendPageUpdate(userId, page)
     }
 }
 
