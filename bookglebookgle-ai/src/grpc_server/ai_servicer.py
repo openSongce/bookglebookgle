@@ -443,76 +443,6 @@ class AIServicer(ai_service_pb2_grpc.AIServiceServicer):
             
     # 사용자 분석 기능은 모바일 앱에서 불필요하므로 제거
 
-    async def ProcessStructuredDocument(self, request, context):
-        """Process structured text document (PDF with text data) and store in vector DB"""
-        try:
-            logger.info(f"Structured document processing requested for: {request.document_id}")
-
-            doc_id = request.document_id
-            file_name = request.file_name
-            metadata = dict(request.metadata)
-            ocr_results = request.ocr_results
-            
-            if not doc_id:
-                context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
-                context.set_details("Document ID is required")
-                return None
-
-            if not ocr_results:
-                context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
-                context.set_details("OCR results are required")
-                return None
-
-            meeting_id = request.metadata.get("meeting_id")
-            if not meeting_id:
-                context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
-                context.set_details("meeting_id is required in metadata")
-                return None
-
-            logger.info(f"📄 Processing structured document for meeting {meeting_id}, document: {doc_id}")
-
-            # OCR 결과를 텍스트로 결합
-            full_text = ""
-            for text_block in ocr_results:
-                full_text += text_block.text + "\n"
-
-            # 벡터DB에 저장
-            chunk_ids = await self.vector_db_manager.process_bookclub_document(
-                meeting_id=meeting_id,
-                document_id=doc_id,
-                text=full_text,
-                metadata={
-                    "file_name": file_name,
-                    "processing_type": "structured_text",
-                    "source": "text_pdf",
-                    **metadata
-                }
-            )
-            
-            logger.info(f"✅ Structured document processed: {len(chunk_ids)} chunks created for meeting {meeting_id}")
-
-            # 간소화된 응답
-            chunks_data = []
-            for i, chunk_id in enumerate(chunk_ids):
-                chunks_data.append(ai_service_pb2.DocumentChunk(
-                    chunk_id=chunk_id,
-                    text=f"Chunk {i+1} from structured document",
-                    start_position=0,
-                    end_position=0
-                ))
-
-            return ai_service_pb2.DocumentResponse(
-                success=True,
-                message=f"Structured document processed successfully for meeting {meeting_id}. {len(chunk_ids)} chunks created.",
-                chunks=chunks_data
-            )
-
-        except Exception as e:
-            logger.error(f"Structured document processing failed: {e}")
-            context.set_code(grpc.StatusCode.INTERNAL)
-            context.set_details(f"Internal error: {str(e)}")
-            return None
-
     async def GenerateQuiz(self, request, context):
         """Generate quiz based on progress percentage (50% or 100%)"""
         try:
@@ -711,7 +641,7 @@ class AIServicer(ai_service_pb2_grpc.AIServiceServicer):
 
             full_pdf_data = b"".join(pdf_data_chunks)
 
-            logger.info(f"📄 Processing PDF for meeting {meeting_id}, document: {document_id}")
+            logger.info(f"📄 Processing PDF with response for meeting {meeting_id}, document: {document_id}")
 
             # OCR 처리
             ocr_result = await self.ocr_service.process_pdf_stream(full_pdf_data, document_id)
@@ -739,27 +669,45 @@ class AIServicer(ai_service_pb2_grpc.AIServiceServicer):
                         **metadata
                     }
                 )
-                logger.info(f"✅ PDF processed and stored: {len(chunk_ids)} chunks created for meeting {meeting_id}")
+                logger.info(f"✅ PDF processed and stored in VectorDB: {len(chunk_ids)} chunks created for meeting {meeting_id}")
             except Exception as e:
                 logger.error(f"Failed to store PDF in vector DB: {e}")
-                # OCR은 성공했으므로 결과는 반환, 하지만 저장 실패 표시
-                pass
+                context.set_code(grpc.StatusCode.INTERNAL)
+                context.set_details(f"Failed to store in vector DB: {str(e)}")
+                return ai_service_pb2.ProcessPdfResponse(
+                    success=False, 
+                    message=f"VectorDB storage failed: {str(e)}",
+                    document_id=document_id
+                )
 
             # 실제 OCR 블록별 응답 - 위치 정보 포함
             response_text_blocks = []
             
-            # OCR 결과에서 실제 블록 정보 사용
-            for text_block in ocr_result.get("text_blocks", []):
-                response_text_blocks.append(ai_service_pb2.TextBlock(
-                    text=text_block.get("text", ""),
-                    page_number=text_block.get("page_number", 0),
-                    x0=text_block.get("x0", 0.0),
-                    y0=text_block.get("y0", 0.0), 
-                    x1=text_block.get("x1", 0.0),
-                    y1=text_block.get("y1", 0.0),
-                    block_type=text_block.get("block_type", "text"),
-                    confidence=text_block.get("confidence", 0.0)
-                ))
+            # OCR 결과에서 실제 블록 정보 사용 (타입 안전성 검사 포함)
+            text_blocks_data = ocr_result.get("text_blocks", [])
+            if not isinstance(text_blocks_data, list):
+                logger.warning(f"text_blocks is not a list: {type(text_blocks_data)}")
+                text_blocks_data = []
+                
+            for text_block in text_blocks_data:
+                if not isinstance(text_block, dict):
+                    logger.warning(f"text_block is not a dict: {type(text_block)}")
+                    continue
+                    
+                try:
+                    response_text_blocks.append(ai_service_pb2.TextBlock(
+                        text=str(text_block.get("text", "")),
+                        page_number=int(text_block.get("page_number", 0)),
+                        x0=float(text_block.get("x0", 0.0)),
+                        y0=float(text_block.get("y0", 0.0)), 
+                        x1=float(text_block.get("x1", 0.0)),
+                        y1=float(text_block.get("y1", 0.0)),
+                        block_type=str(text_block.get("block_type", "text")),
+                        confidence=float(text_block.get("confidence", 0.0))
+                    ))
+                except (ValueError, TypeError) as e:
+                    logger.warning(f"Failed to convert text_block data: {e}, block: {text_block}")
+                    continue
 
             return ai_service_pb2.ProcessPdfResponse(
                 success=True,
@@ -774,6 +722,91 @@ class AIServicer(ai_service_pb2_grpc.AIServiceServicer):
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details(f"Internal server error: {str(e)}")
             return ai_service_pb2.ProcessPdfResponse(success=False, message=f"Internal error: {str(e)}")
+
+    async def ProcessPdfStream(self, request_iterator, context):
+        """Process PDF stream with fire-and-forget approach (no response data)"""
+        document_id = None
+        file_name = None
+        metadata = {}
+        meeting_id = None
+        pdf_data_chunks = []
+
+        try:
+            async for request in request_iterator:
+                if request.HasField("info"):
+                    # First message should contain PdfInfo
+                    document_id = request.info.document_id or str(uuid.uuid4())
+                    file_name = request.info.file_name
+                    meeting_id = request.info.meeting_id
+                    metadata = dict(request.info.metadata)
+                    logger.info(f"Received PDF info for fire-and-forget processing: {document_id}, file: {file_name}, meeting: {meeting_id}")
+                elif request.HasField("chunk"):
+                    # Subsequent messages contain PDF data chunks
+                    pdf_data_chunks.append(request.chunk)
+                else:
+                    logger.warning("Received unknown message type in ProcessPdfStream stream.")
+
+            if not document_id:
+                context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+                context.set_details("Document ID not provided in PdfInfo.")
+                return
+
+            if not pdf_data_chunks:
+                context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+                context.set_details("No PDF data chunks received.")
+                return
+
+            if not meeting_id:
+                context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+                context.set_details("meeting_id is required.")
+                return
+
+            full_pdf_data = b"".join(pdf_data_chunks)
+
+            logger.info(f"📄 Processing PDF fire-and-forget for meeting {meeting_id}, document: {document_id}")
+
+            # OCR 처리
+            ocr_result = await self.ocr_service.process_pdf_stream(full_pdf_data, document_id)
+
+            if not ocr_result["success"]:
+                logger.error(f"OCR processing failed for {document_id}: {ocr_result.get('error', 'Unknown error')}")
+                context.set_code(grpc.StatusCode.INTERNAL)
+                context.set_details(f"OCR processing failed: {ocr_result.get('error', 'Unknown error')}")
+                return
+
+            # OCR 결과 추출 (응답용 데이터는 생성하지 않음)
+            full_text = ocr_result.get("full_text", "")
+            total_pages = ocr_result.get("total_pages", 0)
+            
+            # 벡터DB에 자동 저장 (meeting_id별로 격리)
+            try:
+                chunk_ids = await self.vector_db_manager.process_bookclub_document(
+                    meeting_id=meeting_id,
+                    document_id=document_id,
+                    text=full_text,
+                    metadata={
+                        "file_name": file_name,
+                        "total_pages": total_pages,
+                        "processing_type": "ocr_stream",
+                        **metadata
+                    }
+                )
+                logger.info(f"✅ PDF processed and stored in VectorDB (fire-and-forget): {len(chunk_ids)} chunks created for meeting {meeting_id}")
+            except Exception as e:
+                logger.error(f"Failed to store PDF in vector DB (fire-and-forget): {e}")
+                context.set_code(grpc.StatusCode.INTERNAL)
+                context.set_details(f"Failed to store in vector DB: {str(e)}")
+                return
+
+            # Fire-and-forget: 응답 데이터 생성하지 않고 Empty 반환
+            from google.protobuf.empty_pb2 import Empty
+            return Empty()
+
+        except Exception as e:
+            logger.error(f"Error in ProcessPdfStream RPC for document {document_id}: {e}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(f"Internal server error: {str(e)}")
+            return
 
     async def cleanup(self):
         """Clean up resources when shutting down"""

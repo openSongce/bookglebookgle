@@ -1,3 +1,4 @@
+from google.protobuf import empty_pb2 as _empty_pb2
 from google.protobuf.internal import containers as _containers
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
@@ -291,67 +292,6 @@ class ChatMessageResponse(_message.Message):
     chat_history_enabled: bool
     recent_context: _containers.RepeatedCompositeFieldContainer[ChatHistoryMessage]
     def __init__(self, success: bool = ..., message: _Optional[str] = ..., ai_response: _Optional[str] = ..., suggested_topics: _Optional[_Iterable[str]] = ..., requires_moderation: bool = ..., context_messages_used: _Optional[int] = ..., chat_history_enabled: bool = ..., recent_context: _Optional[_Iterable[_Union[ChatHistoryMessage, _Mapping]]] = ...) -> None: ...
-
-class DocumentChunk(_message.Message):
-    __slots__ = ("chunk_id", "text", "start_position", "end_position", "embedding", "metadata")
-    class MetadataEntry(_message.Message):
-        __slots__ = ("key", "value")
-        KEY_FIELD_NUMBER: _ClassVar[int]
-        VALUE_FIELD_NUMBER: _ClassVar[int]
-        key: str
-        value: str
-        def __init__(self, key: _Optional[str] = ..., value: _Optional[str] = ...) -> None: ...
-    CHUNK_ID_FIELD_NUMBER: _ClassVar[int]
-    TEXT_FIELD_NUMBER: _ClassVar[int]
-    START_POSITION_FIELD_NUMBER: _ClassVar[int]
-    END_POSITION_FIELD_NUMBER: _ClassVar[int]
-    EMBEDDING_FIELD_NUMBER: _ClassVar[int]
-    METADATA_FIELD_NUMBER: _ClassVar[int]
-    chunk_id: str
-    text: str
-    start_position: int
-    end_position: int
-    embedding: _containers.RepeatedScalarFieldContainer[float]
-    metadata: _containers.ScalarMap[str, str]
-    def __init__(self, chunk_id: _Optional[str] = ..., text: _Optional[str] = ..., start_position: _Optional[int] = ..., end_position: _Optional[int] = ..., embedding: _Optional[_Iterable[float]] = ..., metadata: _Optional[_Mapping[str, str]] = ...) -> None: ...
-
-class ProcessDocumentRequest(_message.Message):
-    __slots__ = ("document_id", "ocr_results", "file_name", "metadata")
-    class MetadataEntry(_message.Message):
-        __slots__ = ("key", "value")
-        KEY_FIELD_NUMBER: _ClassVar[int]
-        VALUE_FIELD_NUMBER: _ClassVar[int]
-        key: str
-        value: str
-        def __init__(self, key: _Optional[str] = ..., value: _Optional[str] = ...) -> None: ...
-    DOCUMENT_ID_FIELD_NUMBER: _ClassVar[int]
-    OCR_RESULTS_FIELD_NUMBER: _ClassVar[int]
-    FILE_NAME_FIELD_NUMBER: _ClassVar[int]
-    METADATA_FIELD_NUMBER: _ClassVar[int]
-    document_id: str
-    ocr_results: _containers.RepeatedCompositeFieldContainer[TextBlock]
-    file_name: str
-    metadata: _containers.ScalarMap[str, str]
-    def __init__(self, document_id: _Optional[str] = ..., ocr_results: _Optional[_Iterable[_Union[TextBlock, _Mapping]]] = ..., file_name: _Optional[str] = ..., metadata: _Optional[_Mapping[str, str]] = ...) -> None: ...
-
-class DocumentResponse(_message.Message):
-    __slots__ = ("success", "message", "chunks", "analysis_results")
-    class AnalysisResultsEntry(_message.Message):
-        __slots__ = ("key", "value")
-        KEY_FIELD_NUMBER: _ClassVar[int]
-        VALUE_FIELD_NUMBER: _ClassVar[int]
-        key: str
-        value: str
-        def __init__(self, key: _Optional[str] = ..., value: _Optional[str] = ...) -> None: ...
-    SUCCESS_FIELD_NUMBER: _ClassVar[int]
-    MESSAGE_FIELD_NUMBER: _ClassVar[int]
-    CHUNKS_FIELD_NUMBER: _ClassVar[int]
-    ANALYSIS_RESULTS_FIELD_NUMBER: _ClassVar[int]
-    success: bool
-    message: str
-    chunks: _containers.RepeatedCompositeFieldContainer[DocumentChunk]
-    analysis_results: _containers.ScalarMap[str, str]
-    def __init__(self, success: bool = ..., message: _Optional[str] = ..., chunks: _Optional[_Iterable[_Union[DocumentChunk, _Mapping]]] = ..., analysis_results: _Optional[_Mapping[str, str]] = ...) -> None: ...
 
 class ProcessPdfRequest(_message.Message):
     __slots__ = ("info", "chunk")

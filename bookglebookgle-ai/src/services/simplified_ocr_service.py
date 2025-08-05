@@ -18,7 +18,6 @@ from src.models.ocr_models import (
     OCRBlock, ProcessedOCRBlock, ProcessingMetrics
 )
 from src.services.paddleocr_engine import PaddleOCREngine, PaddleOCRConfig
-from src.services.vector_db import VectorDBManager
 
 
 class SimplifiedOCRService:
@@ -45,7 +44,6 @@ class SimplifiedOCRService:
         
         # 엔진 초기화
         self.ocr_engine = PaddleOCREngine(self.paddleocr_config)
-        self.vector_db = VectorDBManager()  # VectorDB 직접 연결
         
         # 성능 모니터링
         self.processing_stats = {
@@ -61,7 +59,7 @@ class SimplifiedOCRService:
         
         logger.info(f"🚀 SimplifiedOCRService initialized:")
         logger.info(f"   🔧 PaddleOCR language: {self.paddleocr_config.lang}")
-        logger.info(f"   🤖 LLM post-processing: Disabled (직접 VectorDB 저장)")
+        logger.info(f"   🤖 LLM post-processing: Disabled")
         logger.info(f"   🖥️ GPU usage: {self.paddleocr_config.use_gpu}")
         logger.info(f"   🔄 Angle classification: {self.paddleocr_config.use_angle_cls}")
     
@@ -81,16 +79,10 @@ class SimplifiedOCRService:
                 logger.error("❌ PaddleOCR engine initialization failed")
                 return False
             
-            # 2. VectorDB 초기화
-            try:
-                await self.vector_db.initialize()
-                logger.info("✅ VectorDB initialized successfully")
-            except Exception as e:
-                logger.error(f"❌ VectorDB initialization failed: {e}")
-                return False
+            # VectorDB 초기화는 AI Servicer에서 담당
             
             logger.info("✅ SimplifiedOCRService initialization completed")
-            logger.info("📝 Pipeline: PDF → PaddleOCR → VectorDB (LLM 후처리 없음)")
+            logger.info("📝 Pipeline: PDF → PaddleOCR (LLM 후처리 없음, VectorDB는 AI Servicer에서 처리)")
             return True
             
         except Exception as e:
@@ -105,7 +97,7 @@ class SimplifiedOCRService:
         enable_llm_postprocessing: Optional[bool] = None
     ) -> Dict[str, Any]:
         """
-        PDF 스트림을 처리하여 PaddleOCR로 텍스트 추출 후 VectorDB에 직접 저장
+        PDF 스트림을 처리하여 PaddleOCR로 텍스트 추출 (VectorDB 저장은 AI Servicer에서 담당)
         
         Args:
             pdf_stream: PDF 바이트 스트림
@@ -140,16 +132,9 @@ class SimplifiedOCRService:
             # 2단계: LLM 후처리 단계 건너뛰기
             logger.info("🤖 Skipping LLM post-processing as per the new pipeline.")
             
-            # 3단계: OCR 결과를 VectorDB에 직접 저장
-            vectordb_result = await self._store_in_vectordb(ocr_blocks, document_id)
-            vectordb_time = vectordb_result["processing_time"]
-            
-            if not vectordb_result["success"]:
-                return self._create_error_response(
-                    document_id, 
-                    f"VectorDB storage failed: {vectordb_result['error']}", 
-                    start_time
-                )
+            # 3단계: VectorDB 저장은 AI Servicer에서 담당하므로 건너뛰기
+            logger.info("💾 VectorDB storage will be handled by AI Servicer")
+            vectordb_time = 0.0  # VectorDB 저장 시간은 0으로 설정
             
             # 4단계: 최종 응답 생성
             final_result = await self._create_final_response(
@@ -214,57 +199,6 @@ class SimplifiedOCRService:
         except Exception as e:
             logger.error(f"❌ PaddleOCR extraction failed for {document_id}: {e}")
             return {"success": False, "error": str(e)}
-    
-    async def _store_in_vectordb(
-        self, 
-        ocr_blocks: List[OCRBlock], 
-        document_id: str
-    ) -> Dict[str, Any]:
-        """
-        OCR 결과를 VectorDB에 직접 저장
-        
-        Args:
-            ocr_blocks: OCR 블록 리스트
-            document_id: 문서 ID
-            
-        Returns:
-            VectorDB 저장 결과
-        """
-        try:
-            vectordb_start_time = time.time()
-            logger.info(f"💾 Starting VectorDB storage for document: {document_id}")
-            logger.info(f"   📊 Blocks to store: {len(ocr_blocks)}")
-            
-            # VectorDB에 저장
-            success = await self.vector_db.store_document_with_positions(
-                document_id=document_id,
-                ocr_blocks=ocr_blocks,
-                metadata={"ocr_engine": "paddleocr", "llm_postprocessing_enabled": False}
-            )
-            
-            vectordb_time = time.time() - vectordb_start_time
-            
-            if success:
-                logger.info(f"✅ VectorDB storage completed for {document_id}:")
-                logger.info(f"   ⏱️ Storage time: {vectordb_time:.2f}s")
-                logger.info(f"   📊 Blocks stored: {len(ocr_blocks)}")
-                
-                return {
-                    "success": True,
-                    "processing_time": vectordb_time,
-                    "blocks_stored": len(ocr_blocks)
-                }
-            else:
-                raise Exception("VectorDB storage operation failed")
-            
-        except Exception as e:
-            vectordb_time = time.time() - vectordb_start_time
-            logger.error(f"❌ VectorDB storage failed for {document_id}: {e}")
-            return {
-                "success": False, 
-                "error": str(e),
-                "processing_time": vectordb_time
-            }
     
     async def _create_final_response(
         self,
@@ -335,7 +269,7 @@ class SimplifiedOCRService:
             "engine_used": f"SimplifiedOCRService v2.0 (PaddleOCR-only)",
             "processing_stats": metrics.to_dict(),
             "llm_postprocessing_enabled": False,
-            "vectordb_stored": True,
+            "vectordb_stored": False,  # VectorDB 저장은 AI Servicer에서 담당
             "performance_metrics": {
                 "pdf_size_bytes": pdf_size,
                 "processing_speed_blocks_per_sec": len(processed_blocks) / total_time if total_time > 0 else 0,
@@ -433,7 +367,7 @@ class SimplifiedOCRService:
             self.processing_stats['total_ocr_time'] += stats.get('ocr_time', 0)
             self.processing_stats['total_pages_processed'] += result.get('total_pages', 0)
             self.processing_stats['total_blocks_extracted'] += stats.get('text_blocks_count', 0)
-            # VectorDB 시간 추가
+            # VectorDB 시간 (AI Servicer에서 처리)
             perf_metrics = result.get('performance_metrics', {})
             total_time = stats.get('total_time', 0)
             vectordb_ratio = perf_metrics.get('vectordb_to_total_time_ratio', 0)
@@ -474,8 +408,8 @@ class SimplifiedOCRService:
             if self.ocr_engine:
                 await self.ocr_engine.cleanup()
             
-            if self.vector_db:
-                await self.vector_db.cleanup()
+            # VectorDB cleanup은 AI Servicer에서 담당
+            pass
             
             logger.info("✅ SimplifiedOCRService cleanup completed")
             
