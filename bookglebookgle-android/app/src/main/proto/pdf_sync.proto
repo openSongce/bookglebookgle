@@ -42,5 +42,6 @@ message Coordinates {
 }
 
 message Ack {
-  string message = 1;
+  bool success = 1;
+  string message = 2; // 설명 텍스트
 }

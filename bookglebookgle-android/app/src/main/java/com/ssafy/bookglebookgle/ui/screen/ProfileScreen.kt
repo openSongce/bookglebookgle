@@ -86,6 +86,9 @@ fun ProfileScreen(navController: NavHostController, viewModel: ProfileViewModel 
     ) {
 
         val logoutDone by viewModel.logoutCompleted.collectAsState()
+        val profileImageUrl by viewModel.profileImageUrl.collectAsState()
+        val nickname by viewModel.nickname.collectAsState()
+        val email by viewModel.email.collectAsState()
 
         if (logoutDone) {
             LaunchedEffect(Unit) {
@@ -106,7 +109,7 @@ fun ProfileScreen(navController: NavHostController, viewModel: ProfileViewModel 
         ) {
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
-                    .data(viewModel.profileImageUrl)
+                    .data(profileImageUrl)
                     .crossfade(true)
                     .build(),
                 contentDescription = "프로필 이미지",
@@ -146,12 +149,12 @@ fun ProfileScreen(navController: NavHostController, viewModel: ProfileViewModel 
         Spacer(modifier = Modifier.height(ScreenSize.height * 0.015f))
 
         Text(
-            viewModel.nickname ?: "닉네임 없음",
+            nickname ?: "닉네임 없음",
             fontSize = ScreenSize.width.value.times(0.05f).sp,
             fontWeight = FontWeight.Bold
         )
         Text(
-            viewModel.email ?: "이메일 없음",
+            email ?: "이메일 없음",
             fontSize = ScreenSize.width.value.times(0.035f).sp,
             color = Color(0xFF8D7E6E)
         )

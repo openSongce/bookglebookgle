@@ -15,7 +15,7 @@ object PdfSyncClientManager {
 
     fun connect(groupId: Long, userId: String, onReceive: (SyncMessage) -> Unit) {
         channel = ManagedChannelBuilder
-            .forAddress("서버_IP", 9090)
+            .forAddress("52.79.59.66", 6565)
             .usePlaintext()
             .build()
 

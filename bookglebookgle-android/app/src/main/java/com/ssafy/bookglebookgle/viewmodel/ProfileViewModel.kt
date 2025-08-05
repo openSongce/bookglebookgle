@@ -7,6 +7,7 @@ import com.ssafy.bookglebookgle.util.UserInfoManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -20,11 +21,23 @@ class ProfileViewModel @Inject constructor(
     val logoutCompleted: StateFlow<Boolean> = _logoutCompleted
 
     // 사용자 정보 상태
-    val nickname = userInfoManager.getNickname()
-    val email = userInfoManager.getEmail()
-    val profileImageUrl = userInfoManager.getProfileImage()
-    val averageScore = userInfoManager.getAverageScore()
-    val reviewCount = userInfoManager.getReviewCount()
+    private val _nickname = MutableStateFlow(userInfoManager.getNickname())
+    val nickname: StateFlow<String?> = _nickname.asStateFlow()
+
+    private val _email = MutableStateFlow(userInfoManager.getEmail())
+    val email: StateFlow<String?> = _email.asStateFlow()
+
+    private val _profileImageUrl = MutableStateFlow(userInfoManager.getProfileImage())
+    val profileImageUrl: StateFlow<String?> = _profileImageUrl.asStateFlow()
+
+    private val _averageScore = MutableStateFlow(userInfoManager.getAverageScore())
+    val averageScore: StateFlow<Float> = _averageScore.asStateFlow()
+
+    private val _reviewCount = MutableStateFlow(userInfoManager.getReviewCount())
+    val reviewCount: StateFlow<Int> = _reviewCount.asStateFlow()
+
+    private val _userId = MutableStateFlow(userInfoManager.getUserId())
+    val userId: StateFlow<Int> = _userId.asStateFlow()
 
     fun logout() {
         viewModelScope.launch {
@@ -32,5 +45,14 @@ class ProfileViewModel @Inject constructor(
             userInfoManager.clearUserInfo()
             _logoutCompleted.value = true
         }
+    }
+
+    fun refreshUserInfo() {
+        _nickname.value = userInfoManager.getNickname()
+        _email.value = userInfoManager.getEmail()
+        _profileImageUrl.value = userInfoManager.getProfileImage()
+        _averageScore.value = userInfoManager.getAverageScore()
+        _reviewCount.value = userInfoManager.getReviewCount()
+        _userId.value = userInfoManager.getUserId()
     }
 }
