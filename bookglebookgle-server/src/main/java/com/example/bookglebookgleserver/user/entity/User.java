@@ -42,4 +42,8 @@ public class User {
             ratingCnt = 0;
         }
     }
+
+    public void setAvgRating(Float avgRating) {
+        this.avgRating = avgRating;
+    }
 }
