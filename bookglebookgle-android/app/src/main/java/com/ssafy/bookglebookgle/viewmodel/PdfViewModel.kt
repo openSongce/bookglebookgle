@@ -606,24 +606,32 @@ class PdfViewModel @Inject constructor(
         PdfSyncClientManager.connect(groupId, userId, onReceive)
     }
 
-    // 실제 페이지 이동 함수 추가
+    // PdfViewModel의 기존 moveToPage 함수를 수정
+
     fun moveToPage(page: Int) {
         currentPdfView?.let { pdfView ->
             try {
                 Log.d(TAG, "페이지 이동 실행: $page")
-                // PDF 뷰어에서 실제 페이지 이동 (0 기반 인덱스)
-                pdfView.jumpTo(page - 1)
+                // 페이지별 표시 모드에서는 애니메이션과 함께 이동
+                pdfView.jumpTo(page - 1, withAnimation = true, resetZoom = false, resetHorizontalScroll = false)
             } catch (e: Exception) {
                 Log.e(TAG, "페이지 이동 실패", e)
             }
         } ?: Log.w(TAG, "PDFView가 null - 페이지 이동 불가")
     }
 
-    // 원격 페이지 변경 처리
+    // 원격 페이지 변경 시에는 애니메이션 없이 즉시 이동
     fun handleRemotePageChange(page: Int) {
         Log.d(TAG, "원격 페이지 변경 처리: $page")
         isRemotePageChange = true
-        moveToPage(page)
+        currentPdfView?.let { pdfView ->
+            try {
+                // 원격 변경은 애니메이션 없이 즉시 이동
+                pdfView.jumpTo(page - 1, withAnimation = false, resetZoom = false, resetHorizontalScroll = false)
+            } catch (e: Exception) {
+                Log.e(TAG, "원격 페이지 이동 실패", e)
+            }
+        }
     }
 
     // 페이지 변경 발생 시 서버에 알림 (수정된 버전)
@@ -645,6 +653,36 @@ class PdfViewModel @Inject constructor(
         currentPdfView = null
         super.onCleared()
     }
+
+    // 네비게이션 함수들도 페이지 정보 표시하도록 수정
+    fun goToPreviousPage() {
+        val newPage = (currentPage.value - 1).coerceAtLeast(1)
+        if (newPage != currentPage.value) {
+            Log.d(TAG, "이전 페이지로 이동: ${currentPage.value} -> $newPage")
+            currentPdfView?.jumpTo(newPage - 1, withAnimation = true)
+        }
+    }
+
+    fun goToNextPage() {
+        val newPage = (currentPage.value + 1).coerceAtMost(totalPages.value)
+        if (newPage != currentPage.value) {
+            Log.d(TAG, "다음 페이지로 이동: ${currentPage.value} -> $newPage")
+            currentPdfView?.jumpTo(newPage - 1, withAnimation = true)
+        }
+    }
+
+    // 특정 페이지로 이동 (외부에서 호출용)
+    fun goToPage(page: Int) {
+        val targetPage = page.coerceIn(1, totalPages.value)
+        if (targetPage != currentPage.value) {
+            Log.d(TAG, "특정 페이지로 이동: ${currentPage.value} -> $targetPage")
+            currentPdfView?.jumpTo(targetPage - 1, withAnimation = true) // 0 기반 인덱스
+        }
+    }
+
+    // 페이지 네비게이션 버튼 활성화 상태 확인
+    fun canGoToPreviousPage(): Boolean = currentPage.value > 1
+    fun canGoToNextPage(): Boolean = currentPage.value < totalPages.value
 
 
 }
