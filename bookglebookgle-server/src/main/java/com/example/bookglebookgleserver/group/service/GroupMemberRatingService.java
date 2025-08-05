@@ -10,6 +10,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 @Service
 @RequiredArgsConstructor
 public class GroupMemberRatingService {
@@ -37,6 +39,9 @@ public class GroupMemberRatingService {
                 .score(score)
                 .build();
         groupMemberRatingRepository.save(rating);
+
+        // 평점 등록 후 평균 점수 반영
+        updateUserAverageRating(toId);
     }
 
     @Transactional
@@ -45,12 +50,30 @@ public class GroupMemberRatingService {
         if (rating == null) throw new IllegalArgumentException("평가 내역이 없습니다. 먼저 등록해 주세요.");
         rating.setScore(score);
         groupMemberRatingRepository.save(rating);
+
+        // 평점 수정 후 평균 점수 반영
+        updateUserAverageRating(toId);
     }
 
     // 평균 평점 반환
     public Float getAverageRating(Long groupId, Long toId) {
-        var ratings = groupMemberRatingRepository.findByGroup_IdAndToMember_Id(groupId, toId);
+        List<GroupMemberRating> ratings = groupMemberRatingRepository.findByGroup_IdAndToMember_Id(groupId, toId);
         if (ratings.isEmpty()) return null;
         return (float) ratings.stream().mapToDouble(GroupMemberRating::getScore).average().orElse(0.0);
+    }
+
+    // users 테이블 avg_rating 반영 메서드
+    private void updateUserAverageRating(Long toUserId) {
+        // 1. 모든 평가에서 평균 점수 계산 (모든 그룹 기준, 또는 필요 시 그룹 제한)
+        List<GroupMemberRating> allRatings = groupMemberRatingRepository.findByToMember_Id(toUserId);
+        float avg = 0f;
+        if (!allRatings.isEmpty()) {
+            avg = (float) allRatings.stream().mapToDouble(GroupMemberRating::getScore).average().orElse(0.0);
+        }
+        // 2. 유저 조회 및 avg_rating 필드 업데이트
+        User user = userRepository.findById(toUserId)
+                .orElseThrow(() -> new IllegalArgumentException("평가 대상 유저가 존재하지 않습니다."));
+        user.setAvgRating(avg); // User 엔티티에 setAvgRating(float avgRating) 메서드 필요!
+        userRepository.save(user);
     }
 }
