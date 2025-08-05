@@ -36,14 +36,14 @@ public class BookglebookgleServerApplication {
         public void startGrpcServer() {
             Thread grpcThread = new Thread(() -> {
                 try {
-                    log.info("▶ gRPC 서버 초기화 중...");
+                    log.info("gRPC 서버 초기화 중...");
                     com.example.bookglebookgleserver.grpc.PdfSyncGrpcServer.main(null);
                 } catch (Exception e) {
-                    log.error("❌ gRPC 서버 실행 중 예외 발생", e);
+                    log.error("gRPC 서버 실행 중 예외 발생", e);
                 }
             });
 
-            grpcThread.setDaemon(false); // ✅ 이 한 줄 추가!
+            grpcThread.setDaemon(false);
             grpcThread.start();
         }
     }
