@@ -30,20 +30,23 @@ public class BookglebookgleServerApplication {
     @Component
     public class GrpcServerLauncher {
 
-    	private static final Logger log = LoggerFactory.getLogger(GrpcServerLauncher.class);
+        private static final Logger log = LoggerFactory.getLogger(GrpcServerLauncher.class);
 
         @PostConstruct
         public void startGrpcServer() {
-            new Thread(() -> {
+            Thread grpcThread = new Thread(() -> {
                 try {
-                	log.info("▶ gRPC 서버 초기화 중...");
+                    log.info("▶ gRPC 서버 초기화 중...");
                     com.example.bookglebookgleserver.grpc.PdfSyncGrpcServer.main(null);
                 } catch (Exception e) {
-                	log.error("❌ gRPC 서버 실행 중 예외 발생", e);
-                    e.printStackTrace();
+                    log.error("❌ gRPC 서버 실행 중 예외 발생", e);
                 }
-            }).start();
+            });
+
+            grpcThread.setDaemon(false); // ✅ 이 한 줄 추가!
+            grpcThread.start();
         }
     }
+
 
 }
