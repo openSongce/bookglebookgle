@@ -49,6 +49,6 @@ spring:
 
 grpc:
   server:
+    port: 6565
     security:
       enabled: false
-    port: 6565
