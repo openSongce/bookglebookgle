@@ -1,8 +1,9 @@
 syntax = "proto3";
 
-package pdfsync;
+package bgbg.pdf;
 
-option java_package = "com.ssafy.bookglebookgle.grpc";
+// ❗ 이 부분을 실제 서버 패키지와 일치하게 수정
+option java_package = "com.example.bookglebookgleserver.pdf.grpc";
 option java_multiple_files = true;
 
 service PdfSyncService {
@@ -16,32 +17,13 @@ message JoinRequest {
 }
 
 message SyncMessage {
-  string userId = 1;
-  int32 currentPage = 2;
-  Annotation annotation = 3;
-}
-
-message Annotation {
-  enum Type {
-    COMMENT = 0;
-    HIGHLIGHT = 1;
-    DELETE = 2;
-  }
-  Type type = 1;
-  string snippet = 2;
-  string text = 3;
-  int32 page = 4;
-  Coordinates coordinates = 5;
-}
-
-message Coordinates {
-  double startX = 1;
-  double startY = 2;
-  double endX = 3;
-  double endY = 4;
+  int64 groupId = 1;
+  string userId = 2;
+  int32 currentPage = 3;
 }
 
 message Ack {
   bool success = 1;
   string message = 2; // 설명 텍스트
 }
+
