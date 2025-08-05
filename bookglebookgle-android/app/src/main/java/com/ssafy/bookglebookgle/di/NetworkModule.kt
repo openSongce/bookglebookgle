@@ -50,7 +50,7 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun providerChatApi(retrofit: Retrofit): ChatApi =
+    fun provideChatApi(retrofit: Retrofit): ChatApi =
         retrofit.create(ChatApi::class.java)
 
     @Provides

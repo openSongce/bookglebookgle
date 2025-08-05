@@ -129,9 +129,10 @@ class GroupDetailViewModel @Inject constructor(
                     getGroupDetail(groupId)
 
                 } else {
-                    Log.e(TAG, "그룹 참여 실패 - 코드: ${response.code()}, 메시지: ${response.message()}")
+                    val errorBody = response.errorBody()?.string()
+                    Log.e(TAG, "그룹 참여 실패 - 코드: ${response.code()}, 메시지: $errorBody")
                     _joinGroupState.value = JoinGroupUiState.Error(
-                        "그룹 참여 실패: ${response.code()} ${response.message()}"
+                        "그룹 참여 실패: ${response.code()} $errorBody"
                     )
                 }
             } catch (e: Exception) {
