@@ -233,6 +233,7 @@ fun CustomTopAppBar(
                     textAlign = TextAlign.Center,
                     modifier = Modifier
                         .fillMaxWidth()
+                        .padding(end = 40 .dp)
                 )
             }
         },

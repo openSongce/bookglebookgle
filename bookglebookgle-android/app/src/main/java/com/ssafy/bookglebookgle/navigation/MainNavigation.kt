@@ -143,8 +143,9 @@ fun MainNavigation(
                 LaunchedEffect(Unit) {
                     Log.d("GroupId", "ChatRoomScreen 전달 - groupId: $groupId")
                 }
-
-                ChatRoomScreen(navController =  navController, groupId)
+                val profileViewModel: ProfileViewModel = hiltViewModel()
+                val userId by profileViewModel.userId.collectAsState()
+                ChatRoomScreen(navController =  navController, groupId, userId)
             }
 
 

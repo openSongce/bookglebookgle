@@ -25,7 +25,7 @@ class ChatRepositoryImpl @Inject constructor(
                 response.body()?.let { chatList ->
                     Log.d(TAG, "채팅방 목록 - 총 ${chatList.size}개 채팅방 발견")
                     chatList.forEach { chat ->
-                        Log.d(TAG, "채팅방 ID: ${chat.chatRoomId}, 제목: ${chat.groupTitle}, 읽지않은메시지: ${chat.unreadCount}")
+                        Log.d(TAG, "제목: ${chat.groupTitle}, 읽지않은메시지: ${chat.unreadCount}")
                     }
                     chatList
                 } ?: run {

@@ -9,7 +9,7 @@ data class ChatMessagesResponse(
 // 개별 채팅 메시지
 data class ChatMessage(
     val messageId: Long,
-    val userId: Long,
+    val userId: Int,
     val nickname: String,
     val profileImage: String?,
     val message: String,

@@ -55,7 +55,6 @@ class ChatListViewModel @Inject constructor(
                 // Todo: 실제 연동 시 아래 코드 제거.
                 val dummyChatList = listOf(
                     ChatListResponse(
-                        chatRoomId = 101,
                         imageUrl = null,
                         category = "READING",
                         groupId = 1,
@@ -66,7 +65,6 @@ class ChatListViewModel @Inject constructor(
                         unreadCount = 2
                     ),
                     ChatListResponse(
-                        chatRoomId = 102,
                         imageUrl = null,
                         category = "REVIEW",
                         groupId = 2,
@@ -77,7 +75,6 @@ class ChatListViewModel @Inject constructor(
                         unreadCount = 0
                     ),
                     ChatListResponse(
-                        chatRoomId = 103,
                         imageUrl = null,
                         category = "STUDY",
                         groupId = 3,
@@ -113,11 +110,11 @@ class ChatListViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(error = null)
     }
 
-    // 특정 채팅방의 읽지 않은 메시지 수 업데이트 (실시간 알림 등에서 사용)
-    fun updateUnreadCount(chatRoomId: Long, newUnreadCount: Int) {
+    // 특정 그룹의 읽지 않은 메시지 수 업데이트 (groupId 기준)
+    fun updateUnreadCount(groupId: Long, newUnreadCount: Int) {
         val currentList = _uiState.value.chatList
         val updatedList = currentList.map { chat ->
-            if (chat.chatRoomId == chatRoomId) {
+            if (chat.groupId == groupId) {
                 chat.copy(unreadCount = newUnreadCount)
             } else {
                 chat
@@ -125,14 +122,14 @@ class ChatListViewModel @Inject constructor(
         }
 
         _uiState.value = _uiState.value.copy(chatList = updatedList)
-        Log.d(TAG, "채팅방 ${chatRoomId}의 읽지않은메시지 수 업데이트: $newUnreadCount")
+        Log.d(TAG, "그룹 ${groupId}의 읽지않은메시지 수 업데이트: $newUnreadCount")
     }
 
-    // 새로운 메시지가 도착했을 때 목록 업데이트
-    fun updateLastMessage(chatRoomId: Long, lastMessage: String, lastMessageTime: String) {
+    // 새로운 메시지가 도착했을 때 목록 업데이트 (groupId 기준)
+    fun updateLastMessage(groupId: Long, lastMessage: String, lastMessageTime: String) {
         val currentList = _uiState.value.chatList
         val updatedList = currentList.map { chat ->
-            if (chat.chatRoomId == chatRoomId) {
+            if (chat.groupId == groupId) {
                 chat.copy(
                     lastMessage = lastMessage,
                     lastMessageTime = lastMessageTime,
@@ -144,6 +141,12 @@ class ChatListViewModel @Inject constructor(
         }.sortedByDescending { it.lastMessageTime } // 최신 메시지 순으로 정렬
 
         _uiState.value = _uiState.value.copy(chatList = updatedList)
-        Log.d(TAG, "채팅방 ${chatRoomId}의 마지막 메시지 업데이트")
+        Log.d(TAG, "그룹 ${groupId}의 마지막 메시지 업데이트")
+    }
+
+    // 채팅방 입장 시 읽지 않은 메시지 수 초기화 (groupId 기준)
+    fun markAsRead(groupId: Long) {
+        updateUnreadCount(groupId, 0)
+        Log.d(TAG, "그룹 ${groupId} 메시지 읽음 처리")
     }
 }
