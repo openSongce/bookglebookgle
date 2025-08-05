@@ -3,6 +3,7 @@
 import grpc
 
 from . import ai_service_pb2 as ai__service__pb2
+from google.protobuf import empty_pb2 as google_dot_protobuf_dot_empty__pb2
 
 
 class AIServiceStub(object):
@@ -55,15 +56,15 @@ class AIServiceStub(object):
                 request_serializer=ai__service__pb2.ChatSessionStatsRequest.SerializeToString,
                 response_deserializer=ai__service__pb2.ChatSessionStatsResponse.FromString,
                 )
-        self.ProcessStructuredDocument = channel.unary_unary(
-                '/bgbg.ai.AIService/ProcessStructuredDocument',
-                request_serializer=ai__service__pb2.ProcessDocumentRequest.SerializeToString,
-                response_deserializer=ai__service__pb2.DocumentResponse.FromString,
-                )
         self.ProcessPdf = channel.stream_unary(
                 '/bgbg.ai.AIService/ProcessPdf',
                 request_serializer=ai__service__pb2.ProcessPdfRequest.SerializeToString,
                 response_deserializer=ai__service__pb2.ProcessPdfResponse.FromString,
+                )
+        self.ProcessPdfStream = channel.stream_unary(
+                '/bgbg.ai.AIService/ProcessPdfStream',
+                request_serializer=ai__service__pb2.ProcessPdfRequest.SerializeToString,
+                response_deserializer=google_dot_protobuf_dot_empty__pb2.Empty.FromString,
                 )
 
 
@@ -124,15 +125,15 @@ class AIServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def ProcessStructuredDocument(self, request, context):
-        """Document Processing
+    def ProcessPdf(self, request_iterator, context):
+        """PDF OCR Processing (includes vector DB storage)
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def ProcessPdf(self, request_iterator, context):
-        """PDF OCR Processing (includes vector DB storage)
+    def ProcessPdfStream(self, request_iterator, context):
+        """PDF OCR Processing (fire-and-forget, no response)
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -181,15 +182,15 @@ def add_AIServiceServicer_to_server(servicer, server):
                     request_deserializer=ai__service__pb2.ChatSessionStatsRequest.FromString,
                     response_serializer=ai__service__pb2.ChatSessionStatsResponse.SerializeToString,
             ),
-            'ProcessStructuredDocument': grpc.unary_unary_rpc_method_handler(
-                    servicer.ProcessStructuredDocument,
-                    request_deserializer=ai__service__pb2.ProcessDocumentRequest.FromString,
-                    response_serializer=ai__service__pb2.DocumentResponse.SerializeToString,
-            ),
             'ProcessPdf': grpc.stream_unary_rpc_method_handler(
                     servicer.ProcessPdf,
                     request_deserializer=ai__service__pb2.ProcessPdfRequest.FromString,
                     response_serializer=ai__service__pb2.ProcessPdfResponse.SerializeToString,
+            ),
+            'ProcessPdfStream': grpc.stream_unary_rpc_method_handler(
+                    servicer.ProcessPdfStream,
+                    request_deserializer=ai__service__pb2.ProcessPdfRequest.FromString,
+                    response_serializer=google_dot_protobuf_dot_empty__pb2.Empty.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -339,23 +340,6 @@ class AIService(object):
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 
     @staticmethod
-    def ProcessStructuredDocument(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/bgbg.ai.AIService/ProcessStructuredDocument',
-            ai__service__pb2.ProcessDocumentRequest.SerializeToString,
-            ai__service__pb2.DocumentResponse.FromString,
-            options, channel_credentials,
-            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
-
-    @staticmethod
     def ProcessPdf(request_iterator,
             target,
             options=(),
@@ -369,5 +353,22 @@ class AIService(object):
         return grpc.experimental.stream_unary(request_iterator, target, '/bgbg.ai.AIService/ProcessPdf',
             ai__service__pb2.ProcessPdfRequest.SerializeToString,
             ai__service__pb2.ProcessPdfResponse.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def ProcessPdfStream(request_iterator,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.stream_unary(request_iterator, target, '/bgbg.ai.AIService/ProcessPdfStream',
+            ai__service__pb2.ProcessPdfRequest.SerializeToString,
+            google_dot_protobuf_dot_empty__pb2.Empty.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
