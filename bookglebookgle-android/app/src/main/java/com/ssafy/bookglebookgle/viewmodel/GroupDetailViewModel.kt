@@ -131,9 +131,23 @@ class GroupDetailViewModel @Inject constructor(
                 } else {
                     val errorBody = response.errorBody()?.string()
                     Log.e(TAG, "그룹 참여 실패 - 코드: ${response.code()}, 메시지: $errorBody")
-                    _joinGroupState.value = JoinGroupUiState.Error(
-                        "그룹 참여 실패: ${response.code()} $errorBody"
-                    )
+
+                    // 에러 메시지를 상태 코드에 따라 구분
+                    val errorMessage = when (response.code()) {
+                        403 -> {
+                            Log.e(TAG, "평점 부족으로 인한 가입 실패")
+                            "403_평점부족"
+                        }
+                        409 -> {
+                            Log.e(TAG, "정원 초과로 인한 가입 실패")
+                            "정원이 가득 찼습니다"
+                        }
+                        else -> {
+                            "그룹 참여 실패: ${response.code()} $errorBody"
+                        }
+                    }
+
+                    _joinGroupState.value = JoinGroupUiState.Error(errorMessage)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "그룹 참여 중 예외 발생: ${e.message}", e)

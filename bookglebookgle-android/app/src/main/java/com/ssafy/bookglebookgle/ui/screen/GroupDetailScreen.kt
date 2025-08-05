@@ -1,6 +1,7 @@
 package com.ssafy.bookglebookgle.ui.screen
 
 import android.util.Log
+import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -17,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -48,6 +50,8 @@ fun GroupDetailScreen(
     val editGroupState by viewModel.editGroupState.collectAsStateWithLifecycle()
     val currentIsMyGroup by viewModel.isMyGroup.collectAsStateWithLifecycle()
 
+    val context = LocalContext.current
+
     // 수정 다이얼로그 상태
     var showEditDialog by remember { mutableStateOf(false) }
 
@@ -62,11 +66,32 @@ fun GroupDetailScreen(
         when (joinGroupState) {
             is JoinGroupUiState.Success -> {
                 Log.d("GroupDetailScreen", "그룹 가입 성공!")
+                Toast.makeText(context, "그룹에 성공적으로 가입했습니다!", Toast.LENGTH_SHORT).show()
                 // 성공 처리 후 상태 초기화
                 viewModel.resetJoinGroupState()
             }
             is JoinGroupUiState.Error -> {
-                Log.e("GroupDetailScreen", "그룹 가입 실패: ${(joinGroupState as JoinGroupUiState.Error).message}")
+                val errorMessage = (joinGroupState as JoinGroupUiState.Error).message
+                Log.e("GroupDetailScreen", "그룹 가입 실패: $errorMessage")
+
+                // 403 에러 또는 평점 관련 에러 메시지인지 확인
+                val toastMessage = when {
+                    errorMessage.contains("403") || errorMessage.contains("평점") -> {
+                        if (uiState is GroupDetailUiState.Success) {
+                            "가입 조건을 만족하지 않습니다.\n최소 요구 평점: ${(uiState as GroupDetailUiState.Success).groupDetail.minRequiredRating}점"
+                        } else {
+                            "평점이 낮아 가입할 수 없습니다."
+                        }
+                    }
+                    errorMessage.contains("정원") || errorMessage.contains("가득") -> {
+                        "모임 정원이 가득 찼습니다."
+                    }
+                    else -> "모임 가입에 실패했습니다."
+                }
+
+                Toast.makeText(context, toastMessage, Toast.LENGTH_LONG).show()
+                // 에러 처리 후 상태 초기화
+                viewModel.resetJoinGroupState()
             }
             else -> {}
         }
@@ -76,6 +101,7 @@ fun GroupDetailScreen(
         when (editGroupState) {
             is EditGroupUiState.Success -> {
                 Log.d("GroupDetailScreen", "그룹 수정 성공!")
+                Toast.makeText(context, "모임 정보가 성공적으로 수정되었습니다!", Toast.LENGTH_SHORT).show()
                 viewModel.resetEditGroupState()
                 showEditDialog = false
                 // 수정 완료 후 화면 새로고침
@@ -83,6 +109,7 @@ fun GroupDetailScreen(
             }
             is EditGroupUiState.Error -> {
                 Log.e("GroupDetailScreen", "그룹 수정 실패: ${(editGroupState as EditGroupUiState.Error).message}")
+                viewModel.resetEditGroupState()
             }
             else -> {}
         }

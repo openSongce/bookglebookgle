@@ -1,5 +1,6 @@
 package com.ssafy.bookglebookgle.ui.component
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -17,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -47,6 +49,8 @@ fun GroupEditDialog(
     onDismiss: () -> Unit,
     onSave: (GroupEditData) -> Unit
 ) {
+    val context = LocalContext.current
+
     // 초기값 설정
     var selectedCategory by remember {
         mutableStateOf(
@@ -112,6 +116,16 @@ fun GroupEditDialog(
 
                         TextButton(
                             onClick = {
+                                // 현재 참가인원보다 적게 설정하려는 경우 검증
+                                if (maxMembers < groupDetail.memberCount) {
+                                    Toast.makeText(
+                                        context,
+                                        "최대 인원은 현재 참가인원(${groupDetail.memberCount}명)보다 적을 수 없습니다.",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                    return@TextButton
+                                }
+
                                 val editData = GroupEditData(
                                     roomTitle = roomTitle,
                                     category = when(selectedCategory) {
