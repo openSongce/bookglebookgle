@@ -43,15 +43,15 @@ public class GroupMemberRatingController {
         return ResponseEntity.ok("평가 수정 완료");
     }
 
-    @Operation(summary = "내가 받은 그룹 내 평균 평점 조회")
-    @GetMapping("/to/{toId}/average")
-    public ResponseEntity<Float> getAverage(
+    @GetMapping("/average")
+    public ResponseEntity<Float> getMyAverage(
             @PathVariable Long groupId,
-            @PathVariable Long toId
+            @AuthenticationPrincipal CustomUserDetails customUser
     ) {
-        Float avg = ratingService.getAverageRating(groupId, toId);
+        Long myId = customUser.getUser().getId();
+        Float avg = ratingService.getAverageRating(groupId, myId);
         if (avg == null) {
-            return ResponseEntity.status(404).build();
+            return ResponseEntity.status(404).body(null);
         }
         return ResponseEntity.ok(avg);
     }
