@@ -121,6 +121,27 @@ public class GroupServiceImpl implements GroupService {
                             .build())
                     .collect(Collectors.toList());
         }
+        // 1) ChatRoom 생성: group과 1:1 매핑되는 채팅방 생성
+        ChatRoom chatRoom = ChatRoom.builder()
+                .group(group)
+                .category(group.getCategory().name())
+                .groupTitle(group.getRoomTitle())
+                .imageUrl(null) // 필요 시 기본값 넣기
+                .lastMessage(null)
+                .lastMessageTime(null)
+                .memberCount(1) // 방장 1명부터 시작
+                .build();
+        chatRoomRepository.save(chatRoom);
+        log.info("[GroupService] 그룹 생성 및 채팅방 생성 완료 - groupId={}, chatRoom memberCount=1", group.getId());
+
+
+        // 2) 채팅방 멤버로 방장 추가
+        ChatRoomMember chatRoomMember = ChatRoomMember.builder()
+                .chatRoom(chatRoom)
+                .user(user)
+                .build();
+        chatRoomMemberRepository.save(chatRoomMember);
+
 
         GroupMember groupMember = GroupMember.builder()
                 .group(group)
@@ -278,6 +299,7 @@ public class GroupServiceImpl implements GroupService {
                 .isFollowingHost(false)
                 .build();
         groupMemberRepository.save(member);
+
         ChatRoom chatRoom = chatRoomRepository.findByGroupId(groupId)
                 .orElseThrow(() -> new NotFoundException("채팅방 없음"));
 
@@ -286,6 +308,13 @@ public class GroupServiceImpl implements GroupService {
                 .user(user)
                 .build();
         chatRoomMemberRepository.save(chatMember);
+
+        // memberCount 1 증가 후 저장
+        chatRoom.setMemberCount(chatRoom.getMemberCount() + 1);
+        chatRoomRepository.save(chatRoom);
+
+        log.info("[GroupService] userId={} 그룹 {} 참가 및 채팅방 멤버 추가 완료, memberCount={}",
+                user.getId(), groupId, chatRoom.getMemberCount());
     }
 
     @Override
@@ -361,7 +390,25 @@ public class GroupServiceImpl implements GroupService {
         }
 
         groupMemberRepository.delete(member);
+
+        ChatRoom chatRoom = chatRoomRepository.findByGroupId(groupId)
+                .orElseThrow(() -> new NotFoundException("채팅방 없음"));
+
+        ChatRoomMember chatRoomMember = chatRoomMemberRepository.findByChatRoomAndUser(chatRoom, user)
+                .orElse(null);
+
+        if (chatRoomMember != null) {
+            chatRoomMemberRepository.delete(chatRoomMember);
+
+            // memberCount 1 감소 후 저장
+            chatRoom.setMemberCount(Math.max(0, chatRoom.getMemberCount() - 1));
+            chatRoomRepository.save(chatRoom);
+
+            log.info("[GroupService] userId={} 그룹 {} 탈퇴 및 채팅방 멤버 삭제 완료, memberCount={}",
+                    user.getId(), groupId, chatRoom.getMemberCount());
+        }
     }
+
 
     @Override
     public boolean isMember(Long groupId, Long userId) {

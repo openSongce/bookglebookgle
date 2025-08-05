@@ -1,7 +1,7 @@
 package com.example.bookglebookgleserver.chat.entity;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
+import com.example.bookglebookgleserver.group.entity.Group;
+import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDateTime;
@@ -13,8 +13,14 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ChatRoom {
+
     @Id
-    private Long groupId;           // groupId와 1:1 관계
+    private Long groupId;  // PK
+
+    @OneToOne
+    @MapsId
+    @JoinColumn(name = "groupId")
+    private Group group;  // Group 엔티티와 1:1 매핑
 
     private String groupTitle;
     private String imageUrl;
@@ -23,7 +29,6 @@ public class ChatRoom {
     private String lastMessage;
     private LocalDateTime lastMessageTime;
     private int memberCount;
-
-    // unreadCount는 DB에 저장 안함! → 쿼리로 계산해서 응답에 포함
 }
+
 
