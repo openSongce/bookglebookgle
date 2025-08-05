@@ -65,7 +65,6 @@ public class GrpcOcrClient {
             PdfInfo info = PdfInfo.newBuilder()
                     .setDocumentId(String.valueOf(pdfId))
                     .setFileName(file.getOriginalFilename())
-                    .putMetadata("meeting_id", String.valueOf(pdfId))
                     .build();
             requestObserver.onNext(ProcessPdfRequest.newBuilder().setInfo(info).build());
 
