@@ -79,6 +79,7 @@ dependencies {
     implementation "io.grpc:grpc-protobuf:${grpcVersion}"
     implementation "io.grpc:grpc-stub:${grpcVersion}"
     implementation "com.google.protobuf:protobuf-java:${protobufVersion}"
+    implementation 'net.devh:grpc-spring-boot-starter:2.15.0.RELEASE'
 
     implementation 'javax.annotation:javax.annotation-api:1.3.2'
 
@@ -126,7 +127,8 @@ sourceSets {
             srcDirs = [
                     'src/main/java',
                     'build/generated/source/proto/main/java',
-                    'build/generated/source/proto/main/grpc'
+                    'build/generated/source/proto/main/grpc',   // ✅ 이 줄 추가!
+                    'build/generated/source/grpc/main/java'
             ]
         }
         proto {
