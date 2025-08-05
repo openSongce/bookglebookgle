@@ -343,11 +343,22 @@ fun GroupEditDialog(
                             color = Color.Black
                         )
                         Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "설정한 평점 이상의 사용자만 모임에 참여할 수 있습니다",
-                            fontSize = 12.sp,
-                            color = Color.Gray
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ){
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_warning),
+                                contentDescription = "위험",
+                                tint = Color.Gray,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "설정한 평점 이상의 사용자만 모임에 참여할 수 있습니다",
+                                fontSize = 12.sp,
+                                color = Color.Gray
+                            )
+                        }
                         Spacer(modifier = Modifier.height(8.dp))
 
                         Card(
