@@ -5,30 +5,27 @@ import jakarta.persistence.*;
 import lombok.*;
 
 @Entity
+@Table(name = "users")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 @Getter
 @Setter
-@Table(name="users")
 public class User {
 
-    @Id@GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name="user_id")
     private Long id;
 
-    @Column(name="user_email",unique = true,nullable = false)
-    private  String email;
+    @Column(name="user_email", unique = true, nullable = false)
+    private String email;
 
     private String password;
     private String nickname;
-
-    //로그인 제공자
     private String provider;
-
     private String profileImageUrl;
-
 
     @Column(name = "avg_rating")
     private Float avgRating;
@@ -36,4 +33,13 @@ public class User {
     @Column(name = "rating_cnt")
     private Integer ratingCnt;
 
+    @PrePersist
+    public void prePersist() {
+        if (avgRating == null) {
+            avgRating = 3.0f;
+        }
+        if (ratingCnt == null) {
+            ratingCnt = 0;
+        }
+    }
 }
