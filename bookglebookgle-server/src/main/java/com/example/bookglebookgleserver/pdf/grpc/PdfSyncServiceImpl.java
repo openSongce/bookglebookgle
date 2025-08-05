@@ -2,6 +2,7 @@ package com.example.bookglebookgleserver.pdf.grpc;
 
 import io.grpc.stub.ServerCallStreamObserver;
 import io.grpc.stub.StreamObserver;
+import net.devh.boot.grpc.server.service.GrpcService;
 
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
@@ -9,6 +10,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+@GrpcService
 public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBase {
 
     private static final Logger logger = Logger.getLogger(PdfSyncServiceImpl.class.getName());
