@@ -3,6 +3,9 @@ package com.ssafy.bookglebookgle.ui.screen
 import android.graphics.PointF
 import android.util.Log
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.selection.LocalTextSelectionColors
 import androidx.compose.foundation.text.selection.TextSelectionColors
@@ -12,6 +15,7 @@ import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -32,6 +36,7 @@ import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.HighlightModel
 import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.PdfAnnotationModel
 import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.TextSelectionData
 import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.selection.TextSelectionOptionsWindow
+import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.util.FitPolicy
 import com.ssafy.bookglebookgle.ui.component.CustomTopAppBar
 import com.ssafy.bookglebookgle.ui.theme.BaseColor
 import com.ssafy.bookglebookgle.viewmodel.PdfViewModel
@@ -91,6 +96,14 @@ fun PdfReadScreen(
 
     val hasBookmark = annotations.bookmarks.any { it.page == currentPage }
     val currentBookmarkIcon = if (hasBookmark) bookmarkedIcon else bookmarkIcon
+
+    var offsetY by remember { mutableStateOf(0f) } // 박스의 Y 좌표
+
+    // 상단으로 스와이프 감지
+    var topSwipe by remember { mutableStateOf(false) }
+
+    // 하단으로 스와이프 감지
+    var bottomSwipe by remember { mutableStateOf(false) }
 
     // 헬퍼 함수들
     fun hideTextSelection() {
@@ -295,7 +308,24 @@ fun PdfReadScreen(
         // Content
         Box(modifier = Modifier
             .fillMaxSize()
-            .padding(paddingValues)) {
+            .padding(paddingValues).pointerInput(Unit) {
+                detectVerticalDragGestures { _, dragAmount ->
+                    // 위로 스와이프 감지
+                    if (dragAmount < 0 && viewModel.canGoToNextPage()) {
+                        // 위로 스와이프일 때
+                        topSwipe = true
+                        bottomSwipe = false
+                        viewModel.goToNextPage()
+                    }
+                    // 아래로 스와이프 감지
+                    if (dragAmount > 0 && viewModel.canGoToPreviousPage()) {
+                        // 아래로 스와이프일 때
+                        topSwipe = false
+                        bottomSwipe = true
+                        viewModel.goToPreviousPage()
+                    }
+                }
+            }) {
             // 기존의 when 문을 다음과 같이 수정하세요
 
             when {
@@ -397,6 +427,12 @@ fun PdfReadScreen(
                                             viewModel.notifyPageChange(newPage)
                                         }
 
+                                        override fun onTap() {
+                                            hideTextSelection()
+                                            textSelectionOptionsWindow.dismiss(false)
+
+                                        }
+
                                         override fun onTextSelected(
                                             selection: TextSelectionData,
                                             rawPoint: PointF
@@ -444,11 +480,6 @@ fun PdfReadScreen(
                                             textSelectionOptionsWindow.dismiss(false)
                                         }
 
-                                        override fun onTap() {
-                                            hideTextSelection()
-                                            textSelectionOptionsWindow.dismiss(false)
-                                        }
-
                                         override fun onMergeStart(
                                             mergeId: Int,
                                             mergeType: PdfFile.MergeType
@@ -473,7 +504,16 @@ fun PdfReadScreen(
                                     Log.d("PdfReadScreen", "PDF 파일 크기: ${pdfFile!!.length()} bytes")
 
                                     try {
-                                        fromFile(pdfFile!!).defaultPage(0).load()
+                                        fromFile(pdfFile!!)
+                                            .defaultPage(0)
+                                            .enableSwipe(false)              // 스와이프 비활성화
+                                            .swipeHorizontal(false)         // 수평 스와이프 비활성화
+                                            .pageSnap(true)                 // 페이지 스냅 활성화
+                                            .pageFitPolicy(FitPolicy.WIDTH) // 페이지를 화면 너비에 맞춤
+                                            .fitEachPage(true)              // 각 페이지를 개별적으로 맞춤
+                                            .enableDoubleTap(true)          // 더블탭 줌 활성화
+                                            .spacing(1000)
+                                            .load()
                                         Log.d("PdfReadScreen", "PDF 파일 로드 호출 완료")
                                     } catch (e: Exception) {
                                         Log.e("PdfReadScreen", "PDF 파일 로드 중 예외 발생", e)
