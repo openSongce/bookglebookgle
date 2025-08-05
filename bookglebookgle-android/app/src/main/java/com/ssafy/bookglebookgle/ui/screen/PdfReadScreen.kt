@@ -156,11 +156,22 @@ fun PdfReadScreen(
 
     //gRPC
 
-    LaunchedEffect(Unit) {
-        if (groupId != null && userId != null) {
-            viewModel.connectToSync(groupId, userId)
-        }
+    // 기존 gRPC LaunchedEffect를 이것으로 교체
 
+    LaunchedEffect(Unit) {
+        groupId?.let { gid ->
+            viewModel.connectToSync(gid, userId) { syncMessage ->
+                // 다른 사용자의 페이지 변경 메시지 수신 처리
+                if (syncMessage.userId != userId) {
+                    Log.d("PdfReadScreen", "다른 사용자 페이지 변경 수신: ${syncMessage.currentPage} (from: ${syncMessage.userId})")
+
+                    // 메인 스레드에서 페이지 이동 실행
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        viewModel.handleRemotePageChange(syncMessage.currentPage)
+                    }
+                }
+            }
+        }
     }
 
 
@@ -346,6 +357,7 @@ fun PdfReadScreen(
 
                                 PDFView(context, null).apply {
                                     pdfView = this
+                                    viewModel.setPdfView(this)
                                     attachCoroutineScope(pdfRenderScope)
 
                                     // 텍스트 선택 옵션 창 연결
@@ -379,12 +391,10 @@ fun PdfReadScreen(
                                         ) {
                                             val newPage = pageIndex + 1
                                             viewModel.updateCurrentPage(newPage)
-                                            Log.d("PdfReadScreen", "페이지 변경: ${pageIndex + 1}")
+                                            Log.d("PdfReadScreen", "페이지 변경: $newPage")
 
-                                            // gRPC로 현재 페이지 broadcast
-                                            viewModel.notifyPageChange(userId, newPage)
-
-                                            Log.d("PdfReadScreen", "페이지 변경 & broadcast: $newPage")
+                                            // gRPC로 현재 페이지 broadcast (무한 루프 방지 로직 포함)
+                                            viewModel.notifyPageChange(newPage)
                                         }
 
                                         override fun onTextSelected(

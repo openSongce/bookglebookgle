@@ -27,6 +27,7 @@ class PdfViewModel @Inject constructor(
     private val pdfRepository: PdfRepository,
 ): ViewModel(){
 
+    private var userId: String? = null
     var currentGroupId: Long? = null
         private set
 
@@ -585,21 +586,67 @@ class PdfViewModel @Inject constructor(
     }
 
 
+    // 기존 gRPC 섹션을 이 코드로 완전히 교체하세요
+
     //gRPC
+    private var currentPdfView: com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.PDFView? = null
+    private var isRemotePageChange = false
 
-    fun connectToSync(groupId: Long, userId: String) {
-        PdfSyncClientManager.connect(groupId, userId) { message ->
-            if (message.currentPage > 0) {
-                _currentPage.value = message.currentPage
-                _showPageInfo.value = true
+    // PDFView 참조 저장
+    fun setPdfView(pdfView: com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.PDFView) {
+        Log.d(TAG, "PDFView 참조 저장")
+        this.currentPdfView = pdfView
+    }
+
+    // gRPC 연결 시작 (수정된 버전)
+    fun connectToSync(groupId: Long, userId: String, onReceive: (com.example.bookglebookgleserver.pdf.grpc.SyncMessage) -> Unit) {
+        this.currentGroupId = groupId
+        this.userId = userId
+
+        PdfSyncClientManager.connect(groupId, userId, onReceive)
+    }
+
+    // 실제 페이지 이동 함수 추가
+    fun moveToPage(page: Int) {
+        currentPdfView?.let { pdfView ->
+            try {
+                Log.d(TAG, "페이지 이동 실행: $page")
+                // PDF 뷰어에서 실제 페이지 이동 (0 기반 인덱스)
+                pdfView.jumpTo(page - 1)
+            } catch (e: Exception) {
+                Log.e(TAG, "페이지 이동 실패", e)
             }
-            // TODO: message.annotation 도 처리 가능
-        }
+        } ?: Log.w(TAG, "PDFView가 null - 페이지 이동 불가")
     }
 
-    fun notifyPageChange(userId: String, page: Int) {
-        PdfSyncClientManager.sendPageUpdate(userId, page)
+    // 원격 페이지 변경 처리
+    fun handleRemotePageChange(page: Int) {
+        Log.d(TAG, "원격 페이지 변경 처리: $page")
+        isRemotePageChange = true
+        moveToPage(page)
     }
+
+    // 페이지 변경 발생 시 서버에 알림 (수정된 버전)
+    fun notifyPageChange(page: Int) {
+        if (!isRemotePageChange) {
+            // 로컬 페이지 변경일 때만 broadcast
+            Log.d(TAG, "로컬 페이지 변경 broadcast: $page")
+            PdfSyncClientManager.sendPageUpdate(page)
+        } else {
+            Log.d(TAG, "원격 페이지 변경이므로 broadcast 생략: $page")
+        }
+        isRemotePageChange = false // 플래그 리셋
+    }
+
+    // 뷰모델이 사라질 때 연결 종료
+    override fun onCleared() {
+        Log.d(TAG, "ViewModel 정리 - gRPC 연결 종료")
+        PdfSyncClientManager.disconnect()
+        currentPdfView = null
+        super.onCleared()
+    }
+
+
 }
 
 //package com.ssafy.bookglebookgle.viewmodel
