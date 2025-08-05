@@ -8,7 +8,6 @@ services:
       MYSQL_DATABASE: bookglebookgle
     ports:
       - "3306:3306"
-      - "6565:6565"
     volumes:
       - ./mysql-data:/var/lib/mysql
     networks:
@@ -22,6 +21,7 @@ services:
     restart: unless-stopped
     ports:
       - "8081:8081"
+      - "6565:6565"
     depends_on:
       - mysql
       - redis                 # ⭐️ spring이 redis보다 나중에 뜨도록!
