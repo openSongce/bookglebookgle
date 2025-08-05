@@ -1,6 +1,9 @@
 package com.example.bookglebookgleserver.ocr.grpc;
 
-import com.bgbg.ai.grpc.*;
+import com.bgbg.ai.grpc.AIServiceGrpc;
+import com.bgbg.ai.grpc.PdfInfo;
+import com.bgbg.ai.grpc.ProcessPdfRequest;
+import com.bgbg.ai.grpc.ProcessPdfResponse;
 import com.google.protobuf.ByteString;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
@@ -14,7 +17,6 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.InputStream;
 import java.util.Arrays;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Component
@@ -82,7 +84,7 @@ public class GrpcOcrClient {
             requestObserver.onCompleted();
 
             // 4. 응답 대기
-            finishLatch.await(10, TimeUnit.SECONDS);
+            finishLatch.await();
 
         } catch (Exception e) {
             log.error("❌ 파일 전송 중 예외 발생", e);
