@@ -37,7 +37,7 @@ public class GrpcOcrClient {
         log.info("✅ gRPC 클라이언트 초기화 완료 - URL: {}", ocrServerUrl);
     }
 
-    public ProcessPdfResponse sendPdf(Long pdfId, MultipartFile file) {
+    public ProcessPdfResponse sendPdf(Long pdfId, MultipartFile file, Long meetingId) {
         final CountDownLatch finishLatch = new CountDownLatch(1);
         final ProcessPdfResponse[] responseHolder = new ProcessPdfResponse[1];
 
@@ -65,6 +65,7 @@ public class GrpcOcrClient {
             PdfInfo info = PdfInfo.newBuilder()
                     .setDocumentId(String.valueOf(pdfId))
                     .setFileName(file.getOriginalFilename())
+                    .setMeetingId(String.valueOf(meetingId))
                     .build();
             requestObserver.onNext(ProcessPdfRequest.newBuilder().setInfo(info).build());
 

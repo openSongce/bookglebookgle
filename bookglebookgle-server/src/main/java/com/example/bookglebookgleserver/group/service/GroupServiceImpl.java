@@ -98,7 +98,7 @@ public class GroupServiceImpl implements GroupService {
         List<OcrTextBlockDto> ocrResultList = null;
 
         if (dto.isImageBased()) {
-            ProcessPdfResponse response = grpcOcrClient.sendPdf(pdf.getPdfId(), pdfFile);
+            ProcessPdfResponse response = grpcOcrClient.sendPdf(pdf.getPdfId(), pdfFile, group.getId());
             if (!response.getSuccess()) {
                 throw new BadRequestException("OCR 실패: " + response.getMessage());
             }
