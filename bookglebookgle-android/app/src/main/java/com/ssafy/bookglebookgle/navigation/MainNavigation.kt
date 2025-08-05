@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -33,6 +34,7 @@ import com.ssafy.bookglebookgle.ui.screen.ProfileScreen
 import com.ssafy.bookglebookgle.ui.screen.RegisterScreen
 import com.ssafy.bookglebookgle.ui.screen.SplashScreen
 import com.ssafy.bookglebookgle.ui.screen.GroupDetailScreen
+import com.ssafy.bookglebookgle.viewmodel.ProfileViewModel
 
 @Composable
 fun MainNavigation(
@@ -129,7 +131,9 @@ fun MainNavigation(
                     Log.d("GroupId", "PdfReadScreen 전달 - groupId: $groupId")
                 }
 
-                PdfReadScreen(groupId, navController =  navController)
+                val profileViewModel: ProfileViewModel = hiltViewModel()
+                val userId by profileViewModel.userId.collectAsState()
+                PdfReadScreen(groupId = groupId, userId = userId.toString(), navController = navController)
             }
 
             composable(Screen.ChatRoomScreen.route){

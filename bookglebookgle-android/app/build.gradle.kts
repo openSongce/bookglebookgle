@@ -16,6 +16,7 @@ plugins {
     alias(libs.plugins.kotlin.kapt)
     alias(libs.plugins.hilt.android)
     id("kotlin-parcelize")
+    id("com.google.protobuf") version "0.9.4"
 }
 
 android {
@@ -153,8 +154,46 @@ dependencies {
     //Kakao Login
     implementation("com.kakao.sdk:v2-user:2.21.6")
 
+    //gRPC
+    implementation("io.grpc:grpc-okhttp:1.64.0")
+    implementation("io.grpc:grpc-protobuf-lite:1.64.0")
+    implementation("io.grpc:grpc-stub:1.64.0")
+    implementation("com.google.protobuf:protobuf-javalite:3.25.3")
+    implementation("javax.annotation:javax.annotation-api:1.3.2")
+
 }
 
 kapt {
     correctErrorTypes = true
+}
+
+protobuf {
+    protoc {
+        artifact = "com.google.protobuf:protoc:3.25.3"
+    }
+
+    // 여기를 수정
+    plugins {
+        create("grpc") {
+            artifact = "io.grpc:protoc-gen-grpc-java:1.64.0"
+        }
+    }
+
+    generatedFilesBaseDir = "$projectDir/build/generated"
+
+    generateProtoTasks {
+        all().forEach {
+            it.plugins {
+                create("grpc") {
+                    option("lite") // 옵션은 선택
+                }
+            }
+            it.builtins {
+                create("java") {
+                    option("lite")
+                }
+            }
+            it.inputs.dir("src/main/proto")
+        }
+    }
 }
