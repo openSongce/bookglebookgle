@@ -51,7 +51,7 @@ public class GroupMemberRatingController {
     ) {
         Float avg = ratingService.getAverageRating(groupId, toId);
         if (avg == null) {
-            return ResponseEntity.status(404).body("해당 유저에 대한 평가가 없습니다.");
+            return ResponseEntity.status(404).build();
         }
         return ResponseEntity.ok(avg);
     }
