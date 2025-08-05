@@ -40,7 +40,7 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
                 if (groupId == null) {
                     groupId = message.getGroupId();
                     roomObservers.computeIfAbsent(groupId, k -> new CopyOnWriteArraySet<>()).add(responseObserver);
-                    log.info("[gRPC-Chat] 그룹 {}에 클라이언트 연결!", groupId);
+                    log.info("[gRPC-Chat] 그룹 {}에 클라이언트 연결! 현재 접속 수: {}", groupId, roomObservers.get(groupId).size());
                 }
 
                 // 채팅방/유저 조회 및 예외처리
@@ -55,7 +55,7 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
                     return;
                 }
 
-                // 💡 DB 저장 시에는 JPA 엔티티 패키지명을 명확히!
+                // DB 저장
                 try {
                     com.example.bookglebookgleserver.chat.entity.ChatMessage entity =
                             com.example.bookglebookgleserver.chat.entity.ChatMessage.builder()
@@ -80,7 +80,11 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
                     } catch (Exception e) {
                         log.warn("[gRPC-Chat] Observer 메시지 전송 중 예외: {}", e.getMessage(), e);
                         observers.remove(observer);
-                        observer.onCompleted();
+                        try {
+                            observer.onCompleted();
+                        } catch (Exception ex) {
+                            log.error("[gRPC-Chat] observer.onCompleted() 호출 중 예외: {}", ex.getMessage(), ex);
+                        }
                     }
                 }
             }
@@ -103,6 +107,7 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
                     Set<StreamObserver<ChatMessage>> observers = roomObservers.get(groupId);
                     if (observers != null) {
                         observers.remove(responseObserver);
+                        log.info("[gRPC-Chat] 그룹 {}에서 클라이언트 연결 해제! 남은 접속 수: {}", groupId, observers.size());
                     }
                 }
             }
