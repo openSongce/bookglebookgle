@@ -20,7 +20,13 @@ public class BookglebookgleServerApplication {
 
         SpringApplication.run(BookglebookgleServerApplication.class, args);
 
-
+        new Thread(() -> {
+            try {
+                com.example.bookglebookgleserver.grpc.PdfSyncGrpcServer.main(null);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }).start();
     }
 
 }
