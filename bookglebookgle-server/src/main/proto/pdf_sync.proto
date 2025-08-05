@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package bgbg.pdf;
+
+// ❗ 이 부분을 실제 서버 패키지와 일치하게 수정
+option java_package = "com.example.bookglebookgleserver.pdf.grpc";
+option java_multiple_files = true;
+
+service PdfSyncService {
+  rpc JoinRoom(JoinRequest) returns (stream SyncMessage);
+  rpc SendMessage(SyncMessage) returns (Ack);
+}
+
+message JoinRequest {
+  int64 groupId = 1;
+  string userId = 2;
+}
+
+message SyncMessage {
+  int64 groupId = 1;
+  string userId = 2;
+  int32 currentPage = 3;
+}
+
+message Ack {
+  bool success = 1;
+  string message = 2; // 설명 텍스트
+}

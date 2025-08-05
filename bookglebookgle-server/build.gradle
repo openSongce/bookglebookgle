@@ -108,13 +108,16 @@ protobuf {
             artifact = "io.grpc:protoc-gen-grpc-java:${grpcVersion}"
         }
     }
-    generateProtoTasks {
-        all().each { task ->
-            task.plugins {
-                grpc {}
-            }
-        }
-    }
+	generateProtoTasks {
+	    all().each { task ->
+	        task.builtins {
+	            java {}
+	        }
+	        task.plugins {
+	            grpc {}
+	        }
+	    }
+	}
 }
 
 sourceSets {
