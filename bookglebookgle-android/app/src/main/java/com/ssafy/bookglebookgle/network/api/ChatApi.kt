@@ -8,7 +8,7 @@ import retrofit2.http.Path
 
 interface ChatApi {
 
-    @GET("chat/list")
+    @GET("chat/rooms")
     suspend fun getChatList(): Response<List<ChatListResponse>>
 
     @GET("chat/{groupId}/messages")

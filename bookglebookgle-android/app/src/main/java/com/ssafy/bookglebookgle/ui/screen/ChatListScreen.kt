@@ -57,6 +57,10 @@ fun ChatListScreen(
         }
     }
 
+    LaunchedEffect(Unit) {
+        viewModel.loadChatList()
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
@@ -182,7 +186,7 @@ fun ChatListScreen(
 
                             if (index < filteredChatList.size - 1) {
                                 HorizontalDivider(
-                                    modifier = Modifier.padding(8.dp),
+                                    modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
                                     thickness = 1.dp,
                                     color = Color(0xFFE0E0E0)
                                 )
@@ -317,7 +321,7 @@ fun ChatCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 10.dp),
+                .padding(top = 10.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
 
@@ -327,7 +331,7 @@ fun ChatCard(
                     model = chat.imageUrl,
                     contentDescription = "모임 이미지",
                     modifier = Modifier
-                        .size(80.dp)
+                        .size(50.dp)
                         .background(
                             color = Color(0xFFF0F0F0),
                             shape = RoundedCornerShape(12.dp)
@@ -346,7 +350,7 @@ fun ChatCard(
                     ),
                     contentDescription = "모임 이미지",
                     modifier = Modifier
-                        .size(70.dp)
+                        .size(50.dp)
                         .clip(RoundedCornerShape(12.dp)),
                     contentScale = ContentScale.Crop
                 )

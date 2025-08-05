@@ -58,6 +58,13 @@ fun ChatRoomScreen(
         }
     }
 
+    // 화면 나갈 때 채팅방 나가기
+    DisposableEffect(Unit) {
+        onDispose {
+            viewModel.leaveChatRoom()
+        }
+    }
+
     // 채팅방 입장
     LaunchedEffect(groupId) {
         viewModel.enterChatRoom(groupId, userId)
@@ -95,55 +102,73 @@ fun ChatRoomScreen(
             navController = navController,
         )
 
-        // 채팅 메시지 목록
-        LazyColumn(
-            state = listState,
+        // 채팅 메시지 목록 (기존 코드 그대로)
+        Box(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = PaddingValues(
-                top = 16.dp,
-                bottom = 26.dp
-            )
         ) {
-            if (uiState.isLoading) {
-                item {
-                    Box(
-                        modifier = Modifier.fillMaxWidth(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator(
-                            color = Color(0xFFF4E5CE)
-                        )
-                    }
-                }
-            }
-
-            if (uiState.error != null) {
-                item {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(8.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color.Red.copy(alpha = 0.1f))
-                    ) {
-                        Text(
-                            text = uiState.error!!,
-                            modifier = Modifier.padding(16.dp),
-                            color = Color.Red
-                        )
-                    }
-                }
-            }
-
-            // ViewModel에서 관리하는 메시지 목록 사용
-            items(uiState.chatMessages) { message ->
-                ChatMessageItem(
-                    message = message,
-                    isMyMessage = viewModel.isMyMessage(message, userId)
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(
+                    top = 16.dp,
+                    bottom = 26.dp
                 )
+            ) {
+                if (uiState.isLoading) {
+                    item {
+                        Box(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(
+                                color = Color(0xFFF4E5CE)
+                            )
+                        }
+                    }
+                }
+
+                if (uiState.error != null) {
+                    item {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(8.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color.Red.copy(alpha = 0.1f))
+                        ) {
+                            Text(
+                                text = uiState.error!!,
+                                modifier = Modifier.padding(16.dp),
+                                color = Color.Red
+                            )
+                        }
+                    }
+                }
+
+                items(uiState.chatMessages) { message ->
+                    ChatMessageItem(
+                        message = message,
+                        isMyMessage = viewModel.isMyMessage(message, userId)
+                    )
+                }
+            }
+            // 빈 상태 메시지 표시
+            if (!uiState.isLoading && uiState.chatMessages.isEmpty() && uiState.error == null) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "대화내역이 없습니다.\n채팅을 시작해보세요!",
+                        fontSize = 16.sp,
+                        color = Color.Gray,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
             }
         }
 
@@ -159,10 +184,11 @@ fun ChatRoomScreen(
                     .padding(8.dp),
                 verticalAlignment = Alignment.Bottom
             ) {
+                // 입력 필드 추가
                 CompositionLocalProvider(
                     LocalTextSelectionColors provides TextSelectionColors(
-                        handleColor = BaseColor, // 드래그 핸들(물방울) 색상
-                        backgroundColor = BaseColor.copy(alpha = 0.3f) // 선택 영역 배경색 (투명도 적용)
+                        handleColor = BaseColor,
+                        backgroundColor = BaseColor.copy(alpha = 0.3f)
                     )
                 ) {
                     Box(
@@ -171,32 +197,42 @@ fun ChatRoomScreen(
                             .heightIn(min = 40.dp)
                             .border(
                                 width = 1.dp,
-                                color = if (messageText.isNotEmpty()) BaseColor else Color.Gray.copy(alpha = 0.5f),
+                                color = if (messageText.isNotEmpty()) BaseColor else Color.Gray.copy(
+                                    alpha = 0.5f
+                                ),
                                 shape = RoundedCornerShape(16.dp)
                             )
                             .padding(horizontal = 12.dp, vertical = 8.dp),
-                        contentAlignment = Alignment.CenterStart
+                        contentAlignment = Alignment.Center
                     ) {
                         BasicTextField(
                             value = messageText,
-                            onValueChange = { messageText = it },
+                            onValueChange = {
+                                messageText = it
+                                if (uiState.error != null) viewModel.clearError()
+                            },
                             modifier = Modifier.fillMaxWidth(),
                             textStyle = TextStyle(
                                 fontSize = 14.sp,
-                                lineHeight = 12.sp,
+                                lineHeight = 20.sp,
                                 color = Color.Black
                             ),
                             maxLines = 4,
                             cursorBrush = SolidColor(BaseColor),
                             decorationBox = { innerTextField ->
-                                if (messageText.isEmpty()) {
-                                    Text(
-                                        text = "메시지 입력",
-                                        fontSize = 14.sp,
-                                        color = Color.Gray
-                                    )
+                                Box(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    contentAlignment = Alignment.CenterStart
+                                ) {
+                                    if (messageText.isEmpty()) {
+                                        Text(
+                                            text = "메시지 입력",
+                                            fontSize = 14.sp,
+                                            color = Color.Gray
+                                        )
+                                    }
+                                    innerTextField()
                                 }
-                                innerTextField()
                             }
                         )
                     }
@@ -206,13 +242,13 @@ fun ChatRoomScreen(
 
                 FloatingActionButton(
                     onClick = {
-                        if (messageText.isNotBlank()) {
-                            viewModel.sendMessage(messageText.trim(), userId, null)
+                        if (messageText.isNotBlank() && uiState.grpcConnected) {
+                            viewModel.sendMessage(messageText.trim())
                             messageText = ""
                         }
                     },
                     modifier = Modifier.size(40.dp),
-                    containerColor = MainColor
+                    containerColor = if (uiState.grpcConnected || messageText.isNotBlank()) MainColor else Color.Gray
                 ) {
                     Icon(
                         imageVector = Icons.Default.Send,
@@ -334,7 +370,5 @@ fun ChatMessageItem(
                 }
             }
         }
-
-
     }
 }

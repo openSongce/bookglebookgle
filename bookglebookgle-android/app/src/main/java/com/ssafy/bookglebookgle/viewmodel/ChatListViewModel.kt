@@ -36,59 +36,19 @@ class ChatListViewModel @Inject constructor(
         loadChatList()
     }
 
-    private fun loadChatList() {
+    fun loadChatList() {
         viewModelScope.launch {
             Log.d(TAG, "채팅방 목록 로딩 시작")
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
 
             try {
-                // TODO: Repository에서 채팅 목록 가져오기
-//                 val chatList = chatRepositoryImpl.getChatList()
+                 val chatList = chatRepositoryImpl.getChatList()
 
-//                Log.d(TAG, "채팅방 목록 로딩 성공 - ${chatList.size}개 채팅방")
-
-//                _uiState.value = _uiState.value.copy(
-//                    isLoading = false,
-//                    chatList = chatList
-//                )
-
-                // Todo: 실제 연동 시 아래 코드 제거.
-                val dummyChatList = listOf(
-                    ChatListResponse(
-                        imageUrl = null,
-                        category = "READING",
-                        groupId = 1,
-                        groupTitle = "책 읽기 모임",
-                        lastMessage = "다음 주에 읽을 책이 뭐가 좋을까요?",
-                        lastMessageTime = "2024-12-21 14:30",
-                        memberCount = 5,
-                        unreadCount = 2
-                    ),
-                    ChatListResponse(
-                        imageUrl = null,
-                        category = "REVIEW",
-                        groupId = 2,
-                        groupTitle = "자소서 첨삭 모임",
-                        lastMessage = "첨삭해주신 내용 확인했습니다!",
-                        lastMessageTime = "2024-12-21 12:15",
-                        memberCount = 3,
-                        unreadCount = 0
-                    ),
-                    ChatListResponse(
-                        imageUrl = null,
-                        category = "STUDY",
-                        groupId = 3,
-                        groupTitle = "정처기 모임",
-                        lastMessage = "내일 시험 준비는 어떻게 되가고 있나요?",
-                        lastMessageTime = "2024-12-20 18:45",
-                        memberCount = 6,
-                        unreadCount = 5
-                    )
-                )
+                Log.d(TAG, "채팅방 목록 로딩 성공 - ${chatList.size}개 채팅방")
 
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    chatList = dummyChatList
+                    chatList = chatList
                 )
 
             }  catch (e: Exception) {

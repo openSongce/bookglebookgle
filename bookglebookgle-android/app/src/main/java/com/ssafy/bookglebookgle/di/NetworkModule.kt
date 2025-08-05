@@ -1,5 +1,6 @@
 package com.ssafy.bookglebookgle.di
 
+import com.ssafy.bookglebookgle.repository.ChatGrpcRepository
 import com.ssafy.bookglebookgle.network.api.AuthApi
 import com.ssafy.bookglebookgle.network.AuthInterceptor
 import com.ssafy.bookglebookgle.network.api.LoginApi
@@ -17,12 +18,18 @@ import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import javax.inject.Provider
 import javax.inject.Singleton
+import io.grpc.ManagedChannel
+import io.grpc.ManagedChannelBuilder
+import com.example.bookglebookgleserver.chat.ChatServiceGrpc
+import java.util.concurrent.TimeUnit
 
 @Module
 @InstallIn(SingletonComponent::class)
 object NetworkModule {
 
     private const val BASE_URL = "http://52.79.59.66:8081/" // TODO: 실제 서버 주소로 교체
+    private const val GRPC_SERVER_URL = "52.79.59.66"  // gRPC 서버 주소
+    private const val GRPC_SERVER_PORT = 6565
 
     /**
      * API
@@ -85,4 +92,34 @@ object NetworkModule {
         .client(okHttpClient)
         .addConverterFactory(GsonConverterFactory.create())
         .build()
+
+    /**
+     * gRPC 관련
+     * */
+    @Provides
+    @Singleton
+    fun provideGrpcChannel(): ManagedChannel {
+        return ManagedChannelBuilder.forAddress(GRPC_SERVER_URL, GRPC_SERVER_PORT)
+            .usePlaintext()
+            .keepAliveTime(30, TimeUnit.SECONDS)
+            .keepAliveTimeout(10, TimeUnit.SECONDS)
+            .keepAliveWithoutCalls(true)
+            .build()
+    }
+
+    @Provides
+    @Singleton
+    fun provideChatServiceStub(channel: ManagedChannel): ChatServiceGrpc.ChatServiceStub {
+        return ChatServiceGrpc.newStub(channel)
+    }
+
+    @Provides
+    @Singleton
+    fun provideChatGrpcRepository(
+        channel: ManagedChannel,
+        chatStub: ChatServiceGrpc.ChatServiceStub
+    ): ChatGrpcRepository {
+        return ChatGrpcRepository(channel, chatStub)
+    }
+
 }
