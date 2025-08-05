@@ -57,11 +57,13 @@ fun CustomTopAppBar(
     ismygroup: Boolean = false,
     isHost: Boolean = false,
     isDetailScreen: Boolean = false,
+    isChatScreen: Boolean = false,
     isPdfView: Boolean = false,
     onBackPressed: (() -> Unit)? = null, // 뒤로가기 버튼 클릭 콜백
     onEditClick: (() -> Unit)? = null,
     onSearchPerformed: ((String) -> Unit)? = null, // 검색 실행 콜백
-    onSearchCancelled: (() -> Unit)? = null // 검색 취소 콜백 추가
+    onSearchCancelled: (() -> Unit)? = null, // 검색 취소 콜백 추가
+    onChatSettingsClick: (() -> Unit)? = null // 채팅 설정 콜백 추가
 ) {
     var isSearchMode by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
@@ -142,7 +144,7 @@ fun CustomTopAppBar(
             } else if (!isSearchMode && title == "main_home") {
                 Text(
                     text = "북글북글",
-                    fontWeight = FontWeight.Bold,
+                    fontWeight        = FontWeight.Bold,
                     textAlign = TextAlign.Center,
                     fontSize = 20.sp,
                     modifier = Modifier
@@ -167,7 +169,7 @@ fun CustomTopAppBar(
                     fontSize = 20.sp,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(end = 16.dp)
+                        .padding(start = 16.dp)
                 )
             } else if (title == "my_page") {
                 Text(
@@ -176,7 +178,7 @@ fun CustomTopAppBar(
                     textAlign = TextAlign.Center,
                     fontSize = 20.sp,
                     modifier = Modifier
-                        .padding(start = 24.dp)
+                        .padding(start = 16.dp)
                         .fillMaxWidth()
                 )
             } else if (title == "my_group") {
@@ -224,9 +226,18 @@ fun CustomTopAppBar(
                         .padding(end = 40.dp)
                 )
             }
+            else if(isChatScreen){
+                Text(
+                    text = title,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                )
+            }
         },
         navigationIcon = {
-            if (isPdfView || ismygroup || isDetailScreen) {
+            if (isPdfView || ismygroup || isDetailScreen || isChatScreen) {
                 Icon(
                     painter = painterResource(id = R.drawable.ic_back_arrow_left),
                     contentDescription = "뒤로가기",
@@ -305,14 +316,21 @@ fun CustomTopAppBar(
                             }
                     )
                 }
-            } else if (title == "my_page") {
+            } else if (title == "my_page" || title == "chat") {
                 Icon(
                     painter = painterResource(id = R.drawable.my_profile_setting),
                     contentDescription = "설정",
                     modifier = Modifier
                         .padding(end = 16.dp)
                         .size(20.dp)
-                        .clickable { /* TODO: 설정 클릭 동작 */ }
+                        .clickable {
+                            if (title == "chat") {
+                                onChatSettingsClick?.invoke()
+                            } else {
+
+                            }
+
+                        }
                 )
             } else if (title == "create_group") {
                 Icon(

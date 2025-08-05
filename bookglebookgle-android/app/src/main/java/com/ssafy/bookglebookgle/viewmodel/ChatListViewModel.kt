@@ -73,7 +73,7 @@ class ChatListViewModel @Inject constructor(
                         groupTitle = "자소서 첨삭 모임",
                         lastMessage = "첨삭해주신 내용 확인했습니다!",
                         lastMessageTime = "2024-12-21 12:15",
-                        memberCount = 8,
+                        memberCount = 3,
                         unreadCount = 0
                     ),
                     ChatListResponse(

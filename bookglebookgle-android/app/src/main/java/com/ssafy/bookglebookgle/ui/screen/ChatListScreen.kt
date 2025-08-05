@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -23,13 +24,16 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
 import com.ssafy.bookglebookgle.R
 import com.ssafy.bookglebookgle.entity.ChatListResponse
+import com.ssafy.bookglebookgle.navigation.Screen
 import com.ssafy.bookglebookgle.ui.component.CustomTopAppBar
+import com.ssafy.bookglebookgle.ui.theme.MainColor
 import com.ssafy.bookglebookgle.viewmodel.ChatListViewModel
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -41,114 +45,259 @@ fun ChatListScreen(
     viewModel: ChatListViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    var showCategoryFilter by remember { mutableStateOf(false) }
+    var selectedCategory by remember { mutableStateOf<String?>(null) }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.White)
-    ) {
-        CustomTopAppBar(
-            title = "chat",
-            navController = navController,
-        )
+    // 카테고리 필터 적용된 채팅 리스트
+    val filteredChatList = remember(uiState.chatList, selectedCategory) {
+        if (selectedCategory == null) {
+            uiState.chatList
+        } else {
+            uiState.chatList.filter { it.category == selectedCategory }
+        }
+    }
 
-        when {
-            uiState.isLoading -> {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator(
-                        color = Color(0xFFF4E5CE)
-                    )
-                }
-            }
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.White)
+        ) {
+            CustomTopAppBar(
+                title = "chat",
+                navController = navController,
+                onChatSettingsClick = { showCategoryFilter = !showCategoryFilter }
+            )
 
-            uiState.error != null -> {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally
+            when {
+                uiState.isLoading -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = "오류가 발생했습니다",
-                            fontSize = 16.sp,
-                            color = Color.Gray,
-                            textAlign = TextAlign.Center
+                        CircularProgressIndicator(
+                            color = Color(0xFFF4E5CE)
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = uiState.error ?: "알 수 없는 오류",
-                            fontSize = 14.sp,
-                            color = Color.Gray,
-                            textAlign = TextAlign.Center
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Button(
-                            onClick = { viewModel.refreshChatList() },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFFF4E5CE),
-                                contentColor = Color.Black
-                            )
+                    }
+                }
+
+                uiState.error != null -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Text("다시 시도", color = Color.White)
+                            Text(
+                                text = "오류가 발생했습니다",
+                                fontSize = 16.sp,
+                                color = Color.Gray,
+                                textAlign = TextAlign.Center
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = uiState.error ?: "알 수 없는 오류",
+                                fontSize = 14.sp,
+                                color = Color.Gray,
+                                textAlign = TextAlign.Center
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Button(
+                                onClick = { viewModel.refreshChatList() },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFFF4E5CE),
+                                    contentColor = Color.Black
+                                )
+                            ) {
+                                Text("다시 시도", color = Color.White)
+                            }
                         }
                     }
                 }
-            }
 
-            uiState.chatList.isEmpty() && !uiState.isLoading -> {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally
+                filteredChatList.isEmpty() && !uiState.isLoading -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = "참여 중인 채팅방이 없습니다.",
-                            fontSize = 16.sp,
-                            color = Color.Gray,
-                            textAlign = TextAlign.Center
-                        )
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = if (selectedCategory != null) {
+                                    "해당 카테고리의 채팅방이 없습니다."
+                                } else {
+                                    "참여 중인 채팅방이 없습니다."
+                                },
+                                fontSize = 16.sp,
+                                color = Color.Gray,
+                                textAlign = TextAlign.Center
+                            )
+                        }
                     }
                 }
-            }
 
-            else -> {
-                // 모임 목록 표시
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(start = 16.dp, end = 16.dp)
-                ) {
-                    itemsIndexed(uiState.chatList) { index, chatList ->
-                        ChatCard(
-                            chat = chatList,
-                            onClick = {
-                                navController.currentBackStackEntry?.savedStateHandle?.set(
-                                    "groupId",
-                                    chatList.groupId
-                                )
-                                // 채팅방 화면으로 이동
-                                // navController.navigate(Screen.ChatRoomScreen.route)
-                            }
-                        )
+                else -> {
+                    // 선택된 카테고리 표시
+                    if (selectedCategory != null) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp, bottom = 4.dp, end = 24.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.End
+                        ) {
 
-                        if (index < uiState.chatList.size - 1) {
-                            HorizontalDivider(
-                                modifier = Modifier.padding(8.dp),
-                                thickness = 1.dp,
-                                color = Color(0xFFE0E0E0)
+                            Text(
+                                text = "전체 보기",
+                                fontSize = 12.sp,
+                                color = Color(0xFF007AFF),
+                                modifier = Modifier.clickable {
+                                    selectedCategory = null
+                                }
                             )
+                        }
+
+                    }
+
+                    // 채팅방 목록
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(start = 16.dp, end = 16.dp)
+                    ) {
+                        itemsIndexed(filteredChatList) { index, chatList ->
+                            ChatCard(
+                                chat = chatList,
+                                onClick = {
+                                    navController.currentBackStackEntry?.savedStateHandle?.set(
+                                        "groupId",
+                                        chatList.groupId
+                                    )
+                                    // 채팅방 화면으로 이동
+                                     navController.navigate(Screen.ChatRoomScreen.route)
+                                }
+                            )
+
+                            if (index < filteredChatList.size - 1) {
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(8.dp),
+                                    thickness = 1.dp,
+                                    color = Color(0xFFE0E0E0)
+                                )
+                            }
                         }
                     }
                 }
             }
         }
+
+        // 카테고리 필터 드롭다운
+        if (showCategoryFilter) {
+            CategoryFilterDropdown(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 56.dp, end = 16.dp)
+                    .zIndex(1f),
+                onCategorySelected = { category ->
+                    selectedCategory = category
+                    showCategoryFilter = false
+                },
+                onDismiss = { showCategoryFilter = false }
+            )
+        }
     }
+}
+
+@Composable
+fun CategoryFilterDropdown(
+    modifier: Modifier = Modifier,
+    onCategorySelected: (String?) -> Unit,
+    onDismiss: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .clickable(
+                indication = null, // 클릭 효과 제거
+                interactionSource = remember { MutableInteractionSource() }
+            ) {
+                onDismiss()
+            }
+    ) {
+        Card(
+            modifier = modifier.width(80.dp),
+            shape = RoundedCornerShape(8.dp),
+            colors = CardDefaults.cardColors(containerColor = MainColor),
+            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(8.dp)
+            ) {
+                CategoryFilterItem(
+                    text = "전체",
+                    onClick = {
+                        onCategorySelected(null)
+                    }
+                )
+
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    thickness = 1.dp,
+                    color = Color.White
+                )
+
+                CategoryFilterItem(
+                    text = "독서",
+                    onClick = {
+                        onCategorySelected("READING")
+                    }
+                )
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    thickness = 1.dp,
+                    color = Color.White
+                )
+
+                CategoryFilterItem(
+                    text = "첨삭",
+                    onClick = {
+                        onCategorySelected("REVIEW")
+                    }
+                )
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    thickness = 1.dp,
+                    color = Color.White
+                )
+
+                CategoryFilterItem(
+                    text = "학습",
+                    onClick = {
+                        onCategorySelected("STUDY")
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun CategoryFilterItem(
+    text: String,
+    onClick: () -> Unit
+) {
+    Text(
+        text = text,
+        fontSize = 14.sp,
+        textAlign = TextAlign.Center,
+        color = Color.Black,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+    )
 }
 
 @Composable
@@ -290,7 +439,16 @@ fun ChatCard(
     }
 }
 
-// 시간 포맷팅 함수 (상대적 시간 표시)
+private fun getCategoryDisplayName(category: String): String {
+    return when (category) {
+        "READING" -> "독서"
+        "REVIEW" -> "첨삭"
+        "STUDY" -> "학습"
+        else -> category
+    }
+}
+
+// 시간 포맷팅 함수
 @SuppressLint("NewApi")
 private fun formatTime(timeString: String?): String {
     if (timeString == null) return ""

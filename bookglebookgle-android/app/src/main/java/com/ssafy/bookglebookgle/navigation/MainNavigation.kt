@@ -24,6 +24,7 @@ import com.ssafy.bookglebookgle.pdf.ui.screen.BookmarkListScreen
 import com.ssafy.bookglebookgle.pdf.ui.screen.CommentsListScreen
 import com.ssafy.bookglebookgle.pdf.ui.screen.HighlightListScreen
 import com.ssafy.bookglebookgle.ui.screen.ChatListScreen
+import com.ssafy.bookglebookgle.ui.screen.ChatRoomScreen
 import com.ssafy.bookglebookgle.ui.screen.GroupRegisterScreen
 import com.ssafy.bookglebookgle.ui.screen.LoginScreen
 import com.ssafy.bookglebookgle.ui.screen.MainScreen
@@ -129,6 +130,17 @@ fun MainNavigation(
                 }
 
                 PdfReadScreen(groupId, navController =  navController)
+            }
+
+            composable(Screen.ChatRoomScreen.route){
+                val groupId = navController.previousBackStackEntry
+                    ?.savedStateHandle?.get<Long>("groupId") ?: -1L
+
+                LaunchedEffect(Unit) {
+                    Log.d("GroupId", "ChatRoomScreen 전달 - groupId: $groupId")
+                }
+
+                ChatRoomScreen(navController =  navController, groupId)
             }
 
 
