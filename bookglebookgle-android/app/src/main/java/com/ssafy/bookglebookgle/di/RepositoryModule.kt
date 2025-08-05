@@ -2,6 +2,8 @@ package com.ssafy.bookglebookgle.di
 
 import com.ssafy.bookglebookgle.repository.AuthRepository
 import com.ssafy.bookglebookgle.repository.AuthRepositoryImpl
+import com.ssafy.bookglebookgle.repository.ChatRepository
+import com.ssafy.bookglebookgle.repository.ChatRepositoryImpl
 import com.ssafy.bookglebookgle.repository.GroupRepository
 import com.ssafy.bookglebookgle.repository.GroupRepositoryImpl
 import com.ssafy.bookglebookgle.repository.LoginRepositoryImpl
@@ -38,5 +40,10 @@ abstract class RepositoryModule {
     abstract fun bindGroupRepository(
         impl: GroupRepositoryImpl
     ): GroupRepository
+
+    @Binds
+    abstract fun bindChatRepository(
+        impl: ChatRepositoryImpl
+    ): ChatRepository
 
 }

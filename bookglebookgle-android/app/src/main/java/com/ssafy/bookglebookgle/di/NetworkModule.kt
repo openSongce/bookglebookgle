@@ -4,6 +4,7 @@ import com.ssafy.bookglebookgle.network.api.AuthApi
 import com.ssafy.bookglebookgle.network.AuthInterceptor
 import com.ssafy.bookglebookgle.network.api.LoginApi
 import com.ssafy.bookglebookgle.network.TokenAuthenticator
+import com.ssafy.bookglebookgle.network.api.ChatApi
 import com.ssafy.bookglebookgle.network.api.GroupApi
 import com.ssafy.bookglebookgle.network.api.PdfApi
 import com.ssafy.bookglebookgle.util.TokenManager
@@ -46,6 +47,11 @@ object NetworkModule {
     @Singleton
     fun provideGroupApi(retrofit: Retrofit): GroupApi =
         retrofit.create(GroupApi::class.java)
+
+    @Provides
+    @Singleton
+    fun providerChatApi(retrofit: Retrofit): ChatApi =
+        retrofit.create(ChatApi::class.java)
 
     @Provides
     @Singleton

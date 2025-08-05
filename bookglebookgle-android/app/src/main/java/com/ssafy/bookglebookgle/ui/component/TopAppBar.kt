@@ -163,6 +163,11 @@ fun CustomTopAppBar(
                 Text(
                     text = "채팅",
                     fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                    fontSize = 20.sp,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(end = 16.dp)
                 )
             } else if (title == "my_page") {
                 Text(
