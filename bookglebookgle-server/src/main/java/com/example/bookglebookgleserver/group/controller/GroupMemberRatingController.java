@@ -1,10 +1,12 @@
 package com.example.bookglebookgleserver.group.controller;
 
+import com.example.bookglebookgleserver.auth.security.CustomUserDetails;
 import com.example.bookglebookgleserver.group.service.GroupMemberRatingService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @Tag(name = "그룹 멤버 평가", description = "그룹 내 멤버간 평가(점수) API")
@@ -19,10 +21,11 @@ public class GroupMemberRatingController {
     @PostMapping
     public ResponseEntity<String> addRating(
             @PathVariable Long groupId,
-            @RequestParam Long fromId,
             @RequestParam Long toId,
-            @RequestParam float score
+            @RequestParam float score,
+            @AuthenticationPrincipal CustomUserDetails customUser
     ) {
+        Long fromId = customUser.getUser().getId(); // 인증된 사용자에서 평가자 ID 추출
         ratingService.addRating(groupId, fromId, toId, score);
         return ResponseEntity.ok("평가 등록 완료");
     }
@@ -31,10 +34,11 @@ public class GroupMemberRatingController {
     @PutMapping
     public ResponseEntity<String> updateRating(
             @PathVariable Long groupId,
-            @RequestParam Long fromId,
             @RequestParam Long toId,
-            @RequestParam float score
+            @RequestParam float score,
+            @AuthenticationPrincipal CustomUserDetails customUser
     ) {
+        Long fromId = customUser.getUser().getId(); // 인증된 사용자에서 평가자 ID 추출
         ratingService.updateRating(groupId, fromId, toId, score);
         return ResponseEntity.ok("평가 수정 완료");
     }
