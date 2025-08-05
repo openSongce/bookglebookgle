@@ -1,6 +1,10 @@
 package com.example.bookglebookgleserver.group.service;
 
 import com.bgbg.ai.grpc.ProcessPdfResponse;
+import com.example.bookglebookgleserver.chat.entity.ChatRoom;
+import com.example.bookglebookgleserver.chat.entity.ChatRoomMember;
+import com.example.bookglebookgleserver.chat.repository.ChatRoomMemberRepository;
+import com.example.bookglebookgleserver.chat.repository.ChatRoomRepository;
 import com.example.bookglebookgleserver.global.exception.BadRequestException;
 import com.example.bookglebookgleserver.global.exception.ForbiddenException;
 import com.example.bookglebookgleserver.global.exception.NotFoundException;
@@ -44,6 +48,8 @@ public class GroupServiceImpl implements GroupService {
     private final GrpcOcrClient grpcOcrClient;
     private final OcrService ocrService;
     private final UserRepository userRepository;
+    private final ChatRoomRepository chatRoomRepository;
+    private final ChatRoomMemberRepository chatRoomMemberRepository;
 
     @Override
     @Transactional
@@ -272,6 +278,14 @@ public class GroupServiceImpl implements GroupService {
                 .isFollowingHost(false)
                 .build();
         groupMemberRepository.save(member);
+        ChatRoom chatRoom = chatRoomRepository.findByGroupId(groupId)
+                .orElseThrow(() -> new NotFoundException("채팅방 없음"));
+
+        ChatRoomMember chatMember = ChatRoomMember.builder()
+                .chatRoom(chatRoom)
+                .user(user)
+                .build();
+        chatRoomMemberRepository.save(chatMember);
     }
 
     @Override
