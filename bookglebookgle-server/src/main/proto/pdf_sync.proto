@@ -6,13 +6,8 @@ option java_package = "bgbg.pdf";
 option java_multiple_files = true;
 
 service PdfSyncService {
-  rpc JoinRoom(JoinRequest) returns (stream SyncMessage);
-  rpc SendMessage(SyncMessage) returns (Ack);
-}
-
-message JoinRequest {
-  int64 groupId = 1;
-  string userId = 2;
+  // 하나의 스트림으로 모든 Sync 이벤트 송수신
+  rpc Sync(stream SyncMessage) returns (stream SyncMessage);
 }
 
 message SyncMessage {
@@ -51,9 +46,4 @@ message Coordinates {
   double startY = 2;
   double endX = 3;
   double endY = 4;
-}
-
-message Ack {
-  bool success = 1;
-  string message = 2;
 }
