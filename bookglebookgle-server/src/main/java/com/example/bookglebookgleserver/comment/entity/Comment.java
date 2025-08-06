@@ -1,5 +1,6 @@
 package com.example.bookglebookgleserver.comment.entity;
 
+import com.example.bookglebookgleserver.pdf.entity.PdfFile;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -13,6 +14,10 @@ import lombok.*;
 public class Comment {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "pdf_file_id")
+    private PdfFile pdfFile;
 
     private Long groupId;
     private Long userId;
