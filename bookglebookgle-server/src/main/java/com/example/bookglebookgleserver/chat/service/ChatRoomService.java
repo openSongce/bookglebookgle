@@ -11,9 +11,6 @@ import com.example.bookglebookgleserver.chat.repository.ChatRoomRepository;
 import com.example.bookglebookgleserver.global.exception.NotFoundException;
 import com.example.bookglebookgleserver.user.entity.User;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.time.format.DateTimeFormatter;
@@ -37,17 +34,17 @@ public class ChatRoomService {
         // 2. 각 채팅방마다 정보 구성
         return myRooms.stream().map(roomMember -> {
             ChatRoom room = roomMember.getChatRoom();
+            Long roomId = room.getGroupId();
 
             // 최신 메시지
-            ChatMessage lastMessage = chatMessageRepository.findFirstByChatRoomOrderByCreatedAtDesc(room);
+            ChatMessage lastMessage = chatMessageRepository.findFirstByRoomIdOrderByCreatedAtDesc(roomId);
 
             // 아직 읽지 않은 메시지 개수 (내 lastReadMessageId보다 큰 id의 메시지 개수)
-            int unreadCount = 0;
+            int unreadCount;
             if (roomMember.getLastReadMessageId() == null) {
-                // 한 번도 읽은 적이 없다면, 모든 메시지 개수가 unread
-                unreadCount = (int) chatMessageRepository.countByChatRoom(room);
+                unreadCount = chatMessageRepository.countByRoomId(roomId);
             } else {
-                unreadCount = chatMessageRepository.countByChatRoomAndIdGreaterThan(room, roomMember.getLastReadMessageId());
+                unreadCount = chatMessageRepository.countByRoomIdAndIdGreaterThan(roomId, roomMember.getLastReadMessageId());
             }
 
             return ChatRoomSummaryDto.builder()
@@ -64,22 +61,21 @@ public class ChatRoomService {
     }
 
     public List<ChatMessageDto> getMessagesByRoomIdAndBeforeId(Long roomId, Long beforeId, int size) {
-        ChatRoom chatRoom = chatRoomRepository.findById(roomId)
+        // 채팅방이 실제로 존재하는지 체크
+        chatRoomRepository.findById(roomId)
                 .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
 
-        Pageable pageable = PageRequest.of(0, size, Sort.by("id").descending());
         List<ChatMessage> messages;
-
         if (beforeId == null) {
             // 최초 조회 (최신 N개)
-            messages = chatMessageRepository.findByChatRoomOrderByIdDesc(chatRoom, pageable);
+            messages = chatMessageRepository.findTop30ByRoomIdOrderByIdDesc(roomId);
         } else {
             // 커서 조회 (이전 N개)
-            messages = chatMessageRepository.findByChatRoomAndIdLessThanOrderByIdDesc(chatRoom, beforeId, pageable);
+            messages = chatMessageRepository.findTop30ByRoomIdAndIdLessThanOrderByIdDesc(roomId, beforeId);
         }
 
         return messages.stream()
                 .map(ChatMessageDto::from)  // 엔티티→DTO 변환 메서드 필요
-                .toList();
+                .collect(Collectors.toList());
     }
 }

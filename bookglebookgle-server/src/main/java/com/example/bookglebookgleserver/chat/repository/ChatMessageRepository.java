@@ -1,26 +1,24 @@
 package com.example.bookglebookgleserver.chat.repository;
 
 import com.example.bookglebookgleserver.chat.entity.ChatMessage;
-import com.example.bookglebookgleserver.chat.entity.ChatRoom;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
 
 public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> {
-    // 채팅방의 메시지 전체 조회(최신순)
-    List<ChatMessage> findByChatRoomOrderByCreatedAtDesc(ChatRoom chatRoom);
+    // 최신 메시지 30개 (beforeId 없이)
+    List<ChatMessage> findTop30ByRoomIdOrderByIdDesc(Long roomId);
 
-    // 채팅방 전체 메시지 개수
-    int countByChatRoom(ChatRoom chatRoom);
+    // beforeId보다 작은 메시지 30개
+    List<ChatMessage> findTop30ByRoomIdAndIdLessThanOrderByIdDesc(Long roomId, Long beforeId);
 
-    // 특정 메시지 ID보다 큰(안 읽은) 메시지 개수
-    int countByChatRoomAndIdGreaterThan(ChatRoom chatRoom, Long messageId);
+    // (아래는 필요하면 유지, 실제 사용 안 하면 삭제해도 됨)
+    // 전체 메시지 개수
+    int countByRoomId(Long roomId);
 
-    // 채팅방 내 최신 메시지
-    ChatMessage findFirstByChatRoomOrderByCreatedAtDesc(ChatRoom chatRoom);
+    // 안 읽은 메시지 개수
+    int countByRoomIdAndIdGreaterThan(Long roomId, Long messageId);
 
-    List<ChatMessage> findByChatRoomAndIdLessThanOrderByIdDesc(ChatRoom chatRoom, Long id, Pageable pageable);
-
-    List<ChatMessage> findByChatRoomOrderByIdDesc(ChatRoom chatRoom, Pageable pageable);
+    // 최신 메시지 한 개
+    ChatMessage findFirstByRoomIdOrderByCreatedAtDesc(Long roomId);
 }
