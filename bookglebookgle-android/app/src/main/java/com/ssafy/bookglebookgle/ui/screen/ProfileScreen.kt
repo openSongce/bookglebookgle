@@ -89,6 +89,7 @@ fun ProfileScreen(navController: NavHostController, viewModel: ProfileViewModel 
         val profileImageUrl by viewModel.profileImageUrl.collectAsState()
         val nickname by viewModel.nickname.collectAsState()
         val email by viewModel.email.collectAsState()
+        val averageScore by viewModel.averageScore.collectAsState()
 
         if (logoutDone) {
             LaunchedEffect(Unit) {
@@ -217,7 +218,7 @@ fun ProfileScreen(navController: NavHostController, viewModel: ProfileViewModel 
                 ) {
                     RatingStatisticItem(
                         label = "내 평점",
-                        rating = 4.5f
+                        rating = averageScore
                     )
                     SimpleStatisticItem(
                         label = "총 모임 시간",
