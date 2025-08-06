@@ -7,5 +7,6 @@ data class MyGroupResponse(
     val imageUrl: String?,
     val category: String,
     val currentMembers: Int,
-    val maxMembers: Int
+    val maxMembers: Int,
+    val isHost: Boolean?,
 )

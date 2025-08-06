@@ -63,7 +63,8 @@ fun CustomTopAppBar(
     onEditClick: (() -> Unit)? = null,
     onSearchPerformed: ((String) -> Unit)? = null, // 검색 실행 콜백
     onSearchCancelled: (() -> Unit)? = null, // 검색 취소 콜백 추가
-    onChatSettingsClick: (() -> Unit)? = null // 채팅 설정 콜백 추가
+    onChatSettingsClick: (() -> Unit)? = null, // 채팅 설정 콜백 추가
+    onMyGroupFilterClick: (() -> Unit)? = null // 내 모임 필터 콜백 추가
 ) {
     var isSearchMode by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
@@ -178,8 +179,8 @@ fun CustomTopAppBar(
                     textAlign = TextAlign.Center,
                     fontSize = 20.sp,
                     modifier = Modifier
-                        .padding(start = 16.dp)
                         .fillMaxWidth()
+                        .padding(end = 16.dp)
                 )
             } else if (title == "my_group") {
                 Text(
@@ -189,7 +190,7 @@ fun CustomTopAppBar(
                     fontSize = 20.sp,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(end = 16.dp)
+                        .padding(start = 16.dp)
                 )
             } else if (isPdfView) {
                 Text(
@@ -317,7 +318,7 @@ fun CustomTopAppBar(
                             }
                     )
                 }
-            } else if (title == "my_page" || title == "chat") {
+            } else if (title == "my_page" || title == "chat" || title == "my_group") {
                 Icon(
                     painter = painterResource(id = R.drawable.my_profile_setting),
                     contentDescription = "설정",
@@ -327,8 +328,8 @@ fun CustomTopAppBar(
                         .clickable {
                             if (title == "chat") {
                                 onChatSettingsClick?.invoke()
-                            } else {
-
+                            } else if(title == "my_group"){
+                                onMyGroupFilterClick?.invoke()
                             }
 
                         }
