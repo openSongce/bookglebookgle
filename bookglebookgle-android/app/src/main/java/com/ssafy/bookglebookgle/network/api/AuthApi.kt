@@ -20,7 +20,7 @@ interface AuthApi {
     suspend fun register(@Body request: RegisterRequest): Response<Unit>
 
     @GET("auth/check/nickname")
-    suspend fun checkNickname(@Query("nickname") nickname: String): Response<Boolean>
+    suspend fun checkNickname(@Query("nickname") nickname: String): Response<Unit>
 
 
 }
