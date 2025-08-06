@@ -88,4 +88,16 @@ public class JwtService {
         return extractEmailFromAccessToken(token);
     }
 
+    public long getRemainingExpiration(String token, boolean isRefreshToken) {
+        String secret = isRefreshToken ? REFRESH_SECRET : ACCESS_SECRET;
+        Claims claims = Jwts.parserBuilder()
+                .setSigningKey(secret.getBytes(StandardCharsets.UTF_8))
+                .build()
+                .parseClaimsJws(token)
+                .getBody();
+        long exp = claims.getExpiration().getTime();
+        long now = System.currentTimeMillis();
+        return Math.max((exp - now) / 1000, 0);
+    }
+
 }
