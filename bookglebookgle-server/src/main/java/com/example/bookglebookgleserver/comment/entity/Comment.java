@@ -3,6 +3,7 @@ package com.example.bookglebookgleserver.comment.entity;
 import com.example.bookglebookgleserver.pdf.entity.PdfFile;
 import jakarta.persistence.*;
 import lombok.*;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "comment")
@@ -12,7 +13,8 @@ import lombok.*;
 @AllArgsConstructor
 @Builder
 public class Comment {
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -26,5 +28,12 @@ public class Comment {
     private String text;    // 실제 댓글 내용
     private double startX, startY, endX, endY;
 
-    // 생성일, 수정일 등 필요시 추가
+    // ⭐️ 생성일 추가
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
+    @PrePersist
+    public void prePersist() {
+        this.createdAt = LocalDateTime.now();
+    }
 }

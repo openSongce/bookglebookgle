@@ -4,6 +4,8 @@ import com.example.bookglebookgleserver.pdf.entity.PdfFile;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.LocalDateTime;
+
 @Entity
 @Table(name = "highlight")
 @Getter
@@ -25,6 +27,15 @@ public class Highlight {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "pdf_file_id")
     private PdfFile pdfFile;
-    // 생성일, 수정일 등 필요시 추가
+
+    // ⭐ 추가!
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
+    @PrePersist
+    public void prePersist() {
+        this.createdAt = LocalDateTime.now();
+    }
 }
+
 
