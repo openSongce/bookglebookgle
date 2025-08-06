@@ -28,11 +28,6 @@ spring:
             enable: true
 
 
-  redis:
-    host: localhost
-    port: 6379
-
-
   jpa:
     hibernate:
       ddl-auto: update
@@ -46,3 +41,14 @@ spring:
     multipart:
       max-file-size: 50MB
       max-request-size: 50MB
+
+  data:
+    redis:
+      host: redis
+      port: 6379
+
+grpc:
+  server:
+    port: 6565
+    security:
+      enabled: false

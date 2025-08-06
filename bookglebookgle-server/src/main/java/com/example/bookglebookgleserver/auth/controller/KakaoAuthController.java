@@ -37,28 +37,21 @@ public class KakaoAuthController {
     })
     @PostMapping("/oauth/kakao")
     public ResponseEntity<?> kakaoLogin(@RequestBody KakaoLoginRequest request) {
-    	System.out.println(" 컨트롤러 진입 성공!");
 
         try {
-        	System.out.println("try문 안쪽 💥 컨트롤러 진입 성공!");
 
             String accessToken = request.getAccessToken();
             JsonNode userInfo = kakaoOAuthService.getUserInfo(accessToken);
-            System.out.println(" userInfo = " + userInfo);
 
-            System.out.println("accessToken 들어옴 = " + request.getAccessToken());
-            
             String kakaoId = userInfo.path("id").asText();
             String generatedEmail = "kakao_" + kakaoId + "@bookgle.com";
 
             String nicknameRaw = userInfo.path("properties").path("nickname").asText("카카오사용자");
             String profileImage = userInfo.path("properties").path("profile_image").asText(null);
             String nickname = authService.generateUniqueNickname(nicknameRaw);
-            System.out.println(" nickname = " + nickname);
 
             User user = userRepository.findByEmail(generatedEmail)
                     .orElseGet(() -> {
-                        System.out.println(" 신규 유저 생성: " + generatedEmail);
                         return userRepository.save(User.builder()
                                 .email(generatedEmail)
                                 .nickname(nickname)

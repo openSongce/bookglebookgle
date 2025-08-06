@@ -20,5 +20,5 @@ COPY .env .env
 # 포트 오픈
 EXPOSE 8081
 
-# JVM에 타임존 옵션 명시적으로 전달
-ENTRYPOINT ["java", "-Duser.timezone=Asia/Seoul", "-jar", "app.jar"]
+# JVM에 타임존 옵션, 그리고 spring.config.location 옵션 명시
+ENTRYPOINT ["java", "-Duser.timezone=Asia/Seoul", "-Dspring.config.location=file:/app/config/application.yml,classpath:/application.yml", "-jar", "app.jar"]

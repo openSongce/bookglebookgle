@@ -1,9 +1,6 @@
 package com.example.bookglebookgleserver.group.service;
 
-import com.example.bookglebookgleserver.group.dto.GroupCreateRequestDto;
-import com.example.bookglebookgleserver.group.dto.GroupDetailResponse;
-import com.example.bookglebookgleserver.group.dto.GroupListResponseDto;
-import com.example.bookglebookgleserver.group.dto.MyGroupSummaryDto;
+import com.example.bookglebookgleserver.group.dto.*;
 import com.example.bookglebookgleserver.user.entity.User;
 import org.springframework.core.io.Resource;
 import org.springframework.http.ResponseEntity;
@@ -12,10 +9,18 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
 
 public interface GroupService {
-    void createGroup(GroupCreateRequestDto dto, MultipartFile pdfFile, User user);
+    GroupCreateResponseDto createGroup(GroupCreateRequestDto dto, MultipartFile pdfFile, User user);
     void createGroupWithoutOcr(GroupCreateRequestDto dto, MultipartFile pdfFile, User user);
-    List<GroupListResponseDto> getGroupList();
-    GroupDetailResponse getGroupDetail(Long groupId);
+    List<GroupListResponseDto> getNotJoinedGroupList(Long userId);
+    GroupDetailResponse getGroupDetail(Long groupId, User user);
     ResponseEntity<Resource> getPdfFileResponse(Long groupId, User user);
     List<MyGroupSummaryDto> getMyGroupList(Long userId);
+    void joinGroup(Long groupId, User user);
+    GroupDetailResponse updateGroup(Long groupId, GroupUpdateRequestDto dto, User user);
+    void deleteGroup(Long groupId, User user);
+    List<GroupListResponseDto> searchGroups(String roomTitle, String category);
+    void leaveGroup(Long groupId, User user);
+    boolean isMember(Long groupId, Long userId);
+    boolean isLeader(Long groupId, Long userId);
+    int getLastPageRead(Long groupId, Long userId);
 }

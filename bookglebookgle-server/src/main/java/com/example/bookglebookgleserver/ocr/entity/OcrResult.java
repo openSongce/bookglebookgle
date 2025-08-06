@@ -35,14 +35,14 @@ public class OcrResult {
     private String text;
 
     @Column(name = "rect_x")
-    private Integer rectX;
+    private Float rectX;
 
     @Column(name = "rect_y")
-    private Integer rectY;
+    private Float rectY;
 
     @Column(name = "rect_w")
-    private Integer rectW;
+    private Float rectW;
 
     @Column(name = "rect_h")
-    private Integer rectH;
+    private Float rectH;
 }

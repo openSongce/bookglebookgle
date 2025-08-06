@@ -5,23 +5,24 @@ import com.example.bookglebookgleserver.auth.dto.JwtResponse;
 import com.example.bookglebookgleserver.auth.dto.LoginRequest;
 import com.example.bookglebookgleserver.auth.dto.RefreshRequest;
 import com.example.bookglebookgleserver.auth.dto.SignupRequest;
-import com.example.bookglebookgleserver.auth.service.AuthService;
-import com.example.bookglebookgleserver.auth.service.GoogleTokenVerifier;
-import com.example.bookglebookgleserver.auth.service.JwtService;
-import com.example.bookglebookgleserver.auth.service.RefreshTokenService;
+import com.example.bookglebookgleserver.auth.service.*;
 import com.example.bookglebookgleserver.user.entity.User;
 import com.example.bookglebookgleserver.user.repository.UserRepository;
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 
+@Slf4j
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/auth")
@@ -32,6 +33,7 @@ public class AuthController {
     private final JwtService jwtService;
 
     private final RefreshTokenService refreshTokenService;
+    private final JwtBlacklistService jwtBlacklistService;
 
 
     @Operation(
@@ -44,13 +46,9 @@ public class AuthController {
     })
     @PostMapping("/login")
     public ResponseEntity<JwtResponse> login(@RequestBody LoginRequest request){
-        System.out.println(" AuthController에 요청 도달!");
-        System.out.println(" 받은 이메일: " + request.getEmail());
-        System.out.println("받은 비밀번호: " + request.getPassword());
 
         try {
             JwtResponse response = authService.login(request.getEmail(), request.getPassword());
-            System.out.println("토큰 생성 성공");
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             System.out.println("예외 발생: " + e.getMessage());
@@ -70,11 +68,8 @@ public class AuthController {
     })
     @PostMapping("/refresh")
     public ResponseEntity<JwtResponse> refresh(@RequestBody RefreshRequest request){
-        System.out.println("토큰 갱신 요청");
-
         try {
             JwtResponse response = authService.refreshToken(request.getRefreshToken());
-            System.out.println("토큰 갱신 성공");
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             System.out.println("큰 갱신 실패: " + e.getMessage());
@@ -109,7 +104,6 @@ public class AuthController {
     @PostMapping("/check/email")
     public ResponseEntity<String> checkEmailAndSendCode(@RequestBody Map<String, String> request) {
         String email = request.get("email");
-        System.out.println("check-email 요청 도달!");
         if (authService.isEmailDuplicated(email)) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body("이미 등록된 이메일입니다.");
         }
@@ -124,6 +118,7 @@ public class AuthController {
     })
     @GetMapping("/check/nickname")
     public ResponseEntity<String> checkNickname(@RequestParam String nickname) {
+        log.debug("닉네임 중복 체크 요청 :[{}]", nickname);
         boolean exists = authService.isNicknameDuplicated(nickname);
         if (exists) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body("이미 사용 중인 닉네임입니다.");
@@ -134,12 +129,8 @@ public class AuthController {
 
     @PostMapping("/signup/email")
     public ResponseEntity<String> signup(@RequestBody SignupRequest request) {
-        System.out.println("signup 요청 도달");
-
-
         try {
             authService.signup(request);
-            System.out.println("회원가입 성공");
             return ResponseEntity.ok("회원가입 완료");
         } catch (Exception e) {
             System.err.println(" 회원가입 실패: " + e.getMessage());
@@ -195,16 +186,62 @@ public class AuthController {
         refreshTokenService.saveRefreshToken(user.getEmail(), refreshToken);
 
 
-        JwtResponse response = new JwtResponse(accessToken,
+        JwtResponse response = new JwtResponse(
+                accessToken,
                 refreshToken,
                 user.getEmail(),
                 user.getNickname(),
-                user.getProfileImageUrl());
+                user.getProfileImageUrl(),
+                user.getId(),            // userId 추가
+                user.getAvgRating()      // avgRating 추가
+        );
         return ResponseEntity.ok(response);
 
     }
 
+    @Operation(
+            summary = "로그아웃",
+            description = """
+        <b>AccessToken</b>은 Authorization 헤더에,<br>
+        <b>RefreshToken</b>은 <code>body</code>에 JSON으로 전달합니다.<br><br>
+        <b>모바일(Android/iOS) 환경 전용!</b><br>
+        - 로그아웃 시 두 토큰을 모두 서버에서 무효화(블랙리스트 등록)합니다.<br>
+        - 로그아웃 후 이 토큰들로 더 이상 인증/재발급 불가
+    """
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "로그아웃 성공, 두 토큰이 모두 무효화됨"),
+            @ApiResponse(responseCode = "500", description = "로그아웃 처리 중 서버 오류")
+    })
+    @PostMapping("/logout")
+    public ResponseEntity<String> logout(
+            @RequestHeader("Authorization") String authHeader,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                    description = "body에 RefreshToken을 JSON 형태로 전달. ex) { \"refreshToken\": \"...\" }",
+                    required = false,
+                    content = @Content(
+                            schema = @Schema(
+                                    example = "{\"refreshToken\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\"}"
+                            )
+                    )
+            )
+            @RequestBody(required = false) Map<String, String> body
+    ) {
+        try {
+            String accessToken = authHeader.replace("Bearer ", "");
+            long accessExpireSec = jwtService.getRemainingExpiration(accessToken, false);
+            jwtBlacklistService.blacklistToken(accessToken, accessExpireSec);
 
+            String refreshToken = (body != null) ? body.get("refreshToken") : null;
+            if (refreshToken != null && !refreshToken.isBlank()) {
+                long refreshExpireSec = jwtService.getRemainingExpiration(refreshToken, true);
+                jwtBlacklistService.blacklistToken(refreshToken, refreshExpireSec);
+            }
 
-
+            return ResponseEntity.ok("로그아웃 완료");
+        } catch (Exception e) {
+            log.error("로그아웃 실패: ", e);
+            return ResponseEntity.status(500).body("로그아웃 처리 중 오류");
+        }
+    }
 }

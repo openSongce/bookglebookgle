@@ -1,22 +1,25 @@
 package com.example.bookglebookgleserver.group.service;
 
 import com.bgbg.ai.grpc.ProcessPdfResponse;
+import com.example.bookglebookgleserver.chat.entity.ChatRoom;
+import com.example.bookglebookgleserver.chat.entity.ChatRoomMember;
+import com.example.bookglebookgleserver.chat.repository.ChatRoomMemberRepository;
+import com.example.bookglebookgleserver.chat.repository.ChatRoomRepository;
 import com.example.bookglebookgleserver.global.exception.BadRequestException;
 import com.example.bookglebookgleserver.global.exception.ForbiddenException;
 import com.example.bookglebookgleserver.global.exception.NotFoundException;
-import com.example.bookglebookgleserver.group.dto.GroupCreateRequestDto;
-import com.example.bookglebookgleserver.group.dto.GroupDetailResponse;
-import com.example.bookglebookgleserver.group.dto.GroupListResponseDto;
-import com.example.bookglebookgleserver.group.dto.MyGroupSummaryDto;
+import com.example.bookglebookgleserver.group.dto.*;
 import com.example.bookglebookgleserver.group.entity.Group;
 import com.example.bookglebookgleserver.group.entity.GroupMember;
 import com.example.bookglebookgleserver.group.repository.GroupMemberRepository;
 import com.example.bookglebookgleserver.group.repository.GroupRepository;
+import com.example.bookglebookgleserver.ocr.dto.OcrTextBlockDto;
 import com.example.bookglebookgleserver.ocr.grpc.GrpcOcrClient;
 import com.example.bookglebookgleserver.ocr.service.OcrService;
 import com.example.bookglebookgleserver.pdf.entity.PdfFile;
 import com.example.bookglebookgleserver.pdf.repository.PdfFileRepository;
 import com.example.bookglebookgleserver.user.entity.User;
+import com.example.bookglebookgleserver.user.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -44,10 +47,13 @@ public class GroupServiceImpl implements GroupService {
     private final PdfFileRepository pdfFileRepository;
     private final GrpcOcrClient grpcOcrClient;
     private final OcrService ocrService;
+    private final UserRepository userRepository;
+    private final ChatRoomRepository chatRoomRepository;
+    private final ChatRoomMemberRepository chatRoomMemberRepository;
 
     @Override
     @Transactional
-    public void createGroup(GroupCreateRequestDto dto, MultipartFile pdfFile, User user) {
+    public GroupCreateResponseDto createGroup(GroupCreateRequestDto dto, MultipartFile pdfFile, User user) {
         String uploadDir = "/home/ubuntu/pdf-uploads/";
 //        String uploadDir = System.getProperty("user.dir") + "/uploads/";
         File uploadDirFile = new File(uploadDir);
@@ -95,13 +101,47 @@ public class GroupServiceImpl implements GroupService {
         pdf.setGroup(group);
         // pdfFileRepository.save(pdf); // ❌ 생략해도 무방 (영속성 컨텍스트 안에서 관리됨)
 
+        List<OcrTextBlockDto> ocrResultList = null;
+
         if (dto.isImageBased()) {
-            ProcessPdfResponse response = grpcOcrClient.sendPdf(pdf.getPdfId(), pdfFile);
+            ProcessPdfResponse response = grpcOcrClient.sendPdf(pdf.getPdfId(), pdfFile, group.getId());
             if (!response.getSuccess()) {
                 throw new BadRequestException("OCR 실패: " + response.getMessage());
             }
             ocrService.saveOcrResults(pdf, response);
+
+            ocrResultList = response.getTextBlocksList().stream()
+                    .map(block -> OcrTextBlockDto.builder()
+                            .pageNumber(block.getPageNumber())
+                            .text(block.getText())
+                            .rectX((int) block.getX0())
+                            .rectY((int) block.getY0())
+                            .rectW((int) (block.getX1() - block.getX0()))
+                            .rectH((int) (block.getY1() - block.getY0()))
+                            .build())
+                    .collect(Collectors.toList());
         }
+        // 1) ChatRoom 생성: group과 1:1 매핑되는 채팅방 생성
+        ChatRoom chatRoom = ChatRoom.builder()
+                .group(group)
+                .category(group.getCategory().name())
+                .groupTitle(group.getRoomTitle())
+                .imageUrl(null) // 필요 시 기본값 넣기
+                .lastMessage(null)
+                .lastMessageTime(null)
+                .memberCount(1) // 방장 1명부터 시작
+                .build();
+        chatRoomRepository.save(chatRoom);
+        log.info("[GroupService] 그룹 생성 및 채팅방 생성 완료 - groupId={}, chatRoom memberCount=1", group.getId());
+
+
+        // 2) 채팅방 멤버로 방장 추가
+        ChatRoomMember chatRoomMember = ChatRoomMember.builder()
+                .chatRoom(chatRoom)
+                .user(user)
+                .build();
+        chatRoomMemberRepository.save(chatRoomMember);
+
 
         GroupMember groupMember = GroupMember.builder()
                 .group(group)
@@ -112,6 +152,12 @@ public class GroupServiceImpl implements GroupService {
                 .isFollowingHost(false)
                 .build();
         groupMemberRepository.save(groupMember);
+
+        return GroupCreateResponseDto.builder()
+                .groupId(group.getId())
+                .pdfId(pdf.getPdfId())
+                .ocrResultlist(ocrResultList != null ? ocrResultList : List.of())
+                .build();
     }
 
     @Override
@@ -121,13 +167,20 @@ public class GroupServiceImpl implements GroupService {
     }
 
     @Override
-    public List<GroupListResponseDto> getGroupList() {
-        log.info("📌 [GroupService] 그룹 목록 조회 시작");
+    public List<GroupListResponseDto> getNotJoinedGroupList(Long userId) {
+        log.info("📌 [GroupService] (미가입자용) 그룹 목록 조회 시작");
 
+        // 1. 전체 그룹 조회
         List<Group> groups = groupRepository.findAll();
-        log.info("📌 [GroupService] 조회된 그룹 수: {}", groups.size());
+        log.info("📌 [GroupService] 전체 그룹 수: {}", groups.size());
 
+        // 2. 사용자가 가입한 그룹 ID 목록 조회
+        List<Long> joinedGroupIds = groupMemberRepository.findGroupIdsByUserId(userId);
+        log.info("📌 [GroupService] 사용자가 가입한 그룹 수: {}", joinedGroupIds.size());
+
+        // 3. 가입하지 않은 그룹만 필터링
         return groups.stream()
+                .filter(group -> !joinedGroupIds.contains(group.getId()))
                 .map(group -> {
                     try {
                         log.info("📌 그룹 ID: {}, 제목: {}", group.getId(), group.getRoomTitle());
@@ -152,12 +205,14 @@ public class GroupServiceImpl implements GroupService {
                 .collect(java.util.stream.Collectors.toList());
     }
 
+
     @Override
-    public GroupDetailResponse getGroupDetail(Long groupId) {
+    public GroupDetailResponse getGroupDetail(Long groupId, User user) {
         Group group = groupRepository.findById(groupId)
                 .orElseThrow(() -> new NotFoundException("해당 모임이 존재하지 않습니다."));
 
         int memberCount = groupMemberRepository.countByGroup(group);
+        boolean isHost = group.getHostUser().getId().equals(user.getId());
 
         return new GroupDetailResponse(
                 group.getRoomTitle(),
@@ -166,7 +221,9 @@ public class GroupServiceImpl implements GroupService {
                 memberCount,
                 group.getGroupMaxNum(),
                 group.getDescription(),
-                null
+                null,
+                isHost,
+                group.getMinRequiredRating()
         );
     }
 
@@ -206,8 +263,178 @@ public class GroupServiceImpl implements GroupService {
                         null, // 이미지 URL은 아직 없음
                         group.getCategory().name(),
                         group.getGroupMembers().size(),
-                        group.getGroupMaxNum()
+                        group.getGroupMaxNum(),
+                        group.getHostUser().getId().equals(userId)
                 ))
                 .collect(Collectors.toList());
     }
+
+    @Override
+    @Transactional
+    public void joinGroup(Long groupId, User user) {
+        Group group = groupRepository.findById(groupId)
+                .orElseThrow(() -> new NotFoundException("해당 그룹이 존재하지 않습니다."));
+
+        // 이미 참가 여부 확인
+        if (groupMemberRepository.existsByGroupAndUser(group, user)) {
+            throw new BadRequestException("이미 참가한 그룹입니다.");
+        }
+
+        // 정원 초과 여부
+        int currentNum = groupMemberRepository.countByGroup(group);
+        if (currentNum >= group.getGroupMaxNum()) {
+            throw new BadRequestException("그룹 정원이 초과되었습니다.");
+        }
+
+        if (user.getAvgRating() == null || user.getAvgRating() < group.getMinRequiredRating()) {
+            throw new BadRequestException("평점이 낮아 그룹에 참가할 수 없습니다.");
+        }
+
+        // 참가자 추가
+        GroupMember member = GroupMember.builder()
+                .group(group)
+                .user(user)
+                .isHost(false)
+                .lastPageRead(0)
+                .progressPercent(0f)
+                .isFollowingHost(false)
+                .build();
+        groupMemberRepository.save(member);
+
+        ChatRoom chatRoom = chatRoomRepository.findByGroupId(groupId)
+                .orElseThrow(() -> new NotFoundException("채팅방 없음"));
+
+        ChatRoomMember chatMember = ChatRoomMember.builder()
+                .chatRoom(chatRoom)
+                .user(user)
+                .build();
+        chatRoomMemberRepository.save(chatMember);
+
+        // memberCount 1 증가 후 저장
+        chatRoom.setMemberCount(chatRoom.getMemberCount() + 1);
+        chatRoomRepository.save(chatRoom);
+
+        log.info("[GroupService] userId={} 그룹 {} 참가 및 채팅방 멤버 추가 완료, memberCount={}",
+                user.getId(), groupId, chatRoom.getMemberCount());
+    }
+
+    @Override
+    @Transactional
+    public GroupDetailResponse updateGroup(Long groupId, GroupUpdateRequestDto dto, User user) {
+        Group group = groupRepository.findById(groupId)
+                .orElseThrow(() -> new NotFoundException("해당 모임이 존재하지 않습니다."));
+
+        if (!group.getHostUser().getId().equals(user.getId())) {
+            throw new ForbiddenException("그룹 수정 권한이 없습니다.");
+        }
+
+        if (dto.getRoomTitle() != null) group.setRoomTitle(dto.getRoomTitle());
+        if (dto.getDescription() != null) group.setDescription(dto.getDescription());
+        if (dto.getCategory() != null) group.setCategory(Group.Category.valueOf(dto.getCategory().toUpperCase()));
+        if (dto.getSchedule() != null) group.setSchedule(dto.getSchedule());
+        if (dto.getGroupMaxNum() > 0) group.setGroupMaxNum(dto.getGroupMaxNum());
+        if (dto.getMinRequiredRating() > 0) group.setMinRequiredRating(dto.getMinRequiredRating());
+        if (dto.getReadingMode() != null) group.setReadingMode(Group.ReadingMode.valueOf(dto.getReadingMode().toUpperCase()));
+
+        int memberCount = groupMemberRepository.countByGroup(group);
+        boolean isHost = group.getHostUser().getId().equals(user.getId());
+
+        return new GroupDetailResponse(
+                group.getRoomTitle(),
+                group.getCategory().name(),
+                group.getSchedule(),
+                memberCount,
+                group.getGroupMaxNum(),
+                group.getDescription(),
+                null,
+                isHost,
+                group.getMinRequiredRating()
+        );
+    }
+
+    @Override
+    @Transactional
+    public void deleteGroup(Long groupId, User user) {
+        Group group = groupRepository.findById(groupId)
+                .orElseThrow(() -> new NotFoundException("그룹이 존재하지 않습니다."));
+        if (!group.getHostUser().getId().equals(user.getId())) {
+            throw new ForbiddenException("그룹 삭제 권한이 없습니다.");
+        }
+        groupRepository.delete(group);
+    }
+
+// GroupServiceImpl.java
+    @Override
+    public List<GroupListResponseDto> searchGroups(String roomTitle, String category) {
+        Group.Category categoryEnum = null;
+        if (category != null && !category.isBlank()) {
+            categoryEnum = Group.Category.valueOf(category.toUpperCase()); // Enum 파싱
+        }
+        List<Group> groups = groupRepository.searchGroups(roomTitle, categoryEnum);
+
+        return groups.stream()
+                .map(GroupListResponseDto::fromEntity)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional
+    public void leaveGroup(Long groupId, User user) {
+        Group group = groupRepository.findById(groupId)
+                .orElseThrow(() -> new NotFoundException("해당 그룹이 존재하지 않습니다."));
+
+        GroupMember member = groupMemberRepository.findByGroupAndUser(group, user)
+                .orElseThrow(() -> new BadRequestException("해당 그룹에 가입되어 있지 않습니다."));
+
+        if (group.getHostUser().getId().equals(user.getId())) {
+            throw new ForbiddenException("그룹장은 직접 탈퇴할 수 없습니다. 그룹장 권한 위임 후 탈퇴하세요.");
+        }
+
+        groupMemberRepository.delete(member);
+
+        ChatRoom chatRoom = chatRoomRepository.findByGroupId(groupId)
+                .orElseThrow(() -> new NotFoundException("채팅방 없음"));
+
+        ChatRoomMember chatRoomMember = chatRoomMemberRepository.findByChatRoomAndUser(chatRoom, user)
+                .orElse(null);
+
+        if (chatRoomMember != null) {
+            chatRoomMemberRepository.delete(chatRoomMember);
+
+            // memberCount 1 감소 후 저장
+            chatRoom.setMemberCount(Math.max(0, chatRoom.getMemberCount() - 1));
+            chatRoomRepository.save(chatRoom);
+
+            log.info("[GroupService] userId={} 그룹 {} 탈퇴 및 채팅방 멤버 삭제 완료, memberCount={}",
+                    user.getId(), groupId, chatRoom.getMemberCount());
+        }
+    }
+
+
+    @Override
+    public boolean isMember(Long groupId, Long userId) {
+        return groupMemberRepository.existsByGroup_IdAndUser_Id(groupId, userId);
+    }
+
+    // 리더(그룹장) 여부 체크
+    @Override
+    public boolean isLeader(Long groupId, Long userId) {
+        Group group = groupRepository.findById(groupId)
+                .orElseThrow(() -> new NotFoundException("해당 그룹이 존재하지 않습니다."));
+        return group.getHostUser().getId().equals(userId);
+    }
+
+    @Override
+    public int getLastPageRead(Long groupId, Long userId) {
+        Group group = groupRepository.findById(groupId)
+                .orElseThrow(() -> new NotFoundException("그룹을 찾을 수 없습니다."));
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("유저를 찾을 수 없습니다."));
+
+        GroupMember member = groupMemberRepository.findByGroupAndUser(group, user)
+                .orElseThrow(() -> new NotFoundException("해당 그룹 멤버를 찾을 수 없습니다."));
+
+        return member.getLastPageRead();
+    }
+
 }

@@ -23,5 +23,11 @@ public record GroupDetailResponse(
         String description,
 
         @Schema(description = "모임 대표 사진 URL (현재는 null)", example = "null")
-        String photoUrl
+        String photoUrl,
+
+        @Schema(description = "방장 여부", example = "true")
+        boolean isHost,
+
+        @Schema(description = "최소 요구 평점", example = "3")
+        int minRequiredRating
 ) {}

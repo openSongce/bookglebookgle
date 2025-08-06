@@ -12,10 +12,12 @@ public class JwtResponse {
     private String accessToken;
     private String refreshToken;
 
-    //추가필드
     private String email;
     private String nickname;
     private String profileImageUrl;
+
+    private Long userId;
+    private Float avgRating;
 
     public JwtResponse(String accessToken,String refreshToken){
         this.accessToken=accessToken;
