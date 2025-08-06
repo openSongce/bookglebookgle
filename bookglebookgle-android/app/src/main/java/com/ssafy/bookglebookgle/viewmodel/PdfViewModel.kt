@@ -11,7 +11,6 @@ import com.ssafy.bookglebookgle.pdf.tools.OperationsStateHandler
 import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.CommentModel
 import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.Coordinates
 import com.ssafy.bookglebookgle.repository.PdfRepository
-import com.ssafy.bookglebookgle.util.PdfSyncClientManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -22,6 +21,10 @@ import javax.inject.Inject
 import android.graphics.Bitmap
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
+import androidx.lifecycle.Observer
+import com.ssafy.bookglebookgle.repository.PdfGrpcRepository
+import com.ssafy.bookglebookgle.repository.PdfPageSync
+import com.ssafy.bookglebookgle.repository.PdfSyncConnectionStatus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.update
 
@@ -31,6 +34,7 @@ private const val TAG = "싸피_PdfViewModel"
 @HiltViewModel
 class PdfViewModel @Inject constructor(
     private val pdfRepository: PdfRepository,
+    private val pdfGrpcRepository: PdfGrpcRepository
 ): ViewModel(){
 
     private var userId: String? = null
@@ -106,6 +110,7 @@ class PdfViewModel @Inject constructor(
 
     private val _thumbnails = MutableStateFlow<List<Bitmap>>(emptyList())
     val thumbnails: StateFlow<List<Bitmap>> = _thumbnails.asStateFlow()
+
 
 
 
@@ -604,8 +609,51 @@ class PdfViewModel @Inject constructor(
     // 기존 gRPC 섹션을 이 코드로 완전히 교체하세요
 
     //gRPC
+
+    private val _syncConnected = MutableStateFlow(false)
+    val syncConnected: StateFlow<Boolean> = _syncConnected.asStateFlow()
+
+    private val _syncError = MutableStateFlow<String?>(null)
+    val syncError: StateFlow<String?> = _syncError.asStateFlow()
+
+
+    // Observer들 - Chat과 동일한 패턴
+    private val pdfPageObserver = Observer<PdfPageSync> { pageSync ->
+        handleRemotePageChange(pageSync.page)
+    }
+
     private var currentPdfView: com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.PDFView? = null
     private var isRemotePageChange = false
+
+    private val connectionObserver = Observer<PdfSyncConnectionStatus> { status ->
+        _syncConnected.value = status == PdfSyncConnectionStatus.CONNECTED
+
+        when (status) {
+            is PdfSyncConnectionStatus.ERROR -> {
+                _syncError.value = status.message
+                Log.e(TAG, "gRPC 연결 에러: ${status.message}")
+            }
+            is PdfSyncConnectionStatus.CONNECTING -> {
+                _syncError.value = null
+                Log.d(TAG, "gRPC 연결 중...")
+            }
+            is PdfSyncConnectionStatus.CONNECTED -> {
+                _syncError.value = null
+                Log.d(TAG, "gRPC 연결 완료")
+            }
+            is PdfSyncConnectionStatus.DISCONNECTED -> {
+                _syncError.value = null
+                Log.d(TAG, "gRPC 연결 해제")
+            }
+        }
+    }
+
+    init {
+        // Observer 등록 - Chat과 동일한 패턴
+        pdfGrpcRepository.newPageUpdates.observeForever(pdfPageObserver)
+        pdfGrpcRepository.connectionStatus.observeForever(connectionObserver)
+    }
+
 
     // PDFView 참조 저장
     fun setPdfView(pdfView: com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.PDFView) {
@@ -613,63 +661,75 @@ class PdfViewModel @Inject constructor(
         this.currentPdfView = pdfView
     }
 
-    // gRPC 연결 시작 (수정된 버전)
-    fun connectToSync(groupId: Long, userId: String, onReceive: (com.example.bookglebookgleserver.pdf.grpc.SyncMessage) -> Unit) {
+    /**
+     * gRPC 동기화 연결 - 기존과 동일하지만 Repository 사용
+     */
+    fun connectToSync(groupId: Long, userId: String) {
         this.currentGroupId = groupId
         this.userId = userId
 
-        PdfSyncClientManager.connect(groupId, userId, onReceive)
+        Log.d(TAG, "PDF 동기화 연결 시작: groupId=$groupId, userId=$userId")
+
+        // Repository를 통해 연결
+        pdfGrpcRepository.connectAndJoinRoom(groupId, userId)
     }
 
-    // PdfViewModel의 기존 moveToPage 함수를 수정
-
-    fun moveToPage(page: Int) {
-        currentPdfView?.let { pdfView ->
-            try {
-                Log.d(TAG, "페이지 이동 실행: $page")
-                // 페이지별 표시 모드에서는 애니메이션과 함께 이동
-                pdfView.jumpTo(page - 1, withAnimation = true, resetZoom = false, resetHorizontalScroll = false)
-            } catch (e: Exception) {
-                Log.e(TAG, "페이지 이동 실패", e)
-            }
-        } ?: Log.w(TAG, "PDFView가 null - 페이지 이동 불가")
+    fun leaveSyncRoom() {
+        Log.d(TAG, "PDF 뷰어 나가기 - gRPC 방 떠나기")
+        pdfGrpcRepository.leaveRoom()
     }
 
-    // 원격 페이지 변경 시에는 애니메이션 없이 즉시 이동
     fun handleRemotePageChange(page: Int) {
-        Log.d(TAG, "원격 페이지 변경 처리: $page")
-        isRemotePageChange = true
-        currentPdfView?.let { pdfView ->
-            try {
-                // 원격 변경은 애니메이션 없이 즉시 이동
-                pdfView.jumpTo(page - 1, withAnimation = false, resetZoom = false, resetHorizontalScroll = false)
-            } catch (e: Exception) {
-                Log.e(TAG, "원격 페이지 이동 실패", e)
-            }
+        Log.d(TAG, "원격 페이지 변경 수신: $page")
+        if (_currentPage.value != page) {
+            isRemotePageChange = true
+            currentPdfView?.jumpTo(
+                page - 1,
+                withAnimation = false,
+                resetZoom = false,
+                resetHorizontalScroll = false
+            )
+
+            // UI 상태도 업데이트
+            _currentPage.value = page
+            _showPageInfo.value = true
         }
     }
 
-    // 페이지 변경 발생 시 서버에 알림 (수정된 버전)
     fun notifyPageChange(page: Int) {
-        if (!isRemotePageChange) {
-            // 로컬 페이지 변경일 때만 broadcast
-            Log.d(TAG, "로컬 페이지 변경 broadcast: $page")
-            PdfSyncClientManager.sendPageUpdate(page)
-        } else {
-            Log.d(TAG, "원격 페이지 변경이므로 broadcast 생략: $page")
+        // 원격에서 온 페이지 변경이 아니고, 동기화가 연결되어 있을 때만 전송
+        if (!isRemotePageChange && _syncConnected.value) {
+            Log.d(TAG, "페이지 변경 알림 전송: $page")
+            pdfGrpcRepository.sendPageUpdate(page)
         }
-        isRemotePageChange = false // 플래그 리셋
+        isRemotePageChange = false
     }
 
-    // 뷰모델이 사라질 때 연결 종료
+    // 연결 재시도 함수 추가
+    fun retrySyncConnection() {
+        Log.d(TAG, "PDF 동기화 연결 재시도")
+        _syncError.value = null
+        pdfGrpcRepository.reconnect()
+    }
+
+    fun clearSyncError() {
+        _syncError.value = null
+    }
+
     override fun onCleared() {
-        Log.d(TAG, "ViewModel 정리 - gRPC 연결 종료")
-        PdfSyncClientManager.disconnect()
-        currentPdfView = null
         super.onCleared()
+        // Observer 해제
+        pdfGrpcRepository.newPageUpdates.removeObserver(pdfPageObserver)
+        pdfGrpcRepository.connectionStatus.removeObserver(connectionObserver)
+
+        // 연결 종료
+        pdfGrpcRepository.leaveRoom()
+        currentPdfView = null
+
+        Log.d(TAG, "ViewModel 정리 완료")
     }
 
-    // 네비게이션 함수들도 페이지 정보 표시하도록 수정
+    // 기존 함수들도 Repository 패턴에 맞게 수정
     fun goToPreviousPage() {
         val newPage = (currentPage.value - 1).coerceAtLeast(1)
         if (newPage != currentPage.value) {
@@ -686,16 +746,14 @@ class PdfViewModel @Inject constructor(
         }
     }
 
-    // 특정 페이지로 이동 (외부에서 호출용)
     fun goToPage(page: Int) {
         val targetPage = page.coerceIn(1, totalPages.value)
         if (targetPage != currentPage.value) {
             Log.d(TAG, "특정 페이지로 이동: ${currentPage.value} -> $targetPage")
-            currentPdfView?.jumpTo(targetPage - 1, withAnimation = true) // 0 기반 인덱스
+            currentPdfView?.jumpTo(targetPage - 1, withAnimation = false)
         }
     }
 
-    // 페이지 네비게이션 버튼 활성화 상태 확인
     fun canGoToPreviousPage(): Boolean = currentPage.value > 1
     fun canGoToNextPage(): Boolean = currentPage.value < totalPages.value
 
