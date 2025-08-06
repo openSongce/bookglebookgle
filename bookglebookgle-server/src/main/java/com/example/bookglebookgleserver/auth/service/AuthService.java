@@ -66,23 +66,18 @@ public class AuthService {
 
     public JwtResponse login(String email, String password){
 
-        System.out.println("로그인 요청: " + email + " / " + password);
         User user=userRepository.findByEmail(email)
                 .orElseThrow(()->new RuntimeException("존재하지않는 사용자입니다"));
 
-        System.out.println("DB 사용자 조회 성공: " + user.getEmail());
         if(!passwordEncoder.matches(password, user.getPassword())){
             throw new RuntimeException("비밀번호가 일치하지않습니다");
         }
-        System.out.println("비밀번호 일치, 토큰 발급");
 
         String accessToken = jwtService.createAccessToken(user.getEmail());
         String refreshToken = jwtService.createRefreshToken(user.getEmail());
 
-
         // Refresh Token 저장 (나중애 DB 또는 Redis 저장으로 변경)
         refreshTokenService.saveRefreshToken(user.getEmail(), refreshToken);
-
 
         return new JwtResponse(
                 accessToken,
@@ -96,8 +91,6 @@ public class AuthService {
     }
 
     public JwtResponse refreshToken(String refreshToken) {
-        System.out.println(" 토큰 갱신 시작");
-
         // Refresh Token 검증
         if (!jwtService.isValidRefreshToken(refreshToken)) {
             throw new RuntimeException("유효하지 않은 Refresh Token입니다");
@@ -116,8 +109,6 @@ public class AuthService {
 
         // 새로운 Refresh Token 저장
         refreshTokenService.saveRefreshToken(email, newRefreshToken);
-
-        System.out.println("토큰 갱신 완료");
         return new JwtResponse(newAccessToken, newRefreshToken);
     }
 
@@ -140,8 +131,6 @@ public class AuthService {
                 .build();
 
         userRepository.save(user);
-//        redisTemplate.delete(request.getEmail()); // 인증코드 삭제
-
     }
 
     public boolean isNicknameDuplicated(String nickname) {
@@ -158,12 +147,9 @@ public class AuthService {
         return nickname;
     }
 
-
     //refresh token  저장
     public void saveRefreshToken(String email, String refreshToken) {
         refreshTokenService.saveRefreshToken(email, refreshToken);
     }
-
-
 
 }

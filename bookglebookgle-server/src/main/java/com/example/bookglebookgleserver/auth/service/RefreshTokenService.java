@@ -6,9 +6,6 @@ import com.example.bookglebookgleserver.common.verification.repository.RefreshTo
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-
 @Service
 @RequiredArgsConstructor
 public class RefreshTokenService {
@@ -27,7 +24,6 @@ public class RefreshTokenService {
                         .token(refreshToken)
                         .build()
         );
-        System.out.println("Refresh Token 저장: " + email);
     }
 
     public boolean isValidRefreshToken(String email, String refreshToken) {
@@ -38,9 +34,6 @@ public class RefreshTokenService {
 
     public void deleteRefreshToken(String email) {
         refreshTokenRepository.deleteById(email);
-        System.out.println("🗑 Refresh Token 삭제: " + email);
     }
-
-
 
 }

@@ -44,13 +44,9 @@ public class AuthController {
     })
     @PostMapping("/login")
     public ResponseEntity<JwtResponse> login(@RequestBody LoginRequest request){
-        System.out.println(" AuthController에 요청 도달!");
-        System.out.println(" 받은 이메일: " + request.getEmail());
-        System.out.println("받은 비밀번호: " + request.getPassword());
 
         try {
             JwtResponse response = authService.login(request.getEmail(), request.getPassword());
-            System.out.println("토큰 생성 성공");
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             System.out.println("예외 발생: " + e.getMessage());
@@ -70,11 +66,8 @@ public class AuthController {
     })
     @PostMapping("/refresh")
     public ResponseEntity<JwtResponse> refresh(@RequestBody RefreshRequest request){
-        System.out.println("토큰 갱신 요청");
-
         try {
             JwtResponse response = authService.refreshToken(request.getRefreshToken());
-            System.out.println("토큰 갱신 성공");
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             System.out.println("큰 갱신 실패: " + e.getMessage());
@@ -109,7 +102,6 @@ public class AuthController {
     @PostMapping("/check/email")
     public ResponseEntity<String> checkEmailAndSendCode(@RequestBody Map<String, String> request) {
         String email = request.get("email");
-        System.out.println("check-email 요청 도달!");
         if (authService.isEmailDuplicated(email)) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body("이미 등록된 이메일입니다.");
         }
@@ -134,12 +126,8 @@ public class AuthController {
 
     @PostMapping("/signup/email")
     public ResponseEntity<String> signup(@RequestBody SignupRequest request) {
-        System.out.println("signup 요청 도달");
-
-
         try {
             authService.signup(request);
-            System.out.println("회원가입 성공");
             return ResponseEntity.ok("회원가입 완료");
         } catch (Exception e) {
             System.err.println(" 회원가입 실패: " + e.getMessage());
@@ -207,8 +195,5 @@ public class AuthController {
         return ResponseEntity.ok(response);
 
     }
-
-
-
 
 }
