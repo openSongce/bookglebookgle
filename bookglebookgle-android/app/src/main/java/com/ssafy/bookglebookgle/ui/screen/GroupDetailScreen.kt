@@ -1,5 +1,6 @@
 package com.ssafy.bookglebookgle.ui.screen
 
+import android.content.Context
 import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.Image
@@ -74,19 +75,51 @@ fun GroupDetailScreen(
                 val errorMessage = (joinGroupState as JoinGroupUiState.Error).message
                 Log.e("GroupDetailScreen", "그룹 가입 실패: $errorMessage")
 
-                // 403 에러 또는 평점 관련 에러 메시지인지 확인
+                // 에러 메시지에 따른 토스트 메시지 분류
                 val toastMessage = when {
-                    errorMessage.contains("403") || errorMessage.contains("평점") -> {
-                        if (uiState is GroupDetailUiState.Success) {
-                            "가입 조건을 만족하지 않습니다.\n최소 요구 평점: ${(uiState as GroupDetailUiState.Success).groupDetail.minRequiredRating}점"
-                        } else {
-                            "평점이 낮아 가입할 수 없습니다."
-                        }
+                    // 이미 참가한 그룹
+                    errorMessage.contains("이미 참가한 그룹") -> {
+                        "이미 가입된 모임입니다."
                     }
-                    errorMessage.contains("정원") || errorMessage.contains("가득") -> {
+
+                    // 그룹 정원 초과
+                    errorMessage.contains("그룹 정원이 초과되었습니다") ||
+                            errorMessage.contains("정원") -> {
                         "모임 정원이 가득 찼습니다."
                     }
-                    else -> "모임 가입에 실패했습니다."
+
+                    // 평점 부족
+                    errorMessage.contains("평점이 낮아") ||
+                            errorMessage.contains("평점") -> {
+                        if (uiState is GroupDetailUiState.Success) {
+                            val requiredRating = (uiState as GroupDetailUiState.Success).groupDetail.minRequiredRating
+                            "평점이 부족해 가입할 수 없습니다.\n(최소 요구 평점: ${requiredRating}점)"
+                        } else {
+                            "평점이 부족해 가입할 수 없습니다."
+                        }
+                    }
+
+                    // 해당 그룹이 존재하지 않음 (404)
+                    errorMessage.contains("해당 그룹이 존재하지 않습니다") ||
+                            errorMessage.contains("404") -> {
+                        "존재하지 않는 모임입니다."
+                    }
+
+                    // 서버 오류 (500)
+                    errorMessage.contains("500") ||
+                            errorMessage.contains("서버 오류") -> {
+                        "서버 오류가 발생했습니다.\n잠시 후 다시 시도해주세요."
+                    }
+
+                    // 기타 400 에러
+                    errorMessage.contains("400") -> {
+                        "잘못된 요청입니다."
+                    }
+
+                    // 기본 에러 메시지
+                    else -> {
+                        "모임 가입에 실패했습니다.\n다시 시도해주세요."
+                    }
                 }
 
                 Toast.makeText(context, toastMessage, Toast.LENGTH_LONG).show()
@@ -147,6 +180,7 @@ fun GroupDetailScreen(
                     } else null
                 )
                 GroupDetailContent(
+                    context = context,
                     groupDetail = currentState.groupDetail,
                     isMyGroup = currentIsMyGroup,
                     isJoining = joinGroupState is JoinGroupUiState.Loading,
@@ -186,6 +220,7 @@ fun GroupDetailScreen(
 
 @Composable
 private fun GroupDetailContent(
+    context : Context,
     groupDetail: GroupDetailResponse,
     isMyGroup: Boolean,
     isJoining: Boolean,
@@ -249,8 +284,18 @@ private fun GroupDetailContent(
             Spacer(modifier = Modifier.height(ScreenSize.height * 0.01f))
             Row(
                 modifier = Modifier.clickable {
-                    navController.currentBackStackEntry?.savedStateHandle?.set("groupId", groupId)
-                    navController.navigate(Screen.PdfReadScreen.route)
+                    if (isMyGroup) {
+                        // 가입된 모임인 경우 PDF 화면으로 이동
+                        navController.currentBackStackEntry?.savedStateHandle?.set("groupId", groupId)
+                        navController.navigate(Screen.PdfReadScreen.route)
+                    } else {
+                        // 미가입 모임인 경우 토스트 메시지 표시
+                        Toast.makeText(
+                            context,
+                            "모임에 가입해야 문서를 볼 수 있습니다.",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
                 },
                 verticalAlignment = Alignment.CenterVertically
             ) {
