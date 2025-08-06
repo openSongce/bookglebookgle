@@ -7,6 +7,7 @@ public record MyGroupSummaryDto(
         String imageUrl,
         String category,
         int currentMembers,
-        int maxMembers
+        int maxMembers,
+        boolean isHost
 ) {}
 
