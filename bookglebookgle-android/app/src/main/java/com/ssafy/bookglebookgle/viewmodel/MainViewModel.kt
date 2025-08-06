@@ -50,6 +50,7 @@ class MainViewModel @Inject constructor(
                 val response = groupRepository.getAllGroups()
                 if (response.isSuccessful) {
                     _allGroups.value = response.body() ?: emptyList()
+
                     response.body()?.let { groups ->
                         _readingGroups.value = groups.filter { it.category == "READING" }
                         _studyGroups.value = groups.filter { it.category == "STUDY" }

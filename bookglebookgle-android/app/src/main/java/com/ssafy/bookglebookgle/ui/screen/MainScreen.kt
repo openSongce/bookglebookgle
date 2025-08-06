@@ -116,29 +116,76 @@ fun MainScreen(navController: NavHostController, viewModel: MainViewModel = hilt
                 }
 
                 item {
-                    LazyRow(
-                        contentPadding = PaddingValues(
-                            horizontal = horizontalPadding,
-                            vertical = verticalPadding
-                        )
-                    ) {
-                        items(recommendedGroups) { group ->
-                            RecommendGroupCard(
-                                group = group,
-                                width = ScreenSize.width * 0.8f,
-                                height = ScreenSize.height * 0.2f,
-                                rightMargin = horizontalPadding,
-                                onClick = {
-                                    navController.currentBackStackEntry?.savedStateHandle?.set(
-                                        "groupId",
-                                        group.groupId
+                    if (recommendedGroups.isNotEmpty()) {
+                        if (recommendedGroups.size == 1) {
+                            // 추천 모임이 1개일 때는 전체 너비로 표시
+                            Column(
+                                modifier = Modifier.padding(
+                                    horizontal = horizontalPadding,
+                                    vertical = verticalPadding
+                                )
+                            ) {
+                                RecommendGroupCard(
+                                    group = recommendedGroups[0],
+                                    width = ScreenSize.width - (horizontalPadding * 2), // 전체 너비에서 패딩 제외
+                                    height = ScreenSize.height * 0.2f,
+                                    rightMargin = 0.dp, // 오른쪽 마진 없음
+                                    onClick = {
+                                        navController.currentBackStackEntry?.savedStateHandle?.set(
+                                            "groupId",
+                                            recommendedGroups[0].groupId
+                                        )
+                                        navController.currentBackStackEntry?.savedStateHandle?.set(
+                                            "isMyGroup",
+                                            false
+                                        )
+                                        navController.navigate(Screen.GroupDetailScreen.route)
+                                    }
+                                )
+                            }
+                        } else {
+                            // 추천 모임이 2개 이상
+                            LazyRow(
+                                contentPadding = PaddingValues(
+                                    horizontal = horizontalPadding,
+                                    vertical = verticalPadding
+                                )
+                            ) {
+                                items(recommendedGroups) { group ->
+                                    RecommendGroupCard(
+                                        group = group,
+                                        width = ScreenSize.width * 0.8f,
+                                        height = ScreenSize.height * 0.2f,
+                                        rightMargin = horizontalPadding,
+                                        onClick = {
+                                            navController.currentBackStackEntry?.savedStateHandle?.set(
+                                                "groupId",
+                                                group.groupId
+                                            )
+                                            navController.currentBackStackEntry?.savedStateHandle?.set(
+                                                "isMyGroup",
+                                                false
+                                            )
+                                            navController.navigate(Screen.GroupDetailScreen.route)
+                                        }
                                     )
-                                    navController.currentBackStackEntry?.savedStateHandle?.set(
-                                        "isMyGroup",
-                                        false
-                                    )
-                                    navController.navigate(Screen.GroupDetailScreen.route)
                                 }
+                            }
+                        }
+                    } else {
+                        // 추천할 모임이 없을 때
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(ScreenSize.height * 0.2f),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "추천 모임이 없습니다\n" +
+                                        "새로운 모임을 생성해보세요!",
+                                color = Color.Gray,
+                                textAlign = TextAlign.Center,
+                                fontSize = ScreenSize.width.value.times(0.04f).sp
                             )
                         }
                     }
