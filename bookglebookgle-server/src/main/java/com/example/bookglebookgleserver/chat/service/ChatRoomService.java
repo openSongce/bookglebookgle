@@ -34,17 +34,16 @@ public class ChatRoomService {
         // 2. 각 채팅방마다 정보 구성
         return myRooms.stream().map(roomMember -> {
             ChatRoom room = roomMember.getChatRoom();
-            Long roomId = room.getGroupId();
 
             // 최신 메시지
-            ChatMessage lastMessage = chatMessageRepository.findFirstByRoomIdOrderByCreatedAtDesc(roomId);
+            ChatMessage lastMessage = chatMessageRepository.findFirstByChatRoomOrderByCreatedAtDesc(room);
 
             // 아직 읽지 않은 메시지 개수 (내 lastReadMessageId보다 큰 id의 메시지 개수)
             int unreadCount;
             if (roomMember.getLastReadMessageId() == null) {
-                unreadCount = chatMessageRepository.countByRoomId(roomId);
+                unreadCount = chatMessageRepository.countByChatRoom(room);
             } else {
-                unreadCount = chatMessageRepository.countByRoomIdAndIdGreaterThan(roomId, roomMember.getLastReadMessageId());
+                unreadCount = chatMessageRepository.countByChatRoomAndIdGreaterThan(room, roomMember.getLastReadMessageId());
             }
 
             return ChatRoomSummaryDto.builder()
@@ -61,17 +60,17 @@ public class ChatRoomService {
     }
 
     public List<ChatMessageDto> getMessagesByRoomIdAndBeforeId(Long roomId, Long beforeId, int size) {
-        // 채팅방이 실제로 존재하는지 체크
-        chatRoomRepository.findById(roomId)
+        // 반드시 ChatRoom 엔티티를 조회해서 사용
+        ChatRoom chatRoom = chatRoomRepository.findById(roomId)
                 .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
 
         List<ChatMessage> messages;
         if (beforeId == null) {
             // 최초 조회 (최신 N개)
-            messages = chatMessageRepository.findTop30ByRoomIdOrderByIdDesc(roomId);
+            messages = chatMessageRepository.findTop30ByChatRoomOrderByIdDesc(chatRoom);
         } else {
             // 커서 조회 (이전 N개)
-            messages = chatMessageRepository.findTop30ByRoomIdAndIdLessThanOrderByIdDesc(roomId, beforeId);
+            messages = chatMessageRepository.findTop30ByChatRoomAndIdLessThanOrderByIdDesc(chatRoom, beforeId);
         }
 
         return messages.stream()
