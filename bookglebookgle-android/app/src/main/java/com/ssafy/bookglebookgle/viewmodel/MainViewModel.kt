@@ -24,6 +24,9 @@ class MainViewModel @Inject constructor(
     private val _reviewGroups = mutableStateOf<List<GroupListResponse>>(emptyList())
     val reviewGroups: State<List<GroupListResponse>> = _reviewGroups
 
+    private val _allGroups = mutableStateOf<List<GroupListResponse>>(emptyList())
+    val allGroups: State<List<GroupListResponse>> = _allGroups
+
     // 검색 관련 상태
     private val _searchResults = mutableStateOf<List<GroupListResponse>>(emptyList())
     val searchResults: State<List<GroupListResponse>> = _searchResults
@@ -46,6 +49,7 @@ class MainViewModel @Inject constructor(
             try {
                 val response = groupRepository.getAllGroups()
                 if (response.isSuccessful) {
+                    _allGroups.value = response.body() ?: emptyList()
                     response.body()?.let { groups ->
                         _readingGroups.value = groups.filter { it.category == "READING" }
                         _studyGroups.value = groups.filter { it.category == "STUDY" }

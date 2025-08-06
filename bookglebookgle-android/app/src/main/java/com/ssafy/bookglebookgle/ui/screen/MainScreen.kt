@@ -30,8 +30,12 @@ import androidx.navigation.NavHostController
 import com.ssafy.bookglebookgle.entity.GroupListResponse
 import com.ssafy.bookglebookgle.navigation.Screen
 import com.ssafy.bookglebookgle.ui.component.CustomTopAppBar
+import com.ssafy.bookglebookgle.ui.theme.BaseColor
+import com.ssafy.bookglebookgle.ui.theme.MainColor
 import com.ssafy.bookglebookgle.util.ScreenSize
 import com.ssafy.bookglebookgle.viewmodel.MainViewModel
+import org.bouncycastle.asn1.x500.style.RFC4519Style.description
+import org.bouncycastle.asn1.x500.style.RFC4519Style.title
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -41,9 +45,19 @@ fun MainScreen(navController: NavHostController, viewModel: MainViewModel = hilt
     val readingGroups = viewModel.readingGroups.value
     val studyGroups = viewModel.studyGroups.value
     val reviewGroups = viewModel.reviewGroups.value
+    val allGroups = viewModel.allGroups.value
     val searchResults = viewModel.searchResults.value
     val isSearching = viewModel.isSearching.value
     val isInSearchMode = viewModel.isInSearchMode()
+
+    // 추천 모임용 랜덤 그룹 3개 선택
+    val recommendedGroups = remember(allGroups) {
+        if (allGroups.isNotEmpty()) {
+            allGroups.shuffled().take(3)
+        } else {
+            emptyList()
+        }
+    }
 
     val groups = if (isInSearchMode) {
         when (selectedTab) {
@@ -108,48 +122,28 @@ fun MainScreen(navController: NavHostController, viewModel: MainViewModel = hilt
                             vertical = verticalPadding
                         )
                     ) {
-                        items(meetingCard) { card ->
-                            RecommendCard(
-                                title = card.first,
-                                description = card.second,
-                                imageRes = card.third,
+                        items(recommendedGroups) { group ->
+                            RecommendGroupCard(
+                                group = group,
                                 width = ScreenSize.width * 0.8f,
                                 height = ScreenSize.height * 0.2f,
-                                rightMargin = horizontalPadding
+                                rightMargin = horizontalPadding,
+                                onClick = {
+                                    navController.currentBackStackEntry?.savedStateHandle?.set(
+                                        "groupId",
+                                        group.groupId
+                                    )
+                                    navController.currentBackStackEntry?.savedStateHandle?.set(
+                                        "isMyGroup",
+                                        false
+                                    )
+                                    navController.navigate(Screen.GroupDetailScreen.route)
+                                }
                             )
                         }
                     }
                 }
             }
-//            // 카테고리 추천 섹션
-//            item {
-//                Text(
-//                    text = "추천 모임",
-//                    fontSize = ScreenSize.width.value.times(0.06f).sp,
-//                    fontWeight = FontWeight.Bold,
-//                    modifier = Modifier.padding(start = horizontalPadding, top = verticalPadding)
-//                )
-//            }
-//
-//            item {
-//                LazyRow(
-//                    contentPadding = PaddingValues(
-//                        horizontal = horizontalPadding,
-//                        vertical = verticalPadding
-//                    )
-//                ) {
-//                    items(meetingCard) { card ->
-//                        RecommendCard(
-//                            title = card.first,
-//                            description = card.second,
-//                            imageRes = card.third,
-//                            width = ScreenSize.width * 0.8f,
-//                            height = ScreenSize.height * 0.2f,
-//                            rightMargin = horizontalPadding
-//                        )
-//                    }
-//                }
-//            }
 
             // 카테고리별 모임 헤더 - 스크롤 시 상단에 고정
             stickyHeader {
@@ -164,12 +158,6 @@ fun MainScreen(navController: NavHostController, viewModel: MainViewModel = hilt
                             .padding(vertical = verticalPadding)
 
                     ) {
-//                        Text(
-//                            text = "카테고리별 모임",
-//                            fontSize = ScreenSize.width.value.times(0.06f).sp,
-//                            fontWeight = FontWeight.Bold,
-//                            modifier = Modifier.padding(horizontal = horizontalPadding)
-//                        )
                         Text(
                             text = if (isInSearchMode) "검색 결과" else "카테고리별 모임",
                             fontSize = ScreenSize.width.value.times(0.06f).sp,
@@ -278,45 +266,6 @@ fun MainScreen(navController: NavHostController, viewModel: MainViewModel = hilt
                 }
             }
 
-//            // 모임 리스트
-//                if (groups.isEmpty()) {
-//                    item {
-//                        Box(
-//                            modifier = Modifier
-//                                .fillMaxWidth()
-//                                .height(ScreenSize.height * 0.3f),
-//                            contentAlignment = Alignment.Center
-//                        ) {
-//                            Text(
-//                                text = "생성된 모임이 없습니다\n" +
-//                                        "모임을 생성해보세요!",
-//                                color = Color.Gray,
-//                                textAlign = TextAlign.Center,
-//                                fontSize = ScreenSize.width.value.times(0.04f).sp
-//                            )
-//                        }
-//                    }
-//                } else {
-//                    itemsIndexed(groups) { index, group ->
-//                        MeetingCard(
-//                            group = group,
-//                        ) {
-//                            navController.currentBackStackEntry?.savedStateHandle?.set("groupId", group.groupId)
-//                            navController.currentBackStackEntry?.savedStateHandle?.set("isMyGroup", false)
-//                            navController.navigate(Screen.GroupDetailScreen.route)
-//                        }
-//
-//                        // 마지막 아이템이 아닐 때만 구분선 추가
-//                        if (index < groups.size - 1) {
-//                            HorizontalDivider(
-//                                color = Color(0xFFE0E0E0),
-//                                thickness = 0.5.dp,
-//                                modifier = Modifier.padding(horizontal = horizontalPadding)
-//                            )
-//                        }
-//                    }
-//                }
-
             // 하단 여백
             item {
                 Spacer(modifier = Modifier.height(verticalPadding))
@@ -326,18 +275,18 @@ fun MainScreen(navController: NavHostController, viewModel: MainViewModel = hilt
 }
 
 @Composable
-fun RecommendCard(
-    title: String,
-    description: String,
-    imageRes: Int,
+fun RecommendGroupCard(
+    group: GroupListResponse,
     width: Dp,
     height: Dp,
-    rightMargin: Dp
+    rightMargin: Dp,
+    onClick: () -> Unit
 ) {
     Card(
         modifier = Modifier
             .width(width)
-            .padding(end = rightMargin),
+            .padding(end = rightMargin)
+            .clickable { onClick() },
         colors = CardDefaults.cardColors(containerColor = Color.White)
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
@@ -347,20 +296,58 @@ fun RecommendCard(
                     .aspectRatio(16f / 9f) // 적절한 비율
             ) {
                 Image(
-                    painter = painterResource(id = imageRes),
+                    painter = painterResource(
+                        id = when (group.category) {
+                            "READING" -> R.drawable.main_reading
+                            "STUDY" -> R.drawable.main_studying
+                            "REVIEW" -> R.drawable.main_editing
+                            else -> R.drawable.main_reading
+                        }
+                    ),
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
                 )
+
+                // 인원수를 이미지 위 오른쪽 아래에 배치
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color(0xFFf5ecdf),
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(8.dp)
+                ) {
+                    Text(
+                        "${group.currentNum}/${group.groupMaxNum}명",
+                        modifier = Modifier.padding(
+                            horizontal = 4.dp,
+                            vertical = 4.dp
+                        ),
+                        fontSize = width.value.times(0.04f).sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
             }
 
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = width * 0.04f, vertical = height * 0.02f)
+                    .padding(horizontal = width * 0.04f, vertical = height * 0.04f)
             ) {
-                Text(title, fontWeight = FontWeight.Bold)
-                Text(description, fontSize = width.value.times(0.03f).sp, color = Color.Gray)
+                Text(
+                    text = group.roomTitle,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = width.value.times(0.06f).sp
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Text(
+                    text = group.description,
+                    fontSize = width.value.times(0.03f).sp,
+                    color = Color.Gray,
+                    maxLines = 2
+                )
             }
         }
     }
