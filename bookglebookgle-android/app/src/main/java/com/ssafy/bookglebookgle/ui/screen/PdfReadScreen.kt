@@ -6,15 +6,10 @@ import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -28,7 +23,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -55,14 +49,9 @@ import com.ssafy.bookglebookgle.ui.theme.BaseColor
 import com.ssafy.bookglebookgle.viewmodel.PdfViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import androidx.compose.material3.*
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.ui.draw.clip
-import kotlinx.coroutines.launch
 
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PdfReadScreen(
     groupId: Long? = null,
@@ -124,6 +113,10 @@ fun PdfReadScreen(
 
     // 하단으로 스와이프 감지
     var bottomSwipe by remember { mutableStateOf(false) }
+
+    var totalDrag by remember { mutableStateOf(0f) }
+    val syncConnected by viewModel.syncConnected.collectAsState()
+    val syncError by viewModel.syncError.collectAsState()
 
     //thumbnail
     val thumbnails by viewModel.thumbnails.collectAsState()
@@ -187,7 +180,7 @@ fun PdfReadScreen(
             Log.d("PdfReadScreen", "그룹 ID 설정 및 PDF 로드 시작")
             viewModel.setGroupId(it)
             viewModel.loadGroupPdf(it, context)
-            viewModel.loadAllAnnotations()
+//            viewModel.loadAllAnnotations()
         }
     }
 
@@ -195,19 +188,19 @@ fun PdfReadScreen(
 
     // 기존 gRPC LaunchedEffect를 이것으로 교체
 
-    LaunchedEffect(Unit) {
+    // gRPC 동기화 연결
+    LaunchedEffect(groupId, userId) {
         groupId?.let { gid ->
-            viewModel.connectToSync(gid, userId) { syncMessage ->
-                // 다른 사용자의 페이지 변경 메시지 수신 처리
-                if (syncMessage.userId != userId) {
-                    Log.d("PdfReadScreen", "다른 사용자 페이지 변경 수신: ${syncMessage.currentPage} (from: ${syncMessage.userId})")
+            Log.d("PdfReadScreen", "gRPC 동기화 연결: groupId=$gid, userId=$userId")
+            viewModel.connectToSync(gid, userId)
+        }
+    }
 
-                    // 메인 스레드에서 페이지 이동 실행
-                    android.os.Handler(android.os.Looper.getMainLooper()).post {
-                        viewModel.handleRemotePageChange(syncMessage.currentPage)
-                    }
-                }
-            }
+    // 화면 종료 시 정리
+    DisposableEffect(Unit) {
+        onDispose {
+            Log.d("PdfReadScreen", "화면 종료 - gRPC 연결 해제")
+            viewModel.leaveSyncRoom()
         }
     }
 
@@ -274,12 +267,12 @@ fun PdfReadScreen(
         }
     }
 
-    LaunchedEffect(currentPage) {
-        if (pdfView != null && isPdfRenderingComplete) {
-            // 페이지가 변경될 때마다 중앙 정렬 (필요한 경우에만)
-            pdfView?.centerCurrentPage(withAnimation = true)
-        }
-    }
+//    LaunchedEffect(currentPage) {
+//        if (pdfView != null && isPdfRenderingComplete) {
+//            // 페이지가 변경될 때마다 중앙 정렬 (필요한 경우에만)
+//            pdfView?.centerCurrentPage(withAnimation = true)
+//        }
+//    }
 
 //    LaunchedEffect(addBookmarkState) {
 //        when (addBookmarkState) {
@@ -348,24 +341,7 @@ fun PdfReadScreen(
         Box(modifier = Modifier
             .fillMaxSize()
             .padding(paddingValues)
-            .pointerInput(Unit) {
-                detectVerticalDragGestures { _, dragAmount ->
-                    // 위로 스와이프 감지
-                    if (dragAmount < 0 && viewModel.canGoToNextPage()) {
-                        // 위로 스와이프일 때
-                        topSwipe = true
-                        bottomSwipe = false
-                        viewModel.goToNextPage()
-                    }
-                    // 아래로 스와이프 감지
-                    if (dragAmount > 0 && viewModel.canGoToPreviousPage()) {
-                        // 아래로 스와이프일 때
-                        topSwipe = false
-                        bottomSwipe = true
-                        viewModel.goToPreviousPage()
-                    }
-                }
-            }) {
+            ) {
             // 기존의 when 문을 다음과 같이 수정하세요
 
             when {
@@ -421,8 +397,9 @@ fun PdfReadScreen(
 
                     // 렌더링이 완료되지 않은 경우 로딩 오버레이 표시
                     Box(modifier = Modifier.fillMaxSize()) {
-                        AndroidView(
-                            factory = { context ->
+                        key(pdfFile) {
+                            // 1) PDFView 인스턴스를 한번만 생성
+                            val rememberedPdfView = remember {
                                 Log.d("PdfReadScreen", "AndroidView factory 실행")
 
                                 PDFView(context, null).apply {
@@ -450,8 +427,15 @@ fun PdfReadScreen(
                                             loadAnnotations(annotations.toAnnotationList())
                                         }
 
-                                        override fun onPreparationFailed(error: String, e: Exception?) {
-                                            Log.e("PdfReadScreen", "PDF 렌더링 실패 - Listener 호출됨: $error", e)
+                                        override fun onPreparationFailed(
+                                            error: String,
+                                            e: Exception?
+                                        ) {
+                                            Log.e(
+                                                "PdfReadScreen",
+                                                "PDF 렌더링 실패 - Listener 호출됨: $error",
+                                                e
+                                            )
                                             viewModel.onPdfRenderingFailed(error)
                                         }
 
@@ -460,12 +444,19 @@ fun PdfReadScreen(
                                             paginationPageIndex: Int
                                         ) {
                                             val newPage = pageIndex + 1
-                                            viewModel.updateCurrentPage(newPage)
-                                            Log.d("PdfReadScreen", "페이지 변경: $newPage")
+                                            Log.d(
+                                                "PdfReadScreen",
+                                                "[onPageChanged] newPage=$newPage,"
+                                            )
+                                            if (viewModel.currentPage.value != newPage) {
+                                                viewModel.updateCurrentPage(newPage)
+                                                Log.d("PdfReadScreen", "페이지 변경: $newPage")
+                                            }
 
-                                            // gRPC로 현재 페이지 broadcast (무한 루프 방지 로직 포함)
+                                            // gRPC 전송 조건을 철저히 확인 (루프 방지용)
                                             viewModel.notifyPageChange(newPage)
                                         }
+
 
                                         override fun onTap() {
                                             hideTextSelection()
@@ -508,12 +499,14 @@ fun PdfReadScreen(
                                         override fun loadTopPdfChunk(
                                             mergeId: Int,
                                             pageIndexToLoad: Int
-                                        ) {}
+                                        ) {
+                                        }
 
                                         override fun loadBottomPdfChunk(
                                             mergedId: Int,
                                             pageIndexToLoad: Int
-                                        ) {}
+                                        ) {
+                                        }
 
                                         override fun onScrolling() {
                                             hideTextSelection()
@@ -523,36 +516,43 @@ fun PdfReadScreen(
                                         override fun onMergeStart(
                                             mergeId: Int,
                                             mergeType: PdfFile.MergeType
-                                        ) {}
+                                        ) {
+                                        }
 
                                         override fun onMergeEnd(
                                             mergeId: Int,
                                             mergeType: PdfFile.MergeType
-                                        ) {}
+                                        ) {
+                                        }
 
                                         override fun onMergeFailed(
                                             mergeId: Int,
                                             mergeType: PdfFile.MergeType,
                                             message: String,
                                             exception: java.lang.Exception?
-                                        ) {}
+                                        ) {
+                                        }
                                     })
 
                                     // PDF 로드
-                                    Log.d("PdfReadScreen", "PDF 파일 로드 시작: ${pdfFile!!.absolutePath}")
+                                    Log.d(
+                                        "PdfReadScreen",
+                                        "PDF 파일 로드 시작: ${pdfFile!!.absolutePath}"
+                                    )
                                     Log.d("PdfReadScreen", "PDF 파일 존재 여부: ${pdfFile!!.exists()}")
                                     Log.d("PdfReadScreen", "PDF 파일 크기: ${pdfFile!!.length()} bytes")
 
                                     try {
                                         fromFile(pdfFile!!)
                                             .defaultPage(0)
-                                            .enableSwipe(false)              // 스와이프 비활성화
+                                            .enableSwipe(true)              // 스와이프 비활성화
                                             .swipeHorizontal(false)         // 수평 스와이프 비활성화
                                             .pageSnap(true)                 // 페이지 스냅 활성화
                                             .pageFitPolicy(FitPolicy.WIDTH) // 페이지를 화면 너비에 맞춤
                                             .fitEachPage(true)              // 각 페이지를 개별적으로 맞춤
                                             .enableDoubleTap(true)          // 더블탭 줌 활성화
                                             .autoSpacing(true)
+                                            .pageFling(true)
                                             .load()
                                         Log.d("PdfReadScreen", "PDF 파일 로드 호출 완료")
                                     } catch (e: Exception) {
@@ -560,9 +560,16 @@ fun PdfReadScreen(
                                         viewModel.onPdfRenderingFailed("PDF 로드 중 예외: ${e.message}")
                                     }
                                 }
-                            },
-                            modifier = Modifier.fillMaxSize()
-                        )
+                            }
+
+                            AndroidView(
+                                factory = { rememberedPdfView.also { viewModel.setPdfView(it) } },
+                                update = { view ->
+                                    textSelectionOptionsWindow.attachToPdfView(view)
+                                },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
 
                         // 렌더링이 완료되지 않은 경우 로딩 오버레이 표시
                         if (!isPdfRenderingComplete) {
@@ -767,6 +774,7 @@ fun PdfReadScreen(
                 )
             }
 
+
             AnimatedVisibility(
                 visible = showThumbnails.value,
                 enter = slideInVertically(initialOffsetY = { it }),
@@ -776,8 +784,8 @@ fun PdfReadScreen(
                 ThumbnailBottomSheet(
                     thumbnails = thumbnails,
                     currentPage = currentPage,
-                    onThumbnailClick = { page -> pdfView?.jumpTo(page)
-                        viewModel.goToPage(page) },
+                    onThumbnailClick = { page ->
+                        viewModel.goToPage(page + 1) },
                     modifier = Modifier.align(Alignment.BottomCenter)
                 )
             }
