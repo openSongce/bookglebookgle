@@ -29,12 +29,12 @@ class UserInfoManager @Inject constructor(
             putFloat(AVG_RATING, response.avgRating)
             putInt(REVIEW_COUNT, response.reviewCount)
             putString(LOGIN_PROVIDER, response.loginProvider)
-            putInt(USER_ID, response.userId)
+            putLong(USER_ID, response.userId)
             apply()
         }
     }
 
-    fun getUserId() : Int = prefs.getInt(USER_ID, -1)
+    fun getUserId() : Long = prefs.getLong(USER_ID, -1)
     fun getEmail(): String? = prefs.getString(EMAIL, null)
     fun getNickname(): String? = prefs.getString(NICKNAME, null)
     fun getProfileImage(): String? = prefs.getString(PROFILE_IMAGE, null)

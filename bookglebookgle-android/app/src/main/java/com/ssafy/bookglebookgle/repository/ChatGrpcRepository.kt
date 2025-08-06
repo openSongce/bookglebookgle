@@ -42,7 +42,7 @@ class ChatGrpcRepository @Inject constructor(
 
     // 현재 채팅방 정보
     private var currentGroupId: Long = 0
-    private var currentUserId: Int = 0
+    private var currentUserId: Long = 0
     private var currentUserName: String = ""
 
     init {
@@ -56,7 +56,7 @@ class ChatGrpcRepository @Inject constructor(
         _connectionStatus.value = GrpcConnectionStatus.CONNECTED
     }
 
-    fun joinChatRoom(groupId: Long, userId: Int, userName: String) {
+    fun joinChatRoom(groupId: Long, userId: Long, userName: String) {
         currentGroupId = groupId
         currentUserId = userId
         currentUserName = userName
@@ -203,7 +203,7 @@ class ChatGrpcRepository @Inject constructor(
     private fun grpcToChatMessage(grpcMessage: GrpcChatMessage): ChatMessage {
         return ChatMessage(
             messageId = grpcMessage.timestamp,
-            userId = grpcMessage.senderId.toInt(),
+            userId = grpcMessage.senderId,
             nickname = grpcMessage.senderName,
             profileImage = null,
             message = grpcMessage.content,
@@ -211,18 +211,18 @@ class ChatGrpcRepository @Inject constructor(
         )
     }
 
-    // 타임스탬프 포맷팅
+    // 타임스탬프 포맷팅 - 한국어 시간 형식으로 변경
     private fun formatTimestamp(timestamp: Long): String {
-        val now = System.currentTimeMillis()
-        val diff = now - timestamp
+        val date = Date(timestamp)
+        val calendar = Calendar.getInstance().apply { time = date }
+        val hour = calendar.get(Calendar.HOUR_OF_DAY)
+        val minute = calendar.get(Calendar.MINUTE)
 
-        return when {
-            diff < 60 * 1000 -> "방금 전"
-            diff < 60 * 60 * 1000 -> "${diff / (60 * 1000)}분 전"
-            else -> {
-                val sdf = SimpleDateFormat("HH:mm", Locale.getDefault())
-                sdf.format(Date(timestamp))
-            }
-        }
+        val period = if (hour < 12) "오전" else "오후"
+        val displayHour = if (hour == 0) 12
+        else if (hour > 12) hour - 12
+        else hour
+
+        return "$period $displayHour:${String.format("%02d", minute)}"
     }
 }

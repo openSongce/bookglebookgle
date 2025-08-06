@@ -1,6 +1,7 @@
 package com.ssafy.bookglebookgle.repository
 
 import android.util.Log
+import com.example.bookglebookgleserver.chat.ChatMessage
 import com.ssafy.bookglebookgle.entity.ChatListResponse
 import com.ssafy.bookglebookgle.entity.ChatMessagesResponse
 import com.ssafy.bookglebookgle.network.api.ChatApi
@@ -44,42 +45,115 @@ class ChatRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun getChatMessages(groupId: Long): ChatMessagesResponse {
+    /**
+     * 채팅 메시지 조회 (페이징)
+     * */
+    override suspend fun getChatMessages(
+        roomId: Long,
+        beforeId: Long,
+        size: Int
+    ): List<ChatMessagesResponse> {
         return try {
-            Log.d(TAG, "채팅 메시지 요청 시작 - groupId: $groupId")
+            Log.d(TAG, "채팅 메시지 요청 시작 - roomId: $roomId, beforeId: $beforeId, size: $size")
 
-            val response = chatApi.getChatMessages(groupId)
+            val response = chatApi.getChatMessages(roomId, beforeId, size)
 
             if (response.isSuccessful) {
                 Log.d(TAG, "채팅 메시지 조회 성공 - 응답코드: ${response.code()}")
-                response.body()?.let { chatMessages ->
-                    Log.d(TAG, "채팅 메시지 - 총 ${chatMessages.messages.size}개 메시지 발견")
-                    chatMessages.messages.forEach { message ->
-                        Log.d(TAG, "메시지 ID: ${message.messageId}, 보낸이: ${message.nickname}, 내용: ${message.message}")
+                response.body()?.let { messages ->
+                    Log.d(TAG, "채팅 메시지 - 총 ${messages.size}개 메시지 발견")
+                    messages.forEach { message ->
+                        Log.d(TAG, "메시지 ID: ${message.id}, 보낸이: ${message.userNickname}, 내용: ${message.message}")
                     }
-                    chatMessages
+                    messages
                 } ?: run {
                     Log.w(TAG, "채팅 메시지 조회 성공했지만 응답 body가 null")
-                    ChatMessagesResponse(
-                        groupId = groupId,
-                        messages = emptyList()
-                    )
+                    emptyList()
                 }
             } else {
                 val errorBody = response.errorBody()?.string()
-                Log.d(TAG, "채팅 메시지 조회 실패 - 응답코드: ${response.code()}, 메시지: ${response.message()}")
-                Log.d(TAG, "서버 에러 메시지: $errorBody")
-                ChatMessagesResponse(
-                    groupId = groupId,
-                    messages = emptyList()
-                )
+                Log.e(TAG, "채팅 메시지 조회 실패 - 응답코드: ${response.code()}, 메시지: ${response.message()}")
+                Log.e(TAG, "서버 에러 메시지: $errorBody")
+                emptyList()
             }
         } catch (e: Exception) {
             Log.e(TAG, "채팅 메시지 조회 실패 - 네트워크 오류: ${e.message}")
-            ChatMessagesResponse(
-                groupId = groupId,
-                messages = emptyList()
-            )
+            emptyList()
+        }
+    }
+
+    /**
+     * 최신 채팅 메시지 조회 (초기 로드용)
+     * beforeId 없이 최신 메시지부터 조회
+     * */
+    override suspend fun getLatestChatMessages(
+        roomId: Long,
+        size: Int
+    ): List<ChatMessagesResponse> {
+        return try {
+            Log.d(TAG, "최신 채팅 메시지 요청 시작 - roomId: $roomId, size: $size")
+
+            // beforeId를 0으로 설정하여 최신 메시지부터 조회
+            val response = chatApi.getChatMessages(roomId, null, size)
+
+            if (response.isSuccessful) {
+                Log.d(TAG, "최신 채팅 메시지 조회 성공 - 응답코드: ${response.code()}")
+                response.body()?.let { messages ->
+                    Log.d(TAG, "최신 채팅 메시지 - 총 ${messages.size}개 메시지 조회")
+                    messages.forEach { message ->
+                        Log.d(TAG, "메시지 ID: ${message.id}, 유저ID: ${message.userId}, 닉네임: ${message.userNickname}, 내용: ${message.message}")
+                    }
+                    messages
+                } ?: run {
+                    Log.w(TAG, "최신 채팅 메시지 조회 성공했지만 응답 body가 null")
+                    emptyList()
+                }
+            } else {
+                val errorBody = response.errorBody()?.string()
+                Log.e(TAG, "최신 채팅 메시지 조회 실패 - 응답코드: ${response.code()}, 메시지: ${response.message()}")
+                Log.e(TAG, "서버 에러 메시지: $errorBody")
+                emptyList()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "최신 채팅 메시지 조회 실패 - 네트워크 오류: ${e.message}")
+            emptyList()
+        }
+    }
+
+    /**
+     * 이전 채팅 메시지 조회 (스크롤 페이징용)
+     * */
+    override suspend fun getOlderChatMessages(
+        roomId: Long,
+        beforeMessageId: Long,
+        size: Int
+    ): List<ChatMessagesResponse> {
+        return try {
+            Log.d(TAG, "이전 채팅 메시지 요청 시작 - roomId: $roomId, beforeId: $beforeMessageId, size: $size")
+
+            val response = chatApi.getChatMessages(roomId, beforeMessageId, size)
+
+            if (response.isSuccessful) {
+                Log.d(TAG, "이전 채팅 메시지 조회 성공 - 응답코드: ${response.code()}")
+                response.body()?.let { messages ->
+                    Log.d(TAG, "이전 채팅 메시지 - 총 ${messages.size}개 메시지 조회")
+                    messages.forEach { message ->
+                        Log.d(TAG, "메시지 ID: ${message.id}, 유저ID: ${message.userId}, 닉네임: ${message.userNickname}, 내용: ${message.message}")
+                    }
+                    messages
+                } ?: run {
+                    Log.w(TAG, "이전 채팅 메시지 조회 성공했지만 응답 body가 null")
+                    emptyList()
+                }
+            } else {
+                val errorBody = response.errorBody()?.string()
+                Log.e(TAG, "이전 채팅 메시지 조회 실패 - 응답코드: ${response.code()}, 메시지: ${response.message()}")
+                Log.e(TAG, "서버 에러 메시지: $errorBody")
+                emptyList()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "이전 채팅 메시지 조회 실패 - 네트워크 오류: ${e.message}")
+            emptyList()
         }
     }
 }

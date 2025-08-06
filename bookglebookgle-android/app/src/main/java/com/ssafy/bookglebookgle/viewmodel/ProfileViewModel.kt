@@ -37,7 +37,7 @@ class ProfileViewModel @Inject constructor(
     val reviewCount: StateFlow<Int> = _reviewCount.asStateFlow()
 
     private val _userId = MutableStateFlow(userInfoManager.getUserId())
-    val userId: StateFlow<Int> = _userId.asStateFlow()
+    val userId: StateFlow<Long> = _userId.asStateFlow()
 
     fun logout() {
         viewModelScope.launch {

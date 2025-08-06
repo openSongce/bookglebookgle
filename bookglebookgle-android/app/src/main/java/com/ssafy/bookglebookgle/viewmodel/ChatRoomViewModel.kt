@@ -1,5 +1,7 @@
 package com.ssafy.bookglebookgle.viewmodel
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -9,6 +11,7 @@ import com.ssafy.bookglebookgle.repository.ChatRepositoryImpl
 import com.ssafy.bookglebookgle.repository.GroupRepositoryImpl
 import com.ssafy.bookglebookgle.repository.ChatGrpcRepository
 import com.ssafy.bookglebookgle.repository.GrpcConnectionStatus
+import com.ssafy.bookglebookgle.util.DateTimeUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -18,11 +21,12 @@ import javax.inject.Inject
 
 data class ChatRoomUiState(
     val chatMessages: List<ChatMessage> = emptyList(),
-    val currentChatRoom: ChatMessagesResponse? = null,
     val groupTitle: String = "채팅방",
     val isLoading: Boolean = false,
+    val isLoadingMore: Boolean = false,
+    val hasMoreData: Boolean = true,
     val error: String? = null,
-    val grpcConnected: Boolean = false  // gRPC 연결 상태
+    val grpcConnected: Boolean = false
 )
 
 @HiltViewModel
@@ -36,6 +40,9 @@ class ChatRoomViewModel @Inject constructor(
     val uiState: StateFlow<ChatRoomUiState> = _uiState.asStateFlow()
 
     private val grpcMessageObserver = Observer<ChatMessage> { newMessage -> addNewMessage(newMessage) }
+
+    private var currentGroupId: Long = 0 // 현재 채팅방 ID 저장
+    private var isInitialLoad = true     // 최초 로드 여부
 
     init {
         chatGrpcRepository.newMessages.observeForever(grpcMessageObserver)
@@ -59,31 +66,46 @@ class ChatRoomViewModel @Inject constructor(
         }
     }
 
-    fun isMyMessage(message: ChatMessage, userId: Int): Boolean {
+    fun isMyMessage(message: ChatMessage, userId: Long): Boolean {
         return message.userId == userId
     }
 
     // 채팅방 입장 - REST API + gRPC 연결
-    fun enterChatRoom(groupId: Long, userId: Int) {
+    @RequiresApi(Build.VERSION_CODES.O)
+    fun enterChatRoom(groupId: Long, userId: Long) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+            currentGroupId = groupId
 
             try {
-                // 그룹 정보 불러오기 (제목)
+                // 그룹 정보 불러오기
                 val groupDetail = groupRepositoryImpl.getGroupDetail(groupId)
                 val groupTitle = groupDetail.body()?.roomTitle
 
-                // 기존 메시지 불러오기
-                val chatMessagesResponse = chatRepositoryImpl.getChatMessages(groupId)
+                // 최신 메시지 불러오기
+                val latestMessages = chatRepositoryImpl.getLatestChatMessages(groupId, 20)
+
+                val chatMessages = latestMessages.map { response ->
+                    ChatMessage(
+                        messageId = response.id,
+                        userId = response.userId,
+                        nickname = response.userNickname,
+                        profileImage = null,
+                        message = response.message,
+                        timestamp = DateTimeUtils.formatChatTime(response.createdAt)
+                    )
+                }.sortedBy { it.messageId } // 메시지 ID 기준 오름차순 정렬
 
                 _uiState.value = _uiState.value.copy(
-                    currentChatRoom = chatMessagesResponse,
-                    chatMessages = chatMessagesResponse.messages,  // 기존 메시지 (gRPC 이전 내용)
+                    chatMessages = chatMessages,
                     groupTitle = groupTitle ?: "채팅방",
-                    isLoading = false
+                    isLoading = false,
+                    hasMoreData = latestMessages.size >= 20
                 )
 
-                // gRPC 연결
+                isInitialLoad = false
+
+                //gRPC 연결
                 connectToGrpcChat(groupId, userId)
 
             } catch (e: Exception) {
@@ -95,9 +117,71 @@ class ChatRoomViewModel @Inject constructor(
         }
     }
 
+    // 이전 메시지 불러오기 (스크롤 페이징)
+    @RequiresApi(Build.VERSION_CODES.O)
+    fun loadMoreMessages() {
+        if (_uiState.value.isLoadingMore || !_uiState.value.hasMoreData || isInitialLoad) {
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoadingMore = true)
+
+            try {
+                val currentMessages = _uiState.value.chatMessages
+                if (currentMessages.isEmpty()) {
+                    _uiState.value = _uiState.value.copy(isLoadingMore = false)
+                    return@launch
+                }
+
+                val oldestMessageId = currentMessages.firstOrNull()?.messageId ?: return@launch
+
+                // 이전 메시지들 불러오기
+                val olderMessages = chatRepositoryImpl.getOlderChatMessages(
+                    roomId = currentGroupId,
+                    beforeMessageId = oldestMessageId,
+                    20
+                )
+
+                if (olderMessages.isNotEmpty()) {
+                    val newChatMessages = olderMessages.map { response ->
+                        ChatMessage(
+                            messageId = response.id,
+                            userId = response.userId,
+                            nickname = response.userNickname,
+                            profileImage = null,
+                            message = response.message,
+                            timestamp = DateTimeUtils.formatChatTime(response.createdAt)
+                        )
+                    }.sortedBy { it.messageId }
+
+                    // 기존 메시지 앞에 이전 메시지들 추가
+                    val updatedMessages = newChatMessages + currentMessages
+
+                    _uiState.value = _uiState.value.copy(
+                        chatMessages = updatedMessages,
+                        isLoadingMore = false,
+                        hasMoreData = olderMessages.size >= 20
+                    )
+                } else {
+                    _uiState.value = _uiState.value.copy(
+                        isLoadingMore = false,
+                        hasMoreData = false
+                    )
+                }
+
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    error = "이전 메시지 불러오기 실패: ${e.message}",
+                    isLoadingMore = false
+                )
+            }
+        }
+    }
+
 
     // gRPC 실시간 채팅 연결
-    private fun connectToGrpcChat(groupId: Long, userId: Int) {
+    private fun connectToGrpcChat(groupId: Long, userId: Long) {
         viewModelScope.launch {
             try {
                 // 사용자 정보 가져오기
@@ -124,7 +208,8 @@ class ChatRoomViewModel @Inject constructor(
         // 중복 메시지 체크 (messageId 기준)
         if (currentMessages.none { it.messageId == message.messageId }) {
             currentMessages.add(message)
-            _uiState.value = _uiState.value.copy(chatMessages = currentMessages)
+            val sortedMessages = currentMessages.sortedBy { it.messageId }
+            _uiState.value = _uiState.value.copy(chatMessages = sortedMessages)
         }
     }
 

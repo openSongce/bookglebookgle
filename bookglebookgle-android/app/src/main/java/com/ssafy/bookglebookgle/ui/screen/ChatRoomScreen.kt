@@ -1,5 +1,7 @@
 package com.ssafy.bookglebookgle.ui.screen
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -34,6 +36,7 @@ import com.ssafy.bookglebookgle.entity.ChatMessage
 import com.ssafy.bookglebookgle.ui.component.CustomTopAppBar
 import com.ssafy.bookglebookgle.ui.theme.BaseColor
 import com.ssafy.bookglebookgle.ui.theme.MainColor
+import com.ssafy.bookglebookgle.util.DateTimeUtils
 import com.ssafy.bookglebookgle.viewmodel.ChatRoomViewModel
 import kotlinx.coroutines.launch
 
@@ -41,7 +44,7 @@ import kotlinx.coroutines.launch
 fun ChatRoomScreen(
     navController: NavHostController,
     groupId: Long,
-    userId: Int,
+    userId: Long,
     viewModel: ChatRoomViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -74,7 +77,14 @@ fun ChatRoomScreen(
     LaunchedEffect(uiState.chatMessages.size) {
         if (uiState.chatMessages.isNotEmpty()) {
             scope.launch {
-                listState.animateScrollToItem(uiState.chatMessages.size - 1)
+                // 이미 맨 아래에 있을 때만 스크롤
+                val lastVisibleItem = listState.layoutInfo.visibleItemsInfo.lastOrNull()
+                val isAtBottom = lastVisibleItem?.index == uiState.chatMessages.size - 1 ||
+                        listState.firstVisibleItemIndex >= uiState.chatMessages.size - 2
+
+                if (isAtBottom) {
+                    listState.animateScrollToItem(uiState.chatMessages.size - 1)
+                }
             }
         }
     }
@@ -102,7 +112,6 @@ fun ChatRoomScreen(
             navController = navController,
         )
 
-        // 채팅 메시지 목록 (기존 코드 그대로)
         Box(
             modifier = Modifier
                 .weight(1f)
@@ -119,36 +128,95 @@ fun ChatRoomScreen(
                     bottom = 26.dp
                 )
             ) {
-                if (uiState.isLoading) {
+                // 위쪽에 더 불러오기 로딩 표시
+                if (uiState.isLoadingMore && uiState.hasMoreData) {
                     item {
                         Box(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            CircularProgressIndicator(
-                                color = Color(0xFFF4E5CE)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                CircularProgressIndicator(
+                                    color = BaseColor,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "이전 메시지를 불러오는 중...",
+                                    fontSize = 12.sp,
+                                    color = Color.Gray
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // 더 이상 불러올 메시지가 없을 때 표시
+                if (!uiState.hasMoreData && uiState.chatMessages.isNotEmpty() && !uiState.isLoading) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 16.dp, end = 16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "채팅의 시작입니다",
+                                fontSize = 12.sp,
+                                color = Color.Gray
                             )
                         }
                     }
                 }
 
+                // 초기 로딩
+                if (uiState.isLoading && uiState.chatMessages.isEmpty()) {
+                    item {
+                        Box(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(color = BaseColor)
+                        }
+                    }
+                }
+
+                // 에러 메시지
                 if (uiState.error != null) {
                     item {
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(8.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color.Red.copy(alpha = 0.1f))
-                        ) {
-                            Text(
-                                text = uiState.error!!,
-                                modifier = Modifier.padding(16.dp),
-                                color = Color.Red
+                            colors = CardDefaults.cardColors(
+                                containerColor = Color.Red.copy(alpha = 0.1f)
                             )
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp)
+                            ) {
+                                Text(
+                                    text = uiState.error!!,
+                                    color = Color.Red,
+                                    fontSize = 14.sp
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                TextButton(
+                                    onClick = { viewModel.clearError() }
+                                ) {
+                                    Text("확인", color = Color.Red)
+                                }
+                            }
                         }
                     }
                 }
 
+                // 채팅 메시지들
                 items(uiState.chatMessages) { message ->
                     ChatMessageItem(
                         message = message,
@@ -156,18 +224,62 @@ fun ChatRoomScreen(
                     )
                 }
             }
-            // 빈 상태 메시지 표시
+
+            // 스크롤 감지로 이전 메시지 로드
+            LaunchedEffect(listState.canScrollBackward) {
+                snapshotFlow {
+                    listState.layoutInfo.visibleItemsInfo.firstOrNull()?.index
+                }.collect { firstVisibleIndex ->
+                    // 맨 위에서 2번째 아이템이 보이면 더 불러오기
+                    if (firstVisibleIndex != null && firstVisibleIndex <= 1 &&
+                        !uiState.isLoadingMore && uiState.hasMoreData) {
+                        viewModel.loadMoreMessages()
+                    }
+                }
+            }
+
+            // 빈 상태 메시지
             if (!uiState.isLoading && uiState.chatMessages.isEmpty() && uiState.error == null) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = "대화내역이 없습니다.\n채팅을 시작해보세요!",
-                        fontSize = 16.sp,
-                        color = Color.Gray,
-                        fontWeight = FontWeight.Medium
-                    )
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "대화내역이 없습니다.",
+                            fontSize = 16.sp,
+                            color = Color.Gray,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            text = "채팅을 시작해보세요!",
+                            fontSize = 14.sp,
+                            color = Color.Gray
+                        )
+
+                        // 🔧 추가: gRPC 연결 상태 표시
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .background(
+                                        color = if (uiState.grpcConnected) Color.Green else Color.Red,
+                                        shape = CircleShape
+                                    )
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = if (uiState.grpcConnected) "연결됨" else "연결 중...",
+                                fontSize = 12.sp,
+                                color = Color.Gray
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -261,6 +373,7 @@ fun ChatRoomScreen(
     }
 }
 
+@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun ChatMessageItem(
     message: ChatMessage,

@@ -9,5 +9,5 @@ data class LoginResponse(
     val avgRating: Float,
     val reviewCount: Int,
     val loginProvider: String,
-    val userId: Int
+    val userId: Long
 )
