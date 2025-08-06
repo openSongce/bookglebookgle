@@ -23,7 +23,10 @@ public class User {
     private String email;
 
     private String password;
+
+    @Column(name = "nickname", nullable = false, unique = true)
     private String nickname;
+
     private String provider;
     private String profileImageUrl;
 

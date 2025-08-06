@@ -16,12 +16,14 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 
+@Slf4j
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/auth")
@@ -116,6 +118,7 @@ public class AuthController {
     })
     @GetMapping("/check/nickname")
     public ResponseEntity<String> checkNickname(@RequestParam String nickname) {
+        log.debug("닉네임 중복 체크 요청 :[{}]", nickname);
         boolean exists = authService.isNicknameDuplicated(nickname);
         if (exists) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body("이미 사용 중인 닉네임입니다.");
