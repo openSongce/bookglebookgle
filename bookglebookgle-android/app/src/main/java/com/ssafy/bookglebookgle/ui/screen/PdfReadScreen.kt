@@ -1,12 +1,24 @@
 package com.ssafy.bookglebookgle.ui.screen
 
+import android.graphics.Bitmap
 import android.graphics.PointF
 import android.util.Log
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.LocalTextSelectionColors
 import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.material3.*
@@ -15,6 +27,7 @@ import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -42,7 +55,14 @@ import com.ssafy.bookglebookgle.ui.theme.BaseColor
 import com.ssafy.bookglebookgle.viewmodel.PdfViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import androidx.compose.material3.*
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.ui.draw.clip
+import kotlinx.coroutines.launch
 
+
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PdfReadScreen(
     groupId: Long? = null,
@@ -104,6 +124,10 @@ fun PdfReadScreen(
 
     // 하단으로 스와이프 감지
     var bottomSwipe by remember { mutableStateOf(false) }
+
+    //thumbnail
+    val thumbnails by viewModel.thumbnails.collectAsState()
+    val showThumbnails = remember { mutableStateOf(false) }
 
     // 헬퍼 함수들
     fun hideTextSelection() {
@@ -242,6 +266,21 @@ fun PdfReadScreen(
         }
     }
 
+    LaunchedEffect(isPdfRenderingComplete) {
+        if (isPdfRenderingComplete) {
+            // PDF 로딩이 완료되면 현재 페이지를 중앙에 위치
+            kotlinx.coroutines.delay(100) // 렌더링 완료 후 잠시 대기
+            pdfView?.centerCurrentPage(withAnimation = false)
+        }
+    }
+
+    LaunchedEffect(currentPage) {
+        if (pdfView != null && isPdfRenderingComplete) {
+            // 페이지가 변경될 때마다 중앙 정렬 (필요한 경우에만)
+            pdfView?.centerCurrentPage(withAnimation = true)
+        }
+    }
+
 //    LaunchedEffect(addBookmarkState) {
 //        when (addBookmarkState) {
 //            is ResponseState.Success<*> -> {
@@ -308,7 +347,8 @@ fun PdfReadScreen(
         // Content
         Box(modifier = Modifier
             .fillMaxSize()
-            .padding(paddingValues).pointerInput(Unit) {
+            .padding(paddingValues)
+            .pointerInput(Unit) {
                 detectVerticalDragGestures { _, dragAmount ->
                     // 위로 스와이프 감지
                     if (dragAmount < 0 && viewModel.canGoToNextPage()) {
@@ -430,7 +470,7 @@ fun PdfReadScreen(
                                         override fun onTap() {
                                             hideTextSelection()
                                             textSelectionOptionsWindow.dismiss(false)
-
+                                            showThumbnails.value = !showThumbnails.value
                                         }
 
                                         override fun onTextSelected(
@@ -512,7 +552,7 @@ fun PdfReadScreen(
                                             .pageFitPolicy(FitPolicy.WIDTH) // 페이지를 화면 너비에 맞춤
                                             .fitEachPage(true)              // 각 페이지를 개별적으로 맞춤
                                             .enableDoubleTap(true)          // 더블탭 줌 활성화
-                                            .spacing(1000)
+                                            .autoSpacing(true)
                                             .load()
                                         Log.d("PdfReadScreen", "PDF 파일 로드 호출 완료")
                                     } catch (e: Exception) {
@@ -727,6 +767,21 @@ fun PdfReadScreen(
                 )
             }
 
+            AnimatedVisibility(
+                visible = showThumbnails.value,
+                enter = slideInVertically(initialOffsetY = { it }),
+                exit = slideOutVertically(targetOffsetY = { it }),
+                modifier = Modifier.align(Alignment.BottomCenter)
+            ) {
+                ThumbnailBottomSheet(
+                    thumbnails = thumbnails,
+                    currentPage = currentPage,
+                    onThumbnailClick = { page -> pdfView?.jumpTo(page)
+                        viewModel.goToPage(page) },
+                    modifier = Modifier.align(Alignment.BottomCenter)
+                )
+            }
+
 
         }
     }
@@ -747,4 +802,45 @@ private fun AnnotationListResponse.toAnnotationList(): List<PdfAnnotationModel> 
     })
 
     return annotationList
+}
+
+@Composable
+fun ThumbnailBottomSheet(
+    thumbnails: List<Bitmap>,
+    currentPage: Int,
+    onThumbnailClick: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(100.dp),
+        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+        color = Color.White.copy(alpha = 0.95f),
+        tonalElevation = 4.dp,
+        shadowElevation = 8.dp
+    ) {
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            itemsIndexed(thumbnails) { index, bitmap ->
+                Image(
+                    bitmap = bitmap.asImageBitmap(),
+                    contentDescription = "Page ${index + 1}",
+                    modifier = Modifier
+                        .size(80.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .clickable {
+                            onThumbnailClick(index)
+                        }
+                        .border(
+                            width = if (currentPage == index + 1) 2.dp else 0.dp,
+                            color = if (currentPage == index + 1) BaseColor else Color.Transparent,
+                            shape = RoundedCornerShape(6.dp)
+                        )
+                )
+            }
+        }
+    }
 }
