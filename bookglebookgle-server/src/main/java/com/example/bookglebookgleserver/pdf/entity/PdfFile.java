@@ -53,9 +53,11 @@ public class PdfFile {
     }
 
     @OneToMany(mappedBy = "pdfFile", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
     private List<Highlight> highlights = new ArrayList<>();
 
     @OneToMany(mappedBy = "pdfFile", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
     private List<Comment> comments = new ArrayList<>();
 
 }

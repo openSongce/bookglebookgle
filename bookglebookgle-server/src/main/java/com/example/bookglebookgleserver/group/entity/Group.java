@@ -83,6 +83,7 @@ public class Group {
     }
 
     @OneToMany(mappedBy = "group", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
     private List<GroupMember> groupMembers = new ArrayList<>();
 
 }
