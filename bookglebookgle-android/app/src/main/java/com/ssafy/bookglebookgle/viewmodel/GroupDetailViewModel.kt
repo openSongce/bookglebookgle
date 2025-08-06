@@ -132,18 +132,40 @@ class GroupDetailViewModel @Inject constructor(
                     val errorBody = response.errorBody()?.string()
                     Log.e(TAG, "그룹 참여 실패 - 코드: ${response.code()}, 메시지: $errorBody")
 
-                    // 에러 메시지를 상태 코드에 따라 구분
+                    // 서버에서 보내는 실제 에러 메시지를 그대로 전달
                     val errorMessage = when (response.code()) {
-                        403 -> {
-                            Log.e(TAG, "평점 부족으로 인한 가입 실패")
-                            "403_평점부족"
+                        400 -> {
+                            // 400 에러의 경우 서버에서 보내는 구체적인 메시지 사용
+                            when {
+                                errorBody?.contains("이미 참가한 그룹") == true -> {
+                                    Log.e(TAG, "이미 참가한 그룹으로 인한 가입 실패")
+                                    "이미 참가한 그룹입니다."
+                                }
+                                errorBody?.contains("그룹 정원이 초과되었습니다") == true -> {
+                                    Log.e(TAG, "정원 초과로 인한 가입 실패")
+                                    "그룹 정원이 초과되었습니다."
+                                }
+                                errorBody?.contains("평점이 낮아") == true -> {
+                                    Log.e(TAG, "평점 부족으로 인한 가입 실패")
+                                    "평점이 낮아 그룹에 참가할 수 없습니다."
+                                }
+                                else -> {
+                                    Log.e(TAG, "기타 400 에러: $errorBody")
+                                    errorBody ?: "잘못된 요청입니다."
+                                }
+                            }
                         }
-                        409 -> {
-                            Log.e(TAG, "정원 초과로 인한 가입 실패")
-                            "정원이 가득 찼습니다"
+                        404 -> {
+                            Log.e(TAG, "존재하지 않는 그룹")
+                            "해당 그룹이 존재하지 않습니다."
+                        }
+                        500 -> {
+                            Log.e(TAG, "서버 오류")
+                            "서버 오류가 발생했습니다."
                         }
                         else -> {
-                            "그룹 참여 실패: ${response.code()} $errorBody"
+                            Log.e(TAG, "기타 HTTP 에러: ${response.code()}")
+                            errorBody ?: "그룹 참여에 실패했습니다."
                         }
                     }
 
