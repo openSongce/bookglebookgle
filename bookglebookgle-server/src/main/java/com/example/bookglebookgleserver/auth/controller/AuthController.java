@@ -5,14 +5,13 @@ import com.example.bookglebookgleserver.auth.dto.JwtResponse;
 import com.example.bookglebookgleserver.auth.dto.LoginRequest;
 import com.example.bookglebookgleserver.auth.dto.RefreshRequest;
 import com.example.bookglebookgleserver.auth.dto.SignupRequest;
-import com.example.bookglebookgleserver.auth.service.AuthService;
-import com.example.bookglebookgleserver.auth.service.GoogleTokenVerifier;
-import com.example.bookglebookgleserver.auth.service.JwtService;
-import com.example.bookglebookgleserver.auth.service.RefreshTokenService;
+import com.example.bookglebookgleserver.auth.service.*;
 import com.example.bookglebookgleserver.user.entity.User;
 import com.example.bookglebookgleserver.user.repository.UserRepository;
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +33,7 @@ public class AuthController {
     private final JwtService jwtService;
 
     private final RefreshTokenService refreshTokenService;
+    private final JwtBlacklistService jwtBlacklistService;
 
 
     @Operation(
@@ -199,4 +199,49 @@ public class AuthController {
 
     }
 
+    @Operation(
+            summary = "로그아웃",
+            description = """
+        <b>AccessToken</b>은 Authorization 헤더에,<br>
+        <b>RefreshToken</b>은 <code>body</code>에 JSON으로 전달합니다.<br><br>
+        <b>모바일(Android/iOS) 환경 전용!</b><br>
+        - 로그아웃 시 두 토큰을 모두 서버에서 무효화(블랙리스트 등록)합니다.<br>
+        - 로그아웃 후 이 토큰들로 더 이상 인증/재발급 불가
+    """
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "로그아웃 성공, 두 토큰이 모두 무효화됨"),
+            @ApiResponse(responseCode = "500", description = "로그아웃 처리 중 서버 오류")
+    })
+    @PostMapping("/logout")
+    public ResponseEntity<String> logout(
+            @RequestHeader("Authorization") String authHeader,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                    description = "body에 RefreshToken을 JSON 형태로 전달. ex) { \"refreshToken\": \"...\" }",
+                    required = false,
+                    content = @Content(
+                            schema = @Schema(
+                                    example = "{\"refreshToken\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\"}"
+                            )
+                    )
+            )
+            @RequestBody(required = false) Map<String, String> body
+    ) {
+        try {
+            String accessToken = authHeader.replace("Bearer ", "");
+            long accessExpireSec = jwtService.getRemainingExpiration(accessToken, false);
+            jwtBlacklistService.blacklistToken(accessToken, accessExpireSec);
+
+            String refreshToken = (body != null) ? body.get("refreshToken") : null;
+            if (refreshToken != null && !refreshToken.isBlank()) {
+                long refreshExpireSec = jwtService.getRemainingExpiration(refreshToken, true);
+                jwtBlacklistService.blacklistToken(refreshToken, refreshExpireSec);
+            }
+
+            return ResponseEntity.ok("로그아웃 완료");
+        } catch (Exception e) {
+            log.error("로그아웃 실패: ", e);
+            return ResponseEntity.status(500).body("로그아웃 처리 중 오류");
+        }
+    }
 }
