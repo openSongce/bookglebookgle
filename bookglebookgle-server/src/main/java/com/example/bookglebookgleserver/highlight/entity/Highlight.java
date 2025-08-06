@@ -1,5 +1,6 @@
 package com.example.bookglebookgleserver.highlight.entity;
 
+import com.example.bookglebookgleserver.pdf.entity.PdfFile;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -21,6 +22,9 @@ public class Highlight {
     private String color;
     private double startX, startY, endX, endY;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "pdf_file_id")
+    private PdfFile pdfFile;
     // 생성일, 수정일 등 필요시 추가
 }
 
