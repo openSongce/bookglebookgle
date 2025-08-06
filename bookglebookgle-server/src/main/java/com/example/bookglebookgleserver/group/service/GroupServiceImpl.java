@@ -263,7 +263,8 @@ public class GroupServiceImpl implements GroupService {
                         null, // 이미지 URL은 아직 없음
                         group.getCategory().name(),
                         group.getGroupMembers().size(),
-                        group.getGroupMaxNum()
+                        group.getGroupMaxNum(),
+                        group.getHostUser().getId().equals(userId)
                 ))
                 .collect(Collectors.toList());
     }
