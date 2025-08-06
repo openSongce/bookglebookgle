@@ -19,6 +19,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.io.File
 import javax.inject.Inject
+import android.graphics.Bitmap
+import android.graphics.pdf.PdfRenderer
+import android.os.ParcelFileDescriptor
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.update
+
 
 private const val TAG = "싸피_PdfViewModel"
 
@@ -98,6 +104,13 @@ class PdfViewModel @Inject constructor(
 
     val annotationListResponse = OperationsStateHandler(viewModelScope)
 
+    private val _thumbnails = MutableStateFlow<List<Bitmap>>(emptyList())
+    val thumbnails: StateFlow<List<Bitmap>> = _thumbnails.asStateFlow()
+
+
+
+
+
     /**
      * PDF 렌더링 시작 알림
      */
@@ -114,6 +127,8 @@ class PdfViewModel @Inject constructor(
         Log.d(TAG, "==== PDF 렌더링 성공 알림 ====")
         _isPdfRenderingComplete.value = true
         _pdfRenderingError.value = null
+
+        generateThumbnails()
     }
 
     /**
@@ -683,6 +698,38 @@ class PdfViewModel @Inject constructor(
     // 페이지 네비게이션 버튼 활성화 상태 확인
     fun canGoToPreviousPage(): Boolean = currentPage.value > 1
     fun canGoToNextPage(): Boolean = currentPage.value < totalPages.value
+
+    // thumbnail
+
+    fun generateThumbnails() {
+        val file = _pdfFile.value ?: return
+        val pageCount = _totalPages.value
+        viewModelScope.launch(Dispatchers.IO) {
+            val result = mutableListOf<Bitmap>()
+            try {
+                val fileDescriptor = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+                val renderer = PdfRenderer(fileDescriptor)
+
+                for (i in 0 until pageCount) {
+                    val page = renderer.openPage(i)
+                    val width = 120
+                    val height = (width * page.height.toFloat() / page.width).toInt()
+                    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                    page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                    result.add(bitmap)
+                    page.close()
+                }
+
+                renderer.close()
+                fileDescriptor.close()
+
+                _thumbnails.update { result }
+            } catch (e: Exception) {
+                Log.e(TAG, "썸네일 생성 중 오류 발생: ${e.message}", e)
+            }
+        }
+    }
+
 
 
 }

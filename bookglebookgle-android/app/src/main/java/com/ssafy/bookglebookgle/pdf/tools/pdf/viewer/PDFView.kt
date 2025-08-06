@@ -2239,6 +2239,80 @@ class PDFView(context: Context?, set: AttributeSet?) :
         mergeState = MergeState.IDLE
     }
 
+    // PDFView 클래스에 추가할 함수들
+
+    /**
+     * 현재 페이지를 화면 중앙에 위치시킵니다
+     */
+    fun centerCurrentPage(withAnimation: Boolean = false) {
+        if (pdfFile == null) return
+
+        val pageHeight = pdfFile!!.getPageLength(currentPage, zoom)
+        val screenHeight = height.toFloat()
+
+        if (pageHeight < screenHeight) {
+            // 페이지가 화면보다 작을 때 중앙 정렬
+            val centerOffset = (screenHeight - pageHeight) / 2
+            val targetOffset = -pdfFile!!.getPageOffsetWithZoom(currentPage, zoom) + centerOffset
+
+            if (withAnimation) {
+                animationManager?.startYAnimation(currentYOffset, targetOffset)
+            } else {
+                moveTo(currentXOffset, targetOffset)
+            }
+        } else {
+            // 페이지가 화면보다 클 때는 페이지 상단으로
+            jumpTo(currentPage, withAnimation)
+        }
+    }
+
+    /**
+     * 특정 페이지를 중앙에 위치시킵니다
+     */
+    fun centerPage(page: Int, withAnimation: Boolean = false) {
+        if (pdfFile == null) return
+
+        val validPage = pdfFile!!.determineValidPageNumberFrom(page)
+        val pageHeight = pdfFile!!.getPageLength(validPage, zoom)
+        val screenHeight = height.toFloat()
+
+        if (pageHeight < screenHeight) {
+            // 페이지가 화면보다 작을 때 중앙 정렬
+            val centerOffset = (screenHeight - pageHeight) / 2
+            val targetOffset = -pdfFile!!.getPageOffsetWithZoom(validPage, zoom) + centerOffset
+
+            if (withAnimation) {
+                animationManager?.startYAnimation(currentYOffset, targetOffset)
+            } else {
+                moveTo(currentXOffset, targetOffset)
+            }
+        } else {
+            // 페이지가 화면보다 클 때는 일반 점프
+            jumpTo(validPage, withAnimation)
+        }
+
+        showPage(validPage)
+    }
+
+    /**
+     * 줌 레벨 변경 후 페이지를 중앙에 맞춥니다
+     */
+    fun fitPageToCenter() {
+        if (pdfFile == null) return
+
+        val pageSize = pdfFile!!.getPageSize(currentPage)
+        val screenWidth = width.toFloat()
+        val screenHeight = height.toFloat()
+
+        // 페이지가 화면에 맞도록 줌 계산
+        val widthScale = screenWidth / pageSize.width
+        val heightScale = screenHeight / pageSize.height
+        val targetZoom = minOf(widthScale, heightScale) * 0.9f // 약간의 여백
+
+        zoomTo(targetZoom.coerceIn(minZoom, maxZoom))
+        centerCurrentPage(false)
+    }
+
     interface Listener {
         fun onPreparationStarted()
         fun onPreparationSuccess()
