@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package bgbg.pdf;
 
-option java_package = "bgbg.pdf";
+option java_package = "com.example.bookglebookgleserver.pdf.grpc";
 option java_multiple_files = true;
 
 service PdfSyncService {
@@ -16,6 +16,8 @@ message SyncMessage {
   ActionType actionType = 3;
   AnnotationType annotationType = 4;
   AnnotationPayload payload = 5;
+  string targetUserId = 6;
+  string currentHostId = 7;
 }
 
 enum ActionType {
@@ -23,6 +25,7 @@ enum ActionType {
   ADD = 1;
   UPDATE = 2;
   DELETE = 3;
+  LEADERSHIP_TRANSFER = 4;
 }
 
 enum AnnotationType {
