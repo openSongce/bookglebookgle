@@ -1,5 +1,6 @@
 package com.example.bookglebookgleserver.pdf.grpc;
 
+import bgbg.pdf.*;
 import com.example.bookglebookgleserver.comment.entity.Comment;
 import com.example.bookglebookgleserver.comment.repository.CommentRepository;
 import com.example.bookglebookgleserver.group.entity.Group;
