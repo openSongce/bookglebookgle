@@ -1,7 +1,7 @@
 package com.example.bookglebookgleserver.ocr.service;
 
-import com.bgbg.ai.grpc.ProcessPdfResponse;
-import com.bgbg.ai.grpc.TextBlock;
+import com.bgbg.ai.grpc.AIServiceProto.ProcessPdfResponse;
+import com.bgbg.ai.grpc.AIServiceProto.TextBlock;
 import com.example.bookglebookgleserver.ocr.entity.OcrResult;
 import com.example.bookglebookgleserver.ocr.repository.OcrResultRepository;
 import com.example.bookglebookgleserver.pdf.entity.PdfFile;
