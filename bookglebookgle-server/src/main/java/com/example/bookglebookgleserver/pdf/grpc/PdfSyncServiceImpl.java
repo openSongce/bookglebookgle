@@ -7,10 +7,13 @@ import com.example.bookglebookgleserver.group.entity.Group;
 import com.example.bookglebookgleserver.group.repository.GroupRepository;
 import com.example.bookglebookgleserver.highlight.entity.Highlight;
 import com.example.bookglebookgleserver.highlight.repository.HighlightRepository;
+import com.example.bookglebookgleserver.pdf.repository.PdfReadingProgressRepository;
 import io.grpc.stub.StreamObserver;
 import lombok.RequiredArgsConstructor;
 import net.devh.boot.grpc.server.service.GrpcService;
 
+import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -27,6 +30,7 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
     private final HighlightRepository highlightRepository;
     private final CommentRepository commentRepository;
     private final GroupRepository groupRepository;
+    private final PdfReadingProgressRepository pdfReadingProgressRepository;
 
     // 그룹별로 연결된 클라이언트 스트림 관리
     private final ConcurrentHashMap<Long, Set<StreamObserver<SyncMessage>>> sessions = new ConcurrentHashMap<>();
@@ -35,11 +39,13 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
     public StreamObserver<SyncMessage> sync(StreamObserver<SyncMessage> responseObserver) {
         return new StreamObserver<SyncMessage>() {
             private Long groupId = null;
+            private LocalDateTime enterTime;
 
             @Override
             public void onNext(SyncMessage request) {
                 if (groupId == null) {
                     groupId = request.getGroupId();
+                    enterTime= LocalDateTime.now();
                     sessions.computeIfAbsent(groupId, k -> new CopyOnWriteArraySet<>()).add(responseObserver);
                     logger.info("[PDF-SYNC] 그룹 " + groupId + " 연결! 현재 세션: " + sessions.get(groupId).size());
                 }
@@ -119,8 +125,12 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
                         }
                     } else if (annotationType == AnnotationType.PAGE) {
                         if (actionType == ActionType.PAGE_MOVE) {
-                            logger.info("[페이지 이동] page=" + payload.getPage());
-                            // DB 저장 불필요
+
+                            int movedPage= payload.getPage();
+                            Long userIdLong=Long.valueOf(senderId);
+                            pdfReadingProgressRepository.updateLastReadPage(userIdLong, groupId, movedPage);
+
+                            logger.info("[진도 갱신] userId=" + userIdLong + ", page=" + movedPage);
                         }
                     } else {
                         logger.info("[알 수 없는 타입] actionType=" + actionType + ", annotationType=" + annotationType);
@@ -152,6 +162,7 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
 
             @Override
             public void onCompleted() {
+                recordViewingDuration();
                 removeObserver();
                 responseObserver.onCompleted();
                 logger.info("[PDF-SYNC] 클라이언트 채널 정상 종료");
@@ -166,6 +177,19 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
                     }
                 }
             }
+
+            private void recordViewingDuration() {
+                if (enterTime != null && groupId != null) {
+                    LocalDateTime exitTime = LocalDateTime.now();
+                    Duration duration = Duration.between(enterTime, exitTime);
+                    long seconds = duration.getSeconds();
+                    //log.info("📊 userId=" + senderId + ", groupId=" + groupId + ", 활동 시간=" + seconds + "초");
+
+                    // ✅ DB에 저장 (예: PdfViewingSession 테이블)
+                    //viewingSessionService.saveSession(Long.valueOf(senderId), groupId, enterTime, exitTime, seconds);
+                }
+            }
+
         };
     }
 }
