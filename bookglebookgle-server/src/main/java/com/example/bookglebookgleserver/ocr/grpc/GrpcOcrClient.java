@@ -138,9 +138,6 @@ public class GrpcOcrClient {
             // 3. 완료 전송
             requestObserver.onCompleted();
 
-            // 4. 응답 대기
-            finishLatch.await();
-
             if (errorHolder[0] != null) throw new RuntimeException(errorHolder[0]);
         } catch (Exception e) {
             log.error("❌ 파일 전송 중 예외 발생 (No OCR)", e);
