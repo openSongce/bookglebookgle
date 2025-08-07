@@ -79,21 +79,24 @@ public class PdfService {
         return new PdfProgressResponse(groupId, lastReadPage, totalPages, Math.round(progressRate * 100.0) / 100.0);
     }
 
-    public void updateProgress(User user, Group group, int page) {
-        Optional<PdfReadingProgress> optional = pdfReadingProgressRepository.findByUserAndGroup(user, group);
+    public void updateOrInsertProgress(Long userId, Long groupId, int page) {
+        User user = userRepository.findById(userId).orElseThrow();
+        Group group = groupRepository.findById(groupId).orElseThrow();
 
-        if (optional.isPresent()) {
-            pdfReadingProgressRepository.updateLastReadPage(user.getId(), group.getId(), page);
+        Optional<PdfReadingProgress> existing = pdfReadingProgressRepository.findByUserAndGroup(user, group);
+
+        if (existing.isPresent()) {
+            pdfReadingProgressRepository.updateLastReadPage(userId, groupId, page);
         } else {
             PdfReadingProgress progress = PdfReadingProgress.builder()
                     .user(user)
                     .group(group)
                     .lastReadPage(page)
-                    .updatedAt(LocalDateTime.now())
                     .build();
             pdfReadingProgressRepository.save(progress);
         }
     }
+
 
 
 

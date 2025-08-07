@@ -8,6 +8,7 @@ import com.example.bookglebookgleserver.group.repository.GroupRepository;
 import com.example.bookglebookgleserver.highlight.entity.Highlight;
 import com.example.bookglebookgleserver.highlight.repository.HighlightRepository;
 import com.example.bookglebookgleserver.pdf.repository.PdfReadingProgressRepository;
+import com.example.bookglebookgleserver.pdf.service.PdfService;
 import io.grpc.stub.StreamObserver;
 import lombok.RequiredArgsConstructor;
 import net.devh.boot.grpc.server.service.GrpcService;
@@ -30,7 +31,7 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
     private final HighlightRepository highlightRepository;
     private final CommentRepository commentRepository;
     private final GroupRepository groupRepository;
-    private final PdfReadingProgressRepository pdfReadingProgressRepository;
+    private final PdfService pdfService;
 
     // 그룹별로 연결된 클라이언트 스트림 관리
     private final ConcurrentHashMap<Long, Set<StreamObserver<SyncMessage>>> sessions = new ConcurrentHashMap<>();
@@ -126,9 +127,11 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
                     } else if (annotationType == AnnotationType.PAGE) {
                         if (actionType == ActionType.PAGE_MOVE) {
 
-                            int movedPage= payload.getPage();
-                            Long userIdLong=Long.valueOf(senderId);
-                            pdfReadingProgressRepository.updateLastReadPage(userIdLong, groupId, movedPage);
+                            int movedPage = payload.getPage();
+                            Long userIdLong = Long.valueOf(senderId);
+
+                            // 👉 진도 갱신 로직 호출 (없으면 insert, 있으면 update)
+                            pdfService.updateOrInsertProgress(userIdLong, groupId, movedPage);
 
                             logger.info("[진도 갱신] userId=" + userIdLong + ", page=" + movedPage);
                         }
