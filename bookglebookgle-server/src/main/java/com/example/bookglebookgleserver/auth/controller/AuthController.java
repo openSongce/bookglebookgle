@@ -127,6 +127,17 @@ public class AuthController {
     }
 
 
+    @Operation(
+            summary = "이메일 회원가입",
+            description = "이메일, 비밀번호, 닉네임 등의 정보를 기반으로 회원가입을 진행합니다.<br>" +
+                    "사전에 이메일 인증이 완료되어야 합니다."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "회원가입 성공"),
+            @ApiResponse(responseCode = "400", description = "이메일 인증이 완료되지 않음"),
+            @ApiResponse(responseCode = "409", description = "이미 존재하는 이메일"),
+            @ApiResponse(responseCode = "500", description = "서버 오류")
+    })
     @PostMapping("/signup/email")
     public ResponseEntity<String> signup(@RequestBody SignupRequest request) {
         try {
