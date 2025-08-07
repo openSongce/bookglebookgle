@@ -454,8 +454,8 @@ class DiscussionService:
             if not document_content:
                 return {"success": False, "error": "Document content is empty"}
 
-            # LLM 클라이언트 초기화 확인
-            if not hasattr(self.llm_client, 'openrouter_client') or not self.llm_client.openrouter_client:
+            # LLM 클라이언트 초기화 확인 (GMS API용)
+            if not hasattr(self.llm_client, 'gms_client') or not self.llm_client.gms_client:
                 await self.llm_client.initialize()
                 logger.info("LLM Client initialized for topic generation")
 
@@ -468,14 +468,14 @@ class DiscussionService:
 
             prompt = f"다음 문서 내용을 바탕으로 토론 주제를 생성해주세요:\n\n{document_content[:1000]}"  # 토큰 제한
 
-            # LLM 호출 (Gemini 사용)
+            # LLM 호출 (GMS API 사용)
             from src.services.llm_client import LLMProvider
             response = await self.llm_client.generate_completion(
                 prompt=prompt,
                 system_message=system_message,
                 max_tokens=300,
                 temperature=0.7,
-                provider=LLMProvider.GEMINI
+                provider=LLMProvider.GMS
             )
 
             # 응답에서 주제 추출
@@ -507,8 +507,8 @@ class DiscussionService:
     async def generate_discussion_response(self, message: str, sender_nickname: str, document_content: str) -> str:
         """채팅 메시지에 대한 토론 진행자 응답 생성"""
         try:
-            # LLM 클라이언트 초기화 확인
-            if not hasattr(self.llm_client, 'openrouter_client') or not self.llm_client.openrouter_client:
+            # LLM 클라이언트 초기화 확인 (GMS API용)
+            if not hasattr(self.llm_client, 'gms_client') or not self.llm_client.gms_client:
                 await self.llm_client.initialize()
 
             system_message = """당신은 독서 모임의 친근한 AI 토론 진행자입니다.
@@ -527,14 +527,14 @@ class DiscussionService:
 
 위 발언에 대해 토론 진행자로서 응답해주세요."""
 
-            # Gemini를 사용한 토론 진행자 응답 생성
+            # GMS API를 사용한 토론 진행자 응답 생성
             from src.services.llm_client import LLMProvider
             response = await self.llm_client.generate_completion(
                 prompt=prompt,
                 system_message=system_message,
                 max_tokens=200,
                 temperature=0.8,
-                provider=LLMProvider.GEMINI
+                provider=LLMProvider.GMS
             )
 
             return response.strip()
@@ -552,8 +552,8 @@ class DiscussionService:
     ) -> str:
         """채팅 기록 컨텍스트를 포함한 토론 진행자 응답 생성"""
         try:
-            # LLM 클라이언트 초기화 확인
-            if not hasattr(self.llm_client, 'openrouter_client') or not self.llm_client.openrouter_client:
+            # LLM 클라이언트 초기화 확인 (GMS API용)
+            if not hasattr(self.llm_client, 'gms_client') or not self.llm_client.gms_client:
                 await self.llm_client.initialize()
 
             system_message = """당신은 독서 모임의 전문 AI 토론 진행자입니다.
@@ -579,14 +579,14 @@ class DiscussionService:
 
 위 대화 맥락을 고려하여 토론 진행자로서 자연스럽고 의미있는 응답을 해주세요."""
 
-            # Gemini를 사용한 컨텍스트 기반 토론 진행자 응답 생성
+            # GMS API를 사용한 컨텍스트 기반 토론 진행자 응답 생성
             from src.services.llm_client import LLMProvider
             response = await self.llm_client.generate_completion(
                 prompt=prompt,
                 system_message=system_message,
                 max_tokens=250,
                 temperature=0.8,
-                provider=LLMProvider.GEMINI
+                provider=LLMProvider.GMS
             )
 
             return response.strip()

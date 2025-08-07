@@ -29,18 +29,7 @@ class DatabaseSettings(BaseModel):
 
 
 class AISettings(BaseModel):
-    """AI service configuration"""
-    OPENAI_API_KEY: Optional[str] = Field(default=None, description="OpenAI API key")
-    ANTHROPIC_API_KEY: Optional[str] = Field(default=None, description="Anthropic API key")
-    OPENROUTER_API_KEY: Optional[str] = Field(default=None, description="OpenRouter API key")
-    OPENROUTER_BASE_URL: str = Field(default="https://openrouter.ai/api/v1", description="OpenRouter base URL")
-    OPENROUTER_MODEL: str = Field(default="google/gemma-3n-e2b-it:free", description="Default OpenRouter model")
-    
-    # Gemini API settings
-    GEMINI_API_KEY: Optional[str] = Field(default=None, description="Google Gemini API key")
-    GEMINI_MODEL: str = Field(default="gemini-1.5-flash", description="Default Gemini model")
-    GEMINI_BASE_URL: str = Field(default="https://generativelanguage.googleapis.com/v1beta", description="Gemini base URL")
-    
+    """AI service configuration - GMS API Only"""
     # GMS API settings (SSAFY Anthropic proxy)
     GMS_API_KEY: Optional[str] = Field(default=None, description="GMS API key")
     GMS_BASE_URL: str = Field(default="https://gms.ssafy.io/gmsapi/api.anthropic.com/v1", description="GMS API base URL")
@@ -126,6 +115,17 @@ class ChatHistorySettings(BaseModel):
     CHAT_MAX_INTERVENTIONS_PER_HOUR: int = Field(default=10, description="Maximum AI interventions per hour")
 
 
+class LocalOCRSettings(BaseModel):
+    """Local OCR service configuration via Tailscale"""
+    TAILSCALE_HOST: str = Field(default="100.127.241.36", description="Tailscale local OCR host")
+    TAILSCALE_PORT: int = Field(default=4738, description="Tailscale local OCR port")
+    CONNECTION_TIMEOUT: int = Field(default=30, description="Connection timeout in seconds")
+    RETRY_ATTEMPTS: int = Field(default=3, description="Number of retry attempts")
+    RETRY_DELAY: int = Field(default=2, description="Retry delay in seconds")
+    ENABLED: bool = Field(default=True, description="Enable local OCR service")
+    FALLBACK_ENABLED: bool = Field(default=False, description="Enable fallback to local OCR (DISABLED for EC2)")
+
+
 class GRPCSettings(BaseModel):
     """gRPC server configuration"""
     GRPC_MAX_MESSAGE_LENGTH: int = Field(default=4194304, description="Max gRPC message length (4MB)")
@@ -156,6 +156,7 @@ class Settings(BaseSettings):
     ai: AISettings = Field(default_factory=AISettings)
     vector_db: VectorDBSettings = Field(default_factory=VectorDBSettings)
     chat_history: ChatHistorySettings = Field(default_factory=ChatHistorySettings)
+    local_ocr: LocalOCRSettings = Field(default_factory=LocalOCRSettings)
     grpc: GRPCSettings = Field(default_factory=GRPCSettings)
     
     class Config:

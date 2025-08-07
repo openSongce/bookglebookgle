@@ -50,8 +50,7 @@ message User {
 message QuizRequest {
   string document_id = 1;
   string meeting_id = 2;
-  TextContent content = 3;
-  int32 progress_percentage = 4; // 50 or 100
+  int32 progress_percentage = 3; // 50 or 100 (진도율 기반 벡터DB에서 문서 검색)
 }
 
 message Question {
