@@ -1,6 +1,6 @@
 package com.example.bookglebookgleserver.group.service;
 
-import com.bgbg.ai.grpc.ProcessPdfResponse;
+import com.bgbg.ai.grpc.AIServiceProto.ProcessPdfResponse;
 import com.example.bookglebookgleserver.chat.entity.ChatRoom;
 import com.example.bookglebookgleserver.chat.entity.ChatRoomMember;
 import com.example.bookglebookgleserver.chat.repository.ChatRoomMemberRepository;
@@ -55,7 +55,6 @@ public class GroupServiceImpl implements GroupService {
     @Transactional
     public GroupCreateResponseDto createGroup(GroupCreateRequestDto dto, MultipartFile pdfFile, User user) {
         String uploadDir = "/home/ubuntu/pdf-uploads/";
-//        String uploadDir = System.getProperty("user.dir") + "/uploads/";
         File uploadDirFile = new File(uploadDir);
         if (!uploadDirFile.exists()) {
             uploadDirFile.mkdirs();
@@ -70,7 +69,6 @@ public class GroupServiceImpl implements GroupService {
             throw new BadRequestException("PDF 파일 저장 중 오류가 발생했습니다.");
         }
 
-        // 📌 PdfFile 먼저 생성 (group은 null)
         PdfFile pdf = PdfFile.builder()
                 .fileName(pdfFile.getOriginalFilename())
                 .pageCnt(0)
@@ -78,9 +76,8 @@ public class GroupServiceImpl implements GroupService {
                 .createdAt(LocalDateTime.now())
                 .filePath(filePath)
                 .build();
-        pdfFileRepository.save(pdf);  // 1차 저장
+        pdfFileRepository.save(pdf);
 
-        // 📌 Group 생성 시 PdfFile 연결
         Group group = Group.builder()
                 .roomTitle(dto.getRoomTitle())
                 .description(dto.getDescription())
@@ -90,16 +87,14 @@ public class GroupServiceImpl implements GroupService {
                 .groupMaxNum(dto.getGroupMaxNum())
                 .readingMode(Group.ReadingMode.valueOf(dto.getReadingMode().toUpperCase()))
                 .hostUser(user)
-                .pdfFile(pdf)  // 연결
+                .pdfFile(pdf)
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .isDeleted(false)
                 .build();
         groupRepository.save(group);
 
-        // 📌 역방향 연결 (중요)
         pdf.setGroup(group);
-        // pdfFileRepository.save(pdf); // ❌ 생략해도 무방 (영속성 컨텍스트 안에서 관리됨)
 
         List<OcrTextBlockDto> ocrResultList = null;
 
@@ -120,28 +115,27 @@ public class GroupServiceImpl implements GroupService {
                             .rectH((int) (block.getY1() - block.getY0()))
                             .build())
                     .collect(Collectors.toList());
+        } else {
+            grpcOcrClient.sendPdfNoOcr(pdf.getPdfId(), pdfFile, group.getId());
         }
-        // 1) ChatRoom 생성: group과 1:1 매핑되는 채팅방 생성
+
         ChatRoom chatRoom = ChatRoom.builder()
                 .group(group)
                 .category(group.getCategory().name())
                 .groupTitle(group.getRoomTitle())
-                .imageUrl(null) // 필요 시 기본값 넣기
+                .imageUrl(null)
                 .lastMessage(null)
                 .lastMessageTime(null)
-                .memberCount(1) // 방장 1명부터 시작
+                .memberCount(1)
                 .build();
         chatRoomRepository.save(chatRoom);
         log.info("[GroupService] 그룹 생성 및 채팅방 생성 완료 - groupId={}, chatRoom memberCount=1", group.getId());
 
-
-        // 2) 채팅방 멤버로 방장 추가
         ChatRoomMember chatRoomMember = ChatRoomMember.builder()
                 .chatRoom(chatRoom)
                 .user(user)
                 .build();
         chatRoomMemberRepository.save(chatRoomMember);
-
 
         GroupMember groupMember = GroupMember.builder()
                 .group(group)
@@ -160,11 +154,11 @@ public class GroupServiceImpl implements GroupService {
                 .build();
     }
 
-    @Override
-    public void createGroupWithoutOcr(GroupCreateRequestDto dto, MultipartFile pdfFile, User user) {
-        dto.setImageBased(false);
-        createGroup(dto, pdfFile, user);
-    }
+//    @Override
+//    public void createGroupWithoutOcr(GroupCreateRequestDto dto, MultipartFile pdfFile, User user) {
+//        dto.setImageBased(false);
+//        createGroup(dto, pdfFile, user);
+//    }
 
     @Override
     public List<GroupListResponseDto> getNotJoinedGroupList(Long userId) {

@@ -10,7 +10,7 @@ import java.util.List;
 
 public interface GroupService {
     GroupCreateResponseDto createGroup(GroupCreateRequestDto dto, MultipartFile pdfFile, User user);
-    void createGroupWithoutOcr(GroupCreateRequestDto dto, MultipartFile pdfFile, User user);
+//    void createGroupWithoutOcr(GroupCreateRequestDto dto, MultipartFile pdfFile, User user);
     List<GroupListResponseDto> getNotJoinedGroupList(Long userId);
     GroupDetailResponse getGroupDetail(Long groupId, User user);
     ResponseEntity<Resource> getPdfFileResponse(Long groupId, User user);

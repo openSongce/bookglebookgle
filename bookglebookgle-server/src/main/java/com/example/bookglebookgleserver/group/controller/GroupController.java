@@ -52,20 +52,20 @@ public class GroupController {
     }
 
 
-    @Operation(
-            summary = "OCR 없이 스터디 그룹 생성",
-            description = "PDF 파일을 업로드하되 OCR 처리를 하지 않고 그룹을 생성합니다."
-    )
-    @PostMapping("/create/no-ocr")
-    public ResponseEntity<?> createGroupWithoutOcr(
-            @RequestPart("groupInfo") GroupCreateRequestDto groupDto,
-            @RequestPart("file") MultipartFile pdfFile,
-            @AuthenticationPrincipal CustomUserDetails customUser  // ✅ 변경
-    ) {
-        User user = customUser.getUser();  // ✅ User 추출
-        groupService.createGroupWithoutOcr(groupDto, pdfFile, user);  // ✅ User 넘김
-        return ResponseEntity.ok("OCR 없이 그룹 생성 완료");
-    }
+//    @Operation(
+//            summary = "OCR 없이 스터디 그룹 생성",
+//            description = "PDF 파일을 업로드하되 OCR 처리를 하지 않고 그룹을 생성합니다."
+//    )
+//    @PostMapping("/create/no-ocr")
+//    public ResponseEntity<?> createGroupWithoutOcr(
+//            @RequestPart("groupInfo") GroupCreateRequestDto groupDto,
+//            @RequestPart("file") MultipartFile pdfFile,
+//            @AuthenticationPrincipal CustomUserDetails customUser  // ✅ 변경
+//    ) {
+//        User user = customUser.getUser();  // ✅ User 추출
+//        groupService.createGroupWithoutOcr(groupDto, pdfFile, user);  // ✅ User 넘김
+//        return ResponseEntity.ok("OCR 없이 그룹 생성 완료");
+//    }
 
     @GetMapping("/list")
     @Operation(

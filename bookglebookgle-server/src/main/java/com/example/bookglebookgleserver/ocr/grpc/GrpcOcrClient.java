@@ -1,10 +1,11 @@
 package com.example.bookglebookgleserver.ocr.grpc;
 
 import com.bgbg.ai.grpc.AIServiceGrpc;
-import com.bgbg.ai.grpc.PdfInfo;
-import com.bgbg.ai.grpc.ProcessPdfRequest;
-import com.bgbg.ai.grpc.ProcessPdfResponse;
+import com.bgbg.ai.grpc.AIServiceProto.PdfInfo;
+import com.bgbg.ai.grpc.AIServiceProto.ProcessPdfRequest;
+import com.bgbg.ai.grpc.AIServiceProto.ProcessPdfResponse;
 import com.google.protobuf.ByteString;
+import com.google.protobuf.Empty;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.stub.StreamObserver;
@@ -92,5 +93,58 @@ public class GrpcOcrClient {
         }
 
         return responseHolder[0];
+    }
+
+    // 📌 No OCR 처리(응답 없음) - 새로 추가
+    public void sendPdfNoOcr(Long pdfId, MultipartFile file, Long meetingId) {
+        final CountDownLatch finishLatch = new CountDownLatch(1);
+        final Throwable[] errorHolder = new Throwable[1];
+
+        StreamObserver<ProcessPdfRequest> requestObserver = stub.processPdfStream(new StreamObserver<Empty>() {
+            @Override
+            public void onNext(Empty response) {
+                // ProcessPdfStream은 응답 데이터 없음(Empty)
+            }
+            @Override
+            public void onError(Throwable t) {
+                log.error("❌ gRPC 오류 발생 (No OCR)", t);
+                errorHolder[0] = t;
+                finishLatch.countDown();
+            }
+            @Override
+            public void onCompleted() {
+                finishLatch.countDown();
+            }
+        });
+
+        try (InputStream inputStream = file.getInputStream()) {
+            // 1. PDF Info 전송
+            PdfInfo info = PdfInfo.newBuilder()
+                    .setDocumentId(String.valueOf(pdfId))
+                    .setFileName(file.getOriginalFilename())
+                    .setMeetingId(String.valueOf(meetingId))
+                    .build();
+            requestObserver.onNext(ProcessPdfRequest.newBuilder().setInfo(info).build());
+
+            // 2. Chunk 전송
+            byte[] buffer = new byte[4096];
+            int bytesRead;
+            while ((bytesRead = inputStream.read(buffer)) != -1) {
+                byte[] chunk = Arrays.copyOf(buffer, bytesRead);
+                requestObserver.onNext(ProcessPdfRequest.newBuilder()
+                        .setChunk(ByteString.copyFrom(chunk)).build());
+            }
+
+            // 3. 완료 전송
+            requestObserver.onCompleted();
+
+            // 4. 응답 대기
+            finishLatch.await();
+
+            if (errorHolder[0] != null) throw new RuntimeException(errorHolder[0]);
+        } catch (Exception e) {
+            log.error("❌ 파일 전송 중 예외 발생 (No OCR)", e);
+            throw new RuntimeException(e);
+        }
     }
 }
