@@ -23,12 +23,14 @@ import androidx.lifecycle.Observer
 import com.example.bookglebookgleserver.pdf.grpc.ActionType
 import com.example.bookglebookgleserver.pdf.grpc.AnnotationPayload
 import com.example.bookglebookgleserver.pdf.grpc.AnnotationType
+import com.example.bookglebookgleserver.pdf.grpc.SyncMessage
 // UI 좌표
 import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.Coordinates as UiCoordinates
 // gRPC 좌표
 import com.example.bookglebookgleserver.pdf.grpc.Coordinates as GrpcCoordinates
 import com.ssafy.bookglebookgle.entity.CommentSync
 import com.ssafy.bookglebookgle.entity.HighlightSync
+import com.ssafy.bookglebookgle.entity.Participant
 import com.ssafy.bookglebookgle.entity.PdfPageSync
 import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.HighlightModel
 import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.PdfAnnotationModel
@@ -645,9 +647,98 @@ class PdfViewModel @Inject constructor(
 
     //gRPC
 
+    private val _isHost = MutableStateFlow(false)
+    val isHost: StateFlow<Boolean> = _isHost.asStateFlow()
+
+    private val _isCurrentLeader = MutableStateFlow(false)  // 현재 진행자인지
+    val isCurrentLeader: StateFlow<Boolean> = _isCurrentLeader.asStateFlow()
+
+    private val _currentLeaderId = MutableStateFlow<String?>(null)
+    val currentLeaderId: StateFlow<String?> = _currentLeaderId.asStateFlow()
+
+    private val _participants = MutableStateFlow<List<Participant>>(emptyList())
+    val participants: StateFlow<List<Participant>> = _participants.asStateFlow()
+
+    private var myUserId: String = ""
+    private var groupId: Long = 0
+
+    fun setUserInfo(userId: String, groupId: Long, isHostFromNav: Boolean) {
+        this.myUserId = userId
+        this.groupId = groupId
+        _isHost.value = isHostFromNav
+
+        if (isHostFromNav) {
+            // 원조 방장은 무조건 진행자
+            _currentLeaderId.value = userId
+            _isCurrentLeader.value = true
+            sendLeadershipUpdate(userId)
+        }
+    }
 
 
+    // 2) 방 입장 처리 (participants API 또는 gRPC JOIN 메시지 후 호출)
+    fun onRoomEntered(initialParticipants: List<Participant>) {
+        // participants 는 내부에서 관리한다고 가정
+        when {
+            // 1) 호스트라면, 언제 들어와도 leader 강제할당
+            _isHost.value -> {
+                _currentLeaderId.value = myUserId
+                _isCurrentLeader.value = true
+                sendLeadershipUpdate(myUserId)
+            }
+            // 2) 호스트가 아니면서, leader 가 아직 없고 첫 입장자라면
+            _currentLeaderId.value == null && initialParticipants.isEmpty() -> {
+                _currentLeaderId.value = myUserId
+                _isCurrentLeader.value = true
+                sendLeadershipUpdate(myUserId)
+            }
+            // 그 외엔 아무것도 안 함
+        }
+    }
 
+    // 3) 퇴장 or 화면 꺼짐 처리: DisposableEffect 에서 호출
+    fun onParticipantLeft(userId: String) {
+        _participants.value = _participants.value.filter { it.userId != userId }
+        if (userId == _currentLeaderId.value) {
+            handleLeaderDisconnection()
+        }
+    }
+
+    private fun handleLeaderDisconnection() {
+        // 남은 참가자 중 방장 권한 이양
+        val remaining = _participants.value.filter { it.userId != myUserId }
+        when {
+            _isHost.value -> {
+                // 내가 방장(원조)면 바로 회수
+                _currentLeaderId.value = myUserId
+                sendLeadershipUpdate(myUserId)
+            }
+            remaining.isNotEmpty() -> {
+                // 첫 번째 남은 사람에게 이양
+                val next = remaining.first()
+                _currentLeaderId.value = next.userId
+                sendLeadershipUpdate(next.userId)
+            }
+            else -> {
+                // 나만 있으면 그대로
+                _currentLeaderId.value = myUserId
+                sendLeadershipUpdate(myUserId)
+            }
+        }
+    }
+
+    // 4) UI 클릭 시 권한 이양
+    fun transferLeadershipToUser(targetUserId: String) {
+        if (isCurrentLeader.value && targetUserId != myUserId) {
+            _currentLeaderId.value = targetUserId
+            sendLeadershipUpdate(targetUserId)
+        }
+    }
+
+    // 6) gRPC 전송 헬퍼
+    private fun sendLeadershipUpdate(newHostId: String) {
+        pdfGrpcRepository.transferLeadership(groupId, myUserId, newHostId)
+    }
 
     // Observer들 - Chat과 동일한 패턴
     private val pdfPageObserver = Observer<PdfPageSync> { pageSync ->
@@ -690,6 +781,33 @@ class PdfViewModel @Inject constructor(
         pdfGrpcRepository.newComments.observeForever(commentAddObserver)
         pdfGrpcRepository.updatedComments.observeForever(commentUpdateObserver)
         pdfGrpcRepository.deletedComments.observeForever(commentDeleteObserver)
+        pdfGrpcRepository.leadershipTransfers.observeForever { newHostId ->
+            _currentLeaderId.value = newHostId
+            // 내 userId와 비교해서 플래그 갱신
+            _isCurrentLeader.value = (newHostId == myUserId)
+            // (옵션) participants 리스트에도 반영
+            _participants.value = _participants.value.map { p ->
+                p.copy(isCurrentHost = (p.userId == newHostId))
+            }
+        }
+        pdfGrpcRepository.joinRequests.observeForever { joinerId ->
+            // ① 로컬 participants 에 새 참가자 추가
+            if (_participants.value.none { it.userId == joinerId }) {
+                _participants.value = _participants.value + Participant(
+                    userId = joinerId,
+                    userName = "",
+                    isOriginalHost = false,
+                    isCurrentHost = false
+                )
+            }
+            // ② 내가 리더라면 전체 리스트 스냅샷 전송
+            if (_isCurrentLeader.value) {
+                pdfGrpcRepository.sendParticipantsSnapshot(_participants.value)
+                // 그리고 페이지 동기화도
+                pdfGrpcRepository.sendPageUpdate(_currentPage.value)
+            }
+        }
+
     }
 
 
@@ -706,6 +824,14 @@ class PdfViewModel @Inject constructor(
         this.currentGroupId = groupId
         this.userId = userId
 
+        _participants.value = listOf(
+            Participant(
+                userId         = myUserId,
+                userName       = "",
+                isOriginalHost = _isHost.value,
+                isCurrentHost  = _isCurrentLeader.value
+            )
+        )
         Log.d(TAG, "PDF 동기화 연결 시작: groupId=$groupId, userId=$userId")
 
         // Repository를 통해 연결
@@ -732,6 +858,10 @@ class PdfViewModel @Inject constructor(
             _currentPage.value = page
             _showPageInfo.value = true
         }
+    }
+
+    fun getPage(){
+        pdfGrpcRepository.sendJoinRequest()
     }
 
     fun notifyPageChange(page: Int) {
@@ -836,6 +966,32 @@ class PdfViewModel @Inject constructor(
         pdfGrpcRepository.newComments.removeObserver(commentAddObserver)
         pdfGrpcRepository.updatedComments.removeObserver(commentUpdateObserver)
         pdfGrpcRepository.deletedComments.removeObserver(commentDeleteObserver)
+        pdfGrpcRepository.leadershipTransfers.removeObserver{ newHostId ->
+            _currentLeaderId.value = newHostId
+            // 내 userId와 비교해서 플래그 갱신
+            _isCurrentLeader.value = (newHostId == myUserId)
+            // (옵션) participants 리스트에도 반영
+            _participants.value = _participants.value.map { p ->
+                p.copy(isCurrentHost = (p.userId == newHostId))
+            }
+        }
+        pdfGrpcRepository.joinRequests.removeObserver { joinerId ->
+            // ① 로컬 participants 에 새 참가자 추가
+            if (_participants.value.none { it.userId == joinerId }) {
+                _participants.value = _participants.value + Participant(
+                    userId = joinerId,
+                    userName = "",
+                    isOriginalHost = false,
+                    isCurrentHost = false
+                )
+            }
+            // ② 내가 리더라면 전체 리스트 스냅샷 전송
+            if (_isCurrentLeader.value) {
+                pdfGrpcRepository.sendParticipantsSnapshot(_participants.value)
+                // 그리고 페이지 동기화도
+                pdfGrpcRepository.sendPageUpdate(_currentPage.value)
+            }
+        }
 
         // 연결 종료
         pdfGrpcRepository.leaveRoom()
@@ -923,673 +1079,3 @@ class PdfViewModel @Inject constructor(
 
 
 }
-
-//package com.ssafy.bookglebookgle.viewmodel
-//
-//import android.graphics.PointF
-//import android.util.Log
-//import androidx.lifecycle.ViewModel
-//import androidx.lifecycle.viewModelScope
-//import com.ssafy.bookglebookgle.pdf.exception.ValidationErrorException
-//import com.ssafy.bookglebookgle.pdf.response.AnnotationListResponse
-//import com.ssafy.bookglebookgle.pdf.state.ResponseState
-//import com.ssafy.bookglebookgle.pdf.tools.OperationsStateHandler
-//import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.CommentModel
-//import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.Coordinates
-//import com.ssafy.bookglebookgle.repository.PdfRepository
-//import dagger.hilt.android.lifecycle.HiltViewModel
-//import kotlinx.coroutines.flow.MutableStateFlow
-//import kotlinx.coroutines.flow.StateFlow
-//import kotlinx.coroutines.flow.asStateFlow
-//import kotlinx.coroutines.launch
-//import okhttp3.ResponseBody
-//import retrofit2.Response
-//import java.io.File
-//import javax.inject.Inject
-//
-//private const val TAG = "싸피_PdfViewModel"
-//
-//@HiltViewModel
-//class PdfViewModel @Inject constructor(
-//    private val pdfRepository: PdfRepository,
-//): ViewModel(){
-//
-//    var currentGroupId: Long? = null
-//        private set
-//
-//    // ========== PDF 파일 관련 상태 ==========
-//
-//    private val _pdfFile = MutableStateFlow<File?>(null)
-//    val pdfFile: StateFlow<File?> = _pdfFile.asStateFlow()
-//
-//    private val _pdfTitle = MutableStateFlow("")
-//    val pdfTitle: StateFlow<String> = _pdfTitle.asStateFlow()
-//
-//    private val _isLoading = MutableStateFlow(false)
-//    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
-//
-//    private val _pdfLoadError = MutableStateFlow<String?>(null)
-//    val pdfLoadError: StateFlow<String?> = _pdfLoadError.asStateFlow()
-//
-//    private val _pdfReady = MutableStateFlow(false)
-//    val pdfReady: StateFlow<Boolean> = _pdfReady.asStateFlow()
-//
-//    // ========== PDF 뷰어 상태 ==========
-//
-//    private val _currentPage = MutableStateFlow(1)
-//    val currentPage: StateFlow<Int> = _currentPage.asStateFlow()
-//
-//    private val _totalPages = MutableStateFlow(1)
-//    val totalPages: StateFlow<Int> = _totalPages.asStateFlow()
-//
-//    private val _showPageInfo = MutableStateFlow(false)
-//    val showPageInfo: StateFlow<Boolean> = _showPageInfo.asStateFlow()
-//
-//    // ========== 텍스트 선택 및 주석 상태 ==========
-//
-//    private val _showTextSelectionOptions = MutableStateFlow(false)
-//    val showTextSelectionOptions: StateFlow<Boolean> = _showTextSelectionOptions.asStateFlow()
-//
-//    private val _textSelectionPoint = MutableStateFlow(PointF(0f, 0f))
-//    val textSelectionPoint: StateFlow<PointF> = _textSelectionPoint.asStateFlow()
-//
-//    private val _selectedComments = MutableStateFlow<List<CommentModel>>(emptyList())
-//    val selectedComments: StateFlow<List<CommentModel>> = _selectedComments.asStateFlow()
-//
-//    private val _commentPopupPoint = MutableStateFlow(PointF(0f, 0f))
-//    val commentPopupPoint: StateFlow<PointF> = _commentPopupPoint.asStateFlow()
-//
-//    private val _showCommentPopup = MutableStateFlow(false)
-//    val showCommentPopup: StateFlow<Boolean> = _showCommentPopup.asStateFlow()
-//
-//    // ========== 주석 데이터 ==========
-//
-//    private val _annotations = MutableStateFlow(AnnotationListResponse())
-//    val annotations: StateFlow<AnnotationListResponse> = _annotations.asStateFlow()
-//
-//    // ========== 상태 핸들러들 ==========
-//
-//    val addCommentResponse = OperationsStateHandler(viewModelScope)
-//    val updateCommentResponse = OperationsStateHandler(viewModelScope)
-//    val deleteCommentResponse = OperationsStateHandler(viewModelScope)
-//
-//    val addHighlightResponse = OperationsStateHandler(viewModelScope)
-//    val deleteHighlightResponse = OperationsStateHandler(viewModelScope)
-//
-//    val addBookmarkResponse = OperationsStateHandler(viewModelScope)
-//    val deleteBookmarkResponse = OperationsStateHandler(viewModelScope)
-//
-//    val annotationListResponse = OperationsStateHandler(viewModelScope)
-//
-//    /**
-//     * 그룹 ID 설정
-//     */
-//    fun setGroupId(groupId: Long) {
-//        Log.d(TAG, "그룹 ID 설정: $groupId")
-//        currentGroupId = groupId
-//    }
-//
-//    /**
-//     * 그룹 PDF 파일을 서버에서 다운로드
-//     */
-//    fun loadGroupPdf(groupId: Long, context: android.content.Context) {
-//        Log.d(TAG, "PDF 다운로드 시작 - 그룹 ID: $groupId")
-//
-//        _isLoading.value = true
-//        _pdfLoadError.value = null
-//
-//        viewModelScope.launch {
-//            try {
-//                val pdfData = pdfRepository.getGroupPdf(groupId)
-//
-//                if (pdfData != null && pdfData.inputStream != null) {
-//                    Log.d(TAG, "PDF 다운로드 성공 - 파일명: ${pdfData.fileName}")
-//
-//                    // PDF 제목 설정 (확장자 제거)
-//                    _pdfTitle.value = pdfData.fileName.removeSuffix(".pdf")
-//
-//                    // PDF 처리
-//                    val bytes = pdfData.inputStream.readBytes()
-//                    Log.d(TAG, "PDF 크기: ${bytes.size} bytes")
-//
-//                    if (bytes.size >= 4 && String(bytes.sliceArray(0..3)) == "%PDF") {
-//                        val tempFile = File.createTempFile("group_pdf", ".pdf", context.cacheDir)
-//                        tempFile.writeBytes(bytes)
-//
-//                        Log.d(TAG, "임시 파일 저장: ${tempFile.absolutePath}")
-//                        _pdfFile.value = tempFile
-//                        _pdfReady.value = true
-//                        _isLoading.value = false
-//                    } else {
-//                        Log.e(TAG, "유효하지 않은 PDF 파일")
-//                        _pdfLoadError.value = "유효하지 않은 PDF 파일"
-//                        _isLoading.value = false
-//                        _pdfReady.value = false
-//                    }
-//                } else {
-//                    Log.e(TAG, "PDF 파일을 다운로드할 수 없습니다.")
-//                    _pdfLoadError.value = "PDF 파일을 다운로드할 수 없습니다."
-//                    _isLoading.value = false
-//                    _pdfReady.value = false
-//                }
-//            } catch (e: Exception) {
-//                val error = "PDF 다운로드 중 오류가 발생했습니다: ${e.message}"
-//                Log.e(TAG, error, e)
-//                _pdfLoadError.value = error
-//                _isLoading.value = false
-//                _pdfReady.value = false
-//            }
-//        }
-//    }
-//
-////    /**
-////     * 그룹 PDF 파일을 서버에서 다운로드
-////     */
-////    fun loadGroupPdf(groupId: Long, context: android.content.Context) {
-////        Log.d(TAG, "PDF 다운로드 시작 - 그룹 ID: $groupId")
-////
-////        _isLoading.value = true
-////        _pdfLoadError.value = null
-////
-////        viewModelScope.launch {
-////            try {
-////                val inputStream = pdfRepository.getGroupPdf(groupId)
-////                if (inputStream != null) {
-////                    Log.d(TAG, "PDF 다운로드 성공")
-////
-////                    // 헤더에서 파일명 추출
-////                    val fileName = extractFileNameFromResponse(inputStream)
-////                    _pdfTitle.value = fileName.removeSuffix(".pdf")
-////
-////                    // PDF 처리
-////                    val bytes = inputStream.readBytes()
-////                    Log.d(TAG, "PDF 크기: ${bytes.size} bytes")
-////
-////                    if (bytes.size >= 4 && String(bytes.sliceArray(0..3)) == "%PDF") {
-////                        val tempFile = File.createTempFile("group_pdf", ".pdf", context.cacheDir)
-////                        tempFile.writeBytes(bytes)
-////
-////                        Log.d(TAG, "임시 파일 저장: ${tempFile.absolutePath}")
-////                        _pdfFile.value = tempFile
-////                        _pdfReady.value = true
-////                        _isLoading.value = false
-////                    } else {
-////                        Log.e(TAG, "유효하지 않은 PDF 파일")
-////                        _pdfLoadError.value = "유효하지 않은 PDF 파일"
-////                        _isLoading.value = false
-////                        _pdfReady.value = false
-////                    }
-////                } else {
-////                    Log.e(TAG, "PDF 파일을 다운로드할 수 없습니다.")
-////                    _pdfLoadError.value = "PDF 파일을 다운로드할 수 없습니다."
-////                    _isLoading.value = false
-////                    _pdfReady.value = false
-////                }
-////            } catch (e: Exception) {
-////                val error = "PDF 다운로드 중 오류가 발생했습니다: ${e.message}"
-////                Log.e(TAG, error, e)
-////                _pdfLoadError.value = error
-////                _isLoading.value = false
-////                _pdfReady.value = false
-////            }
-////        }
-////    }
-//
-//    // ========== PDF 뷰어 상태 관리 ==========
-//
-//    fun updateCurrentPage(page: Int) {
-//        Log.d(TAG, "현재 페이지 업데이트: $page")
-//        _currentPage.value = page
-//        _showPageInfo.value = true
-//    }
-//
-//    fun updateTotalPages(pages: Int) {
-//        Log.d(TAG, "총 페이지 수 업데이트: $pages")
-//        _totalPages.value = pages
-//    }
-//
-//    fun hidePageInfo() {
-//        Log.d(TAG, "페이지 정보 숨김")
-//        _showPageInfo.value = false
-//    }
-//
-//    // ========== 텍스트 선택 관리 ==========
-//
-//    fun showTextSelection(point: PointF) {
-//        Log.d(TAG, "텍스트 선택 표시 - 위치: (${point.x}, ${point.y})")
-//        _textSelectionPoint.value = point
-//        _showTextSelectionOptions.value = true
-//    }
-//
-//    fun hideTextSelection() {
-//        Log.d(TAG, "텍스트 선택 숨김")
-//        _showTextSelectionOptions.value = false
-//        _textSelectionPoint.value = PointF(0f, 0f)
-//    }
-//
-//    // ========== 댓글 팝업 관리 ==========
-//
-//    fun showCommentPopup(comments: List<CommentModel>, point: PointF) {
-//        Log.d(TAG, "댓글 팝업 표시 - 댓글 수: ${comments.size}, 위치: (${point.x}, ${point.y})")
-//        _selectedComments.value = comments
-//        _commentPopupPoint.value = point
-//        _showCommentPopup.value = true
-//    }
-//
-//    fun hideCommentPopup() {
-//        Log.d(TAG, "댓글 팝업 숨김")
-//        _showCommentPopup.value = false
-//        _selectedComments.value = emptyList()
-//        _commentPopupPoint.value = PointF(0f, 0f)
-//    }
-//
-//    // ========== 댓글 관리 ==========
-//
-//    /**
-//     * 댓글 추가
-//     */
-//    fun addComment(snippet: String, text: String, page: Int, coordinates: Coordinates?) {
-//        val groupId = currentGroupId
-//        Log.d(TAG, "댓글 추가 시도 - 그룹 ID: $groupId, 페이지: $page, 텍스트: $text")
-//
-//        if (groupId == null) {
-//            Log.e(TAG, "댓글 추가 실패: 그룹 ID가 설정되지 않음")
-//            return
-//        }
-//
-//        addCommentResponse.load {
-//            try {
-//                if (coordinates == null) {
-//                    Log.e(TAG, "댓글 추가 실패: 좌표 정보가 없음")
-//                    throw ValidationErrorException(1, "좌표 정보가 필요합니다.")
-//                }
-//
-//                val result = pdfRepository.addComment(groupId, snippet, text, page, coordinates)
-//                if (result != null) {
-//                    Log.d(TAG, "댓글 추가 성공 - ID: ${result.id}")
-//
-//                    // 로컬 상태 업데이트
-//                    val currentAnnotations = _annotations.value
-//                    val updatedComments = currentAnnotations.comments.toMutableList()
-//                    updatedComments.add(result)
-//                    _annotations.value = currentAnnotations.copy(comments = ArrayList(updatedComments))
-//
-//                    ResponseState.Success(result)
-//                } else {
-//                    Log.e(TAG, "댓글 추가 실패: 서버에서 null 응답")
-//                    throw Exception("댓글 추가에 실패했습니다.")
-//                }
-//            } catch (e: Exception) {
-//                Log.e(TAG, "댓글 추가 예외 발생", e)
-//                throw e
-//            }
-//        }
-//    }
-//
-//    /**
-//     * 댓글 수정
-//     */
-//    fun updateComment(commentId: Long, newText: String) {
-//        Log.d(TAG, "댓글 수정 시도 - ID: $commentId, 새 텍스트: $newText")
-//
-//        updateCommentResponse.load {
-//            try {
-//                val result = pdfRepository.updateComment(commentId, newText)
-//                if (result != null) {
-//                    Log.d(TAG, "댓글 수정 성공 - ID: $commentId")
-//
-//                    // 로컬 상태 업데이트
-//                    val currentAnnotations = _annotations.value
-//                    val updatedComments = currentAnnotations.comments.map { comment ->
-//                        if (comment.id == commentId) {
-////                            comment.copy(text = newText, updatedAt = result.updatedAt)
-//                        } else {
-//                            comment
-//                        }
-//                    }
-////                    _annotations.value = currentAnnotations.copy(comments = ArrayList(updatedComments))
-//
-//                    ResponseState.Success(result)
-//                } else {
-//                    Log.e(TAG, "댓글 수정 실패: 서버에서 null 응답")
-//                    throw Exception("댓글 수정에 실패했습니다.")
-//                }
-//            } catch (e: Exception) {
-//                Log.e(TAG, "댓글 수정 예외 발생", e)
-//                throw e
-//            }
-//        }
-//    }
-//
-//    /**
-//     * 댓글 삭제
-//     */
-//    fun deleteComment(commentId: Long) {
-//        Log.d(TAG, "댓글 삭제 시도 - ID: $commentId")
-//
-//        deleteCommentResponse.load {
-//            try {
-//                val result = pdfRepository.deleteComment(commentId)
-//                if (result != null) {
-//                    Log.d(TAG, "댓글 삭제 성공 - 삭제된 ID: ${result.deletedIds}")
-//
-//                    // 로컬 상태 업데이트
-//                    removeCommentsFromLocal(result.deletedIds)
-//
-//                    ResponseState.Success(result)
-//                } else {
-//                    Log.e(TAG, "댓글 삭제 실패: 서버에서 null 응답")
-//                    throw Exception("댓글 삭제에 실패했습니다.")
-//                }
-//            } catch (e: Exception) {
-//                Log.e(TAG, "댓글 삭제 예외 발생", e)
-//                throw e
-//            }
-//        }
-//    }
-//
-//    // ========== 하이라이트 관리 ==========
-//
-//    /**
-//     * 하이라이트 추가
-//     */
-//    fun addHighlight(snippet: String, color: String, page: Int, coordinates: Coordinates) {
-//        val groupId = currentGroupId
-//        Log.d(TAG, "하이라이트 추가 시도 - 그룹 ID: $groupId, 페이지: $page, 색상: $color")
-//
-//        if (groupId == null) {
-//            Log.e(TAG, "하이라이트 추가 실패: 그룹 ID가 설정되지 않음")
-//            return
-//        }
-//
-//        addHighlightResponse.load {
-//            try {
-//                val result = pdfRepository.addHighlight(groupId, snippet, color, page, coordinates)
-//                if (result != null) {
-//                    Log.d(TAG, "하이라이트 추가 성공 - ID: ${result.id}")
-//
-//                    // 로컬 상태 업데이트
-//                    val currentAnnotations = _annotations.value
-//                    val updatedHighlights = currentAnnotations.highlights.toMutableList()
-//                    updatedHighlights.add(result)
-//                    _annotations.value = currentAnnotations.copy(highlights = ArrayList(updatedHighlights))
-//
-//                    ResponseState.Success(result)
-//                } else {
-//                    Log.e(TAG, "하이라이트 추가 실패: 서버에서 null 응답")
-//                    throw Exception("하이라이트 추가에 실패했습니다.")
-//                }
-//            } catch (e: Exception) {
-//                Log.e(TAG, "하이라이트 추가 예외 발생", e)
-//                throw e
-//            }
-//        }
-//    }
-//
-//    /**
-//     * 하이라이트 삭제
-//     */
-//    fun deleteHighlight(highlightId: Long) {
-//        Log.d(TAG, "하이라이트 삭제 시도 - ID: $highlightId")
-//
-//        deleteHighlightResponse.load {
-//            try {
-//                val result = pdfRepository.deleteHighlight(highlightId)
-//                if (result != null) {
-//                    Log.d(TAG, "하이라이트 삭제 성공 - 삭제된 ID: ${result.deletedIds}")
-//
-//                    // 로컬 상태 업데이트
-//                    removeHighlightsFromLocal(result.deletedIds)
-//
-//                    ResponseState.Success(result)
-//                } else {
-//                    Log.e(TAG, "하이라이트 삭제 실패: 서버에서 null 응답")
-//                    throw Exception("하이라이트 삭제에 실패했습니다.")
-//                }
-//            } catch (e: Exception) {
-//                Log.e(TAG, "하이라이트 삭제 예외 발생", e)
-//                throw e
-//            }
-//        }
-//    }
-//
-//    // ========== 북마크 관리 ==========
-//
-//    /**
-//     * 북마크 추가
-//     */
-//    fun addBookmark(page: Int) {
-//        val groupId = currentGroupId
-//        Log.d(TAG, "북마크 추가 시도 - 그룹 ID: $groupId, 페이지: $page")
-//
-//        if (groupId == null) {
-//            Log.e(TAG, "북마크 추가 실패: 그룹 ID가 설정되지 않음")
-//            return
-//        }
-//
-//        addBookmarkResponse.load {
-//            try {
-//                val result = pdfRepository.addBookmark(groupId, page)
-//                if (result != null) {
-//                    Log.d(TAG, "북마크 추가 성공 - ID: ${result.id}, 페이지: ${result.page}")
-//
-//                    // 로컬 상태 업데이트
-//                    val currentAnnotations = _annotations.value
-//                    val updatedBookmarks = currentAnnotations.bookmarks.toMutableList()
-//                    updatedBookmarks.add(result)
-//                    _annotations.value = currentAnnotations.copy(bookmarks = ArrayList(updatedBookmarks))
-//
-//                    ResponseState.Success(result)
-//                } else {
-//                    Log.e(TAG, "북마크 추가 실패: 서버에서 null 응답")
-//                    throw Exception("북마크 추가에 실패했습니다.")
-//                }
-//            } catch (e: Exception) {
-//                Log.e(TAG, "북마크 추가 예외 발생", e)
-//                throw e
-//            }
-//        }
-//    }
-//
-//    /**
-//     * 북마크 삭제 (페이지 기준)
-//     */
-//    fun removeBookmark(page: Int) {
-//        val groupId = currentGroupId
-//        Log.d(TAG, "북마크 삭제 시도 (페이지 기준) - 그룹 ID: $groupId, 페이지: $page")
-//
-//        if (groupId == null) {
-//            Log.e(TAG, "북마크 삭제 실패: 그룹 ID가 설정되지 않음")
-//            return
-//        }
-//
-//        deleteBookmarkResponse.load {
-//            try {
-//                val result = pdfRepository.deleteBookmarkByPage(groupId, page)
-//                if (result != null) {
-//                    Log.d(TAG, "북마크 삭제 성공 (페이지 기준) - 삭제된 ID: ${result.deletedIds}")
-//
-//                    // 로컬 상태 업데이트
-//                    removeBookmarksFromLocal(result.deletedIds)
-//
-//                    ResponseState.Success(result)
-//                } else {
-//                    Log.e(TAG, "북마크 삭제 실패: 서버에서 null 응답")
-//                    throw Exception("북마크 삭제에 실패했습니다.")
-//                }
-//            } catch (e: Exception) {
-//                Log.e(TAG, "북마크 삭제 예외 발생 (페이지 기준)", e)
-//                throw e
-//            }
-//        }
-//    }
-//
-//    /**
-//     * 북마크 삭제 (ID 기준)
-//     */
-//    fun deleteBookmark(bookmarkId: Long) {
-//        Log.d(TAG, "북마크 삭제 시도 (ID 기준) - ID: $bookmarkId")
-//
-//        deleteBookmarkResponse.load {
-//            try {
-//                val result = pdfRepository.deleteBookmark(bookmarkId)
-//                if (result != null) {
-//                    Log.d(TAG, "북마크 삭제 성공 (ID 기준) - 삭제된 ID: ${result.deletedIds}")
-//
-//                    // 로컬 상태 업데이트
-//                    removeBookmarksFromLocal(result.deletedIds)
-//
-//                    ResponseState.Success(result)
-//                } else {
-//                    Log.e(TAG, "북마크 삭제 실패: 서버에서 null 응답")
-//                    throw Exception("북마크 삭제에 실패했습니다.")
-//                }
-//            } catch (e: Exception) {
-//                Log.e(TAG, "북마크 삭제 예외 발생 (ID 기준)", e)
-//                throw e
-//            }
-//        }
-//    }
-//
-//    /**
-//     * 현재 페이지에 북마크가 있는지 확인
-//     */
-//    fun hasBookmarkOnPage(page: Int): Boolean {
-//        val hasBookmark = _annotations.value.bookmarks.any { it.page == page }
-//        Log.d(TAG, "페이지 $page 북마크 존재 여부: $hasBookmark")
-//        return hasBookmark
-//    }
-//
-//    /**
-//     * 특정 페이지의 북마크 ID 가져오기
-//     */
-//    fun getBookmarkIdForPage(page: Int): Long? {
-//        val bookmarkId = _annotations.value.bookmarks.find { it.page == page }?.id
-//        Log.d(TAG, "페이지 $page 북마크 ID: $bookmarkId")
-//        return bookmarkId
-//    }
-//
-//    /**
-//     * 북마크 토글
-//     */
-//    fun toggleBookmark(page: Int) {
-//        Log.d(TAG, "북마크 토글 - 페이지: $page")
-//
-//        if (hasBookmarkOnPage(page)) {
-//            getBookmarkIdForPage(page)?.let { bookmarkId ->
-//                Log.d(TAG, "기존 북마크 삭제 - ID: $bookmarkId")
-//                deleteBookmark(bookmarkId)
-//            }
-//        } else {
-//            Log.d(TAG, "새 북마크 추가 - 페이지: $page")
-//            addBookmark(page)
-//        }
-//    }
-//
-//    // ========== 전체 주석 관리 ==========
-//
-//    /**
-//     * 모든 주석 로드
-//     */
-//    fun loadAllAnnotations() {
-//        val groupId = currentGroupId
-//        Log.d(TAG, "모든 주석 로드 시도 - 그룹 ID: $groupId")
-//
-//        if (groupId == null) {
-//            Log.e(TAG, "주석 로드 실패: 그룹 ID가 설정되지 않음")
-//            return
-//        }
-//
-//        annotationListResponse.load {
-//            try {
-//                val result = pdfRepository.getAllAnnotations(groupId)
-//                if (result != null) {
-//                    Log.d(TAG, "주석 로드 성공 - 댓글: ${result.comments.size}개, 하이라이트: ${result.highlights.size}개, 북마크: ${result.bookmarks.size}개")
-//                    _annotations.value = result
-//                    ResponseState.Success(result)
-//                } else {
-//                    Log.e(TAG, "주석 로드 실패: 서버에서 null 응답")
-//                    throw Exception("주석 목록을 불러올 수 없습니다.")
-//                }
-//            } catch (e: Exception) {
-//                Log.e(TAG, "주석 로드 예외 발생", e)
-//                throw e
-//            }
-//        }
-//    }
-//
-//    // ========== 상태 초기화 ==========
-//
-//    fun resetPdfState() {
-//        Log.d(TAG, "PDF 상태 초기화")
-//
-//        _pdfFile.value = null
-//        _pdfTitle.value = ""
-//        _isLoading.value = false
-//        _pdfLoadError.value = null
-//        _pdfReady.value = false
-//        _currentPage.value = 1
-//        _totalPages.value = 1
-//        _showPageInfo.value = false
-//        hideTextSelection()
-//        hideCommentPopup()
-//    }
-//
-//    // ========== 로컬 상태 업데이트 헬퍼 메서드 ==========
-//
-//    private fun removeCommentsFromLocal(deletedIds: List<Long>) {
-//        Log.d(TAG, "로컬에서 댓글 제거: $deletedIds")
-//        val currentAnnotations = _annotations.value
-//        val beforeCount = currentAnnotations.comments.size
-//        val updatedComments = currentAnnotations.comments.filter { comment ->
-//            !deletedIds.contains(comment.id)
-//        }
-//        _annotations.value = currentAnnotations.copy(comments = ArrayList(updatedComments))
-//        Log.d(TAG, "댓글 제거 완료 - 이전: ${beforeCount}개, 현재: ${updatedComments.size}개")
-//    }
-//
-//    private fun removeHighlightsFromLocal(deletedIds: List<Long>) {
-//        Log.d(TAG, "로컬에서 하이라이트 제거: $deletedIds")
-//        val currentAnnotations = _annotations.value
-//        val beforeCount = currentAnnotations.highlights.size
-//        val updatedHighlights = currentAnnotations.highlights.filter { highlight ->
-//            !deletedIds.contains(highlight.id)
-//        }
-//        _annotations.value = currentAnnotations.copy(highlights = ArrayList(updatedHighlights))
-//        Log.d(TAG, "하이라이트 제거 완료 - 이전: ${beforeCount}개, 현재: ${updatedHighlights.size}개")
-//    }
-//
-//    private fun removeBookmarksFromLocal(deletedIds: List<Long>) {
-//        Log.d(TAG, "로컬에서 북마크 제거: $deletedIds")
-//        val currentAnnotations = _annotations.value
-//        val beforeCount = currentAnnotations.bookmarks.size
-//        val updatedBookmarks = currentAnnotations.bookmarks.filter { bookmark ->
-//            !deletedIds.contains(bookmark.id)
-//        }
-//        _annotations.value = currentAnnotations.copy(bookmarks = ArrayList(updatedBookmarks))
-//        Log.d(TAG, "북마크 제거 완료 - 이전: ${beforeCount}개, 현재: ${updatedBookmarks.size}개")
-//    }
-//
-//    private fun extractFileNameFromResponse(response: Response<ResponseBody>): String {
-//        // Content-Disposition 헤더에서 파일명 추출
-//        val contentDisposition = response.headers()["Content-Disposition"]
-//        Log.d(TAG, "Content-Disposition: $contentDisposition")
-//
-//        return if (contentDisposition != null) {
-//            // filename="example.pdf" 또는 filename*=UTF-8''example.pdf 형태에서 추출
-//            val fileNameRegex = """filename[*]?=['"]?([^'";]+)['"]?""".toRegex()
-//            val matchResult = fileNameRegex.find(contentDisposition)
-//            val fileName = matchResult?.groupValues?.get(1) ?: "Group PDF"
-//
-//            // URL 디코딩이 필요한 경우
-//            try {
-//                java.net.URLDecoder.decode(fileName, "UTF-8")
-//            } catch (e: Exception) {
-//                fileName
-//            }
-//        } else {
-//            // 헤더에 파일명이 없으면 기본값
-//            "Group PDF"
-//        }
-//    }
-//}

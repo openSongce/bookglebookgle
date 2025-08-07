@@ -17,6 +17,20 @@ message SyncMessage {
   ActionType actionType = 3;
   AnnotationType annotationType = 4;
   AnnotationPayload payload = 5;
+  string targetUserId = 6;
+  string currentHostId = 7;
+  ParticipantsSnapshot participants = 8;
+}
+
+message ParticipantsSnapshot {
+  repeated Participant participants = 1;
+}
+
+message Participant {
+  string userId         = 1;
+  string userName       = 2;
+  bool   isOriginalHost = 3;
+  bool   isCurrentHost  = 4;
 }
 
 enum ActionType {
@@ -24,6 +38,9 @@ enum ActionType {
   ADD = 1;
   UPDATE = 2;
   DELETE = 3;
+  LEADERSHIP_TRANSFER = 4;
+  JOIN_ROOM = 5;
+  PARTICIPANTS = 6;
 }
 
 enum AnnotationType {
