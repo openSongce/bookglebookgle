@@ -1,8 +1,9 @@
 package com.example.bookglebookgleserver.comment.entity;
 
-import com.example.bookglebookgleserver.pdf.entity.PdfFile;
+import com.example.bookglebookgleserver.group.entity.Group;
 import jakarta.persistence.*;
 import lombok.*;
+
 import java.time.LocalDateTime;
 
 @Entity
@@ -18,17 +19,15 @@ public class Comment {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "pdf_file_id")
-    private PdfFile pdfFile;
+    @JoinColumn(name = "group_id", nullable = false)
+    private Group group;
 
-    private Long groupId;
     private Long userId;
     private int page;
-    private String snippet; // 주석 대상 텍스트
-    private String text;    // 실제 댓글 내용
+    private String snippet;
+    private String text;
     private double startX, startY, endX, endY;
 
-    // ⭐️ 생성일 추가
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

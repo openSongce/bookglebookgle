@@ -29,11 +29,11 @@ public class HighlightController {
     )
     @GetMapping("/group/{groupId}")
     public List<HighlightResponseDto> getHighlights(@PathVariable Long groupId) {
-        List<Highlight> highlights = highlightRepository.findByGroupId(groupId);
+        List<Highlight> highlights = highlightRepository.findByGroup_Id(groupId); // group.id로 조회
         return highlights.stream()
                 .map(h -> new HighlightResponseDto(
                         h.getId(),
-                        h.getGroupId(),
+                        h.getGroup().getId(),    // 변경된 부분!
                         h.getUserId(),
                         h.getPage(),
                         h.getSnippet(),
@@ -42,11 +42,8 @@ public class HighlightController {
                         h.getStartY(),
                         h.getEndX(),
                         h.getEndY(),
-                        h.getPdfFile().getPdfId(),
-                        h.getPdfFile().getFileName(),
                         h.getCreatedAt().toString()
                 ))
                 .toList();
     }
-
 }
