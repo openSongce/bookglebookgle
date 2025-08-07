@@ -30,11 +30,6 @@ public record HighlightResponseDto(
         double endX,
         @Schema(description = "끝 Y좌표", example = "0.0124")
         double endY,
-
-        @Schema(description = "PDF 파일 ID", example = "12")
-        Long pdfId,
-        @Schema(description = "PDF 파일 이름", example = "sample.pdf")
-        String pdfFileName,
         @Schema(description = "하이라이트 생성일시", example = "2025-08-07T12:34:56")
         String createdAt
 ) {}

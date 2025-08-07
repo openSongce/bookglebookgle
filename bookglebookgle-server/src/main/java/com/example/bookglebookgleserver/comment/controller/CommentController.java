@@ -35,13 +35,12 @@ public class CommentController {
             )
     )
     @GetMapping("/group/{groupId}")
-    public List<CommentResponseDto> getComments(@PathVariable Long groupId) {
-        List<Comment> comments = commentRepository.findByGroupId(groupId);
+    public List<CommentResponseDto> getCommentsByGroup(@PathVariable Long groupId) {
+        List<Comment> comments = commentRepository.findByGroup_Id(groupId); // group.id로 조회
         return comments.stream()
                 .map(c -> new CommentResponseDto(
                         c.getId(),
-                        c.getPdfFile().getPdfId(),
-                        c.getGroupId(),
+                        c.getGroup().getId(), // groupId
                         c.getUserId(),
                         c.getPage(),
                         c.getSnippet(),
@@ -50,9 +49,10 @@ public class CommentController {
                         c.getStartY(),
                         c.getEndX(),
                         c.getEndY(),
-                        c.getCreatedAt().toString()
+                        c.getCreatedAt().toString() // String 타입이면 OK
                 ))
                 .toList();
     }
+
 
 }

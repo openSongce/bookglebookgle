@@ -1,6 +1,6 @@
 package com.example.bookglebookgleserver.highlight.entity;
 
-import com.example.bookglebookgleserver.pdf.entity.PdfFile;
+import com.example.bookglebookgleserver.group.entity.Group;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -14,10 +14,10 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Builder
 public class Highlight {
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private Long groupId;
     private Long userId;
     private int page;
     private String snippet; // 하이라이트 텍스트
@@ -25,10 +25,9 @@ public class Highlight {
     private double startX, startY, endX, endY;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "pdf_file_id")
-    private PdfFile pdfFile;
+    @JoinColumn(name = "group_id", nullable = false)
+    private Group group;
 
-    // ⭐ 추가!
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -37,5 +36,3 @@ public class Highlight {
         this.createdAt = LocalDateTime.now();
     }
 }
-
-

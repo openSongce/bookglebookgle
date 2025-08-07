@@ -1,10 +1,12 @@
 package com.example.bookglebookgleserver.pdf.grpc;
 
 import bgbg.pdf.*;
-import com.example.bookglebookgleserver.highlight.entity.Highlight;
-import com.example.bookglebookgleserver.highlight.repository.HighlightRepository;
 import com.example.bookglebookgleserver.comment.entity.Comment;
 import com.example.bookglebookgleserver.comment.repository.CommentRepository;
+import com.example.bookglebookgleserver.group.entity.Group;
+import com.example.bookglebookgleserver.group.repository.GroupRepository;
+import com.example.bookglebookgleserver.highlight.entity.Highlight;
+import com.example.bookglebookgleserver.highlight.repository.HighlightRepository;
 import io.grpc.stub.StreamObserver;
 import lombok.RequiredArgsConstructor;
 import net.devh.boot.grpc.server.service.GrpcService;
@@ -24,6 +26,7 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
 
     private final HighlightRepository highlightRepository;
     private final CommentRepository commentRepository;
+    private final GroupRepository groupRepository;
 
     // 그룹별로 연결된 클라이언트 스트림 관리
     private final ConcurrentHashMap<Long, Set<StreamObserver<SyncMessage>>> sessions = new ConcurrentHashMap<>();
@@ -48,11 +51,15 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
 
                 // 1. DB 처리 (주석/하이라이트)
                 try {
+                    // 공통: groupId로 Group 객체를 조회
+                    Group group = groupRepository.findById(groupId)
+                            .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 그룹입니다."));
+
                     if (annotationType == AnnotationType.HIGHLIGHT) {
                         if (actionType == ActionType.ADD) {
                             logger.info("[하이라이트 추가] page=" + payload.getPage() + ", color=" + payload.getColor());
                             Highlight highlight = Highlight.builder()
-                                    .groupId(groupId)
+                                    .group(group)
                                     .userId(Long.valueOf(senderId))
                                     .page(payload.getPage())
                                     .snippet(payload.getSnippet())
@@ -83,7 +90,7 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
                         if (actionType == ActionType.ADD) {
                             logger.info("[주석 추가] page=" + payload.getPage() + ", text=" + payload.getText());
                             Comment comment = Comment.builder()
-                                    .groupId(groupId)
+                                    .group(group)
                                     .userId(Long.valueOf(senderId))
                                     .page(payload.getPage())
                                     .snippet(payload.getSnippet())
