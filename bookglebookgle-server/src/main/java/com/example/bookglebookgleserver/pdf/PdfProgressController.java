@@ -18,8 +18,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/groups")
 public class PdfProgressController {
 
-
-
     private final PdfService pdfService;
 
     @GetMapping("/{groupId}/progress")

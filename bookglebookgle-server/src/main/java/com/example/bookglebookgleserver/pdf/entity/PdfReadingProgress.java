@@ -31,4 +31,14 @@ public class PdfReadingProgress {
 
     private LocalDateTime updatedAt;
 
+    @PrePersist
+    public void onCreate() {
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    @PreUpdate
+    public void onUpdate() {
+        this.updatedAt = LocalDateTime.now();
+    }
+
 }
