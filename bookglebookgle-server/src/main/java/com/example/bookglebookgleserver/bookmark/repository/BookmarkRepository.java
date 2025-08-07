@@ -14,4 +14,5 @@ public interface BookmarkRepository extends JpaRepository<Bookmark, Long> {
     List<Bookmark> findByUser(User user);
 
     Optional<Bookmark> findByUserAndGroupAndPage(User user, Group group, int page);
+    // 올바른 예시 (JPA 기본 제공)
 }
