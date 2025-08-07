@@ -7,7 +7,9 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import com.example.bookglebookgleserver.chat.ChatMessage as GrpcChatMessage
 import com.example.bookglebookgleserver.chat.ChatServiceGrpc
+import com.kakao.sdk.common.KakaoSdk.type
 import com.ssafy.bookglebookgle.entity.ChatMessage
+import com.ssafy.bookglebookgle.entity.MessageType
 import io.grpc.ManagedChannel
 import io.grpc.stub.StreamObserver
 import java.text.SimpleDateFormat
@@ -35,6 +37,14 @@ class ChatGrpcRepository @Inject constructor(
     // 실시간 메시지 스트림
     private val _newMessages = MutableLiveData<ChatMessage>()
     val newMessages: LiveData<ChatMessage> = _newMessages
+
+    // AI 응답 전용 스트림
+    private val _aiResponses = MutableLiveData<ChatMessage>()
+    val aiResponses: LiveData<ChatMessage> = _aiResponses
+
+    // 토론 상태 변화 스트림
+    private val _discussionStatus = MutableLiveData<ChatMessage>()
+    val discussionStatus: LiveData<ChatMessage> = _discussionStatus
 
     // 연결 상태
     private val _connectionStatus = MutableLiveData<GrpcConnectionStatus>()
@@ -73,9 +83,20 @@ class ChatGrpcRepository @Inject constructor(
 
                     Handler(Looper.getMainLooper()).post {
                         Log.d(TAG, "실시간 메시지 수신: ${chatMessage.nickname}: ${chatMessage.message}")
-                        _newMessages.value = chatMessage
+
+                        // 메시지 타입별로 다른 LiveData로 분배
+                        when (chatMessage.type) {
+                            MessageType.AI_RESPONSE -> {
+                                _aiResponses.value = chatMessage
+                            }
+                            MessageType.DISCUSSION_START, MessageType.DISCUSSION_END -> {
+                                _discussionStatus.value = chatMessage
+                            }
+                            else -> {
+                                _newMessages.value = chatMessage
+                            }
+                        }
                     }
-                    Log.d(TAG, "실시간 메시지 수신: ${chatMessage.nickname}: ${chatMessage.message}")
                 }
             }
 
@@ -108,27 +129,45 @@ class ChatGrpcRepository @Inject constructor(
         Log.d(TAG, "채팅방 입장 완료")
     }
 
+    // 일반 메시지 전송
     fun sendMessage(content: String) {
+        sendTypedMessage(content, MessageType.NORMAL)
+    }
+
+    // 토론 시작 신호 전송
+    fun startDiscussion(content: String = "토론을 시작합니다.") {
+        sendTypedMessage(content, MessageType.DISCUSSION_START)
+    }
+
+    // 토론 종료 신호 전송
+    fun endDiscussion(content: String = "토론을 종료합니다.") {
+        sendTypedMessage(content, MessageType.DISCUSSION_END)
+    }
+
+    // 타입별 메시지 전송 (내부 함수)
+    private fun sendTypedMessage(content: String, type: MessageType) {
         if (requestObserver == null) {
             Log.e(TAG, "채팅방에 참여하지 않았습니다.")
             return
         }
 
-        if (content.isBlank()) {
+        if (content.isBlank() && type == MessageType.NORMAL) {
             Log.w(TAG, "빈 메시지는 전송할 수 없습니다.")
+            return
         }
 
         val grpcMessage = GrpcChatMessage.newBuilder()
             .setGroupId(currentGroupId)
-            .setSenderId(currentUserId.toLong())
+            .setSenderId(currentUserId)
             .setSenderName(currentUserName)
             .setContent(content)
             .setTimestamp(System.currentTimeMillis())
+            .setType(type.value)
             .build()
 
         try {
             requestObserver?.onNext(grpcMessage)
-            Log.d(TAG, "메시지 전송 성공: $content")
+            Log.d(TAG, "메시지 전송 성공: [${type.value}] $content")
         } catch (e: Exception) {
             Log.e(TAG, "메시지 전송 실패", e)
             _connectionStatus.value = GrpcConnectionStatus.ERROR("메시지 전송 실패")
@@ -144,11 +183,12 @@ class ChatGrpcRepository @Inject constructor(
             .setSenderName("시스템")
             .setContent(content)
             .setTimestamp(System.currentTimeMillis())
+            .setType(type.value)
             .build()
 
         try {
             requestObserver?.onNext(systemMessage)
-            Log.d(TAG, "시스템 메시지 전송: $content")
+            Log.d(TAG, "시스템 메시지 전송: [${type.value}] $content")
         } catch (e: Exception) {
             Log.e(TAG, "시스템 메시지 전송 실패", e)
         }
@@ -207,7 +247,10 @@ class ChatGrpcRepository @Inject constructor(
             nickname = grpcMessage.senderName,
             profileImage = null,
             message = grpcMessage.content,
-            timestamp = formatTimestamp(grpcMessage.timestamp)
+            timestamp = formatTimestamp(grpcMessage.timestamp),
+            type = MessageType.fromString(grpcMessage.type),
+            aiResponse = if (grpcMessage.aiResponse.isNotEmpty()) grpcMessage.aiResponse else null,
+            suggestedTopics = grpcMessage.suggestedTopicsList
         )
     }
 

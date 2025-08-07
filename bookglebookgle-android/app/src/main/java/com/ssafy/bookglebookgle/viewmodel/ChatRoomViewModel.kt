@@ -6,6 +6,7 @@ import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ssafy.bookglebookgle.entity.ChatMessage
+import com.ssafy.bookglebookgle.entity.MessageType
 import com.ssafy.bookglebookgle.repository.ChatRepositoryImpl
 import com.ssafy.bookglebookgle.repository.GroupRepositoryImpl
 import com.ssafy.bookglebookgle.repository.ChatGrpcRepository
@@ -27,30 +28,47 @@ data class ChatRoomUiState(
     val error: String? = null,
     val grpcConnected: Boolean = false,
     val shouldScrollToBottom: Boolean = false,
-    val isMarkingAsRead: Boolean = false
+    val isMarkingAsRead: Boolean = false,
+    // AI 토론 관련 상태
+    val isDiscussionActive: Boolean = false,
+    val currentAiResponse: String? = null,
+    val suggestedTopics: List<String> = emptyList(),
+    val showAiSuggestions: Boolean = false
 )
 
 @HiltViewModel
 class ChatRoomViewModel @Inject constructor(
-    private val chatRepositoryImpl: ChatRepositoryImpl,          // REST API
+    private val chatRepositoryImpl: ChatRepositoryImpl, // REST API
     private val groupRepositoryImpl: GroupRepositoryImpl,
-    private val chatGrpcRepository: ChatGrpcRepository           // gRPC
+    private val chatGrpcRepository: ChatGrpcRepository // gRPC
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ChatRoomUiState())
     val uiState: StateFlow<ChatRoomUiState> = _uiState.asStateFlow()
 
-    private val grpcMessageObserver = Observer<ChatMessage> { newMessage -> addNewMessage(newMessage) }
+    // 메시지 타입별 Observer들
+    private val grpcMessageObserver = Observer<ChatMessage> { newMessage ->
+        addNewMessage(newMessage)
+    }
+    private val aiResponseObserver = Observer<ChatMessage> { aiMessage ->
+        handleAiResponse(aiMessage)
+    }
+    private val discussionStatusObserver = Observer<ChatMessage> { statusMessage ->
+        handleDiscussionStatus(statusMessage)
+    }
 
-    private var currentGroupId: Long = 0 // 현재 채팅방 ID 저장
-    private var isInitialLoad = true     // 최초 로드 여부
+    private var currentGroupId: Long = 0
+    private var currentUserId: Long = 0
+    private var isInitialLoad = true
 
     init {
+        // 각 타입별 Observer 등록
         chatGrpcRepository.newMessages.observeForever(grpcMessageObserver)
+        chatGrpcRepository.aiResponses.observeForever(aiResponseObserver)
+        chatGrpcRepository.discussionStatus.observeForever(discussionStatusObserver)
         observeGrpcConnection()
     }
 
-    // gRPC 연결 상태 관찰
     private fun observeGrpcConnection() {
         chatGrpcRepository.connectionStatus.observeForever { status ->
             val isConnected = status == GrpcConnectionStatus.CONNECTED
@@ -76,13 +94,12 @@ class ChatRoomViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             currentGroupId = groupId
+            currentUserId = userId
 
             try {
-                // 그룹 정보 불러오기
                 val groupDetail = groupRepositoryImpl.getGroupDetail(groupId)
                 val groupTitle = groupDetail.body()?.roomTitle
 
-                // 최신 메시지 불러오기
                 val latestMessages = chatRepositoryImpl.getLatestChatMessages(groupId, 15)
 
                 val chatMessages = latestMessages.map { response ->
@@ -92,16 +109,17 @@ class ChatRoomViewModel @Inject constructor(
                         nickname = response.userNickname,
                         profileImage = null,
                         message = response.message,
-                        timestamp = DateTimeUtils.formatChatTime(response.createdAt)
+                        timestamp = DateTimeUtils.formatChatTime(response.createdAt),
+                        type = MessageType.NORMAL // 기존 메시지는 NORMAL로 처리
                     )
-                }.sortedBy  { it.messageId } // 메시지 ID 기준 오름차순 정렬 유지
+                }.sortedBy { it.messageId }
 
                 _uiState.value = _uiState.value.copy(
                     chatMessages = chatMessages,
                     groupTitle = groupTitle ?: "채팅방",
                     isLoading = false,
                     hasMoreData = latestMessages.size >= 15,
-                    shouldScrollToBottom = true // 스크롤 플래그 추가
+                    shouldScrollToBottom = true
                 )
 
                 isInitialLoad = false
@@ -120,10 +138,6 @@ class ChatRoomViewModel @Inject constructor(
 
     @RequiresApi(Build.VERSION_CODES.O)
     fun loadMoreMessages() {
-//        if (_uiState.value.isLoadingMore || !_uiState.value.hasMoreData || isInitialLoad) {
-//            return
-//        }
-        // 중복 호출 방지를 위한 더 엄격한 체크
         if (_uiState.value.isLoadingMore ||
             !_uiState.value.hasMoreData ||
             isInitialLoad ||
@@ -146,9 +160,6 @@ class ChatRoomViewModel @Inject constructor(
                     return@launch
                 }
 
-//                val oldestMessageId = currentMessages.firstOrNull()?.messageId ?: return@launch
-
-                // 이전 메시지들 불러오기
                 val olderMessages = chatRepositoryImpl.getOlderChatMessages(
                     roomId = currentGroupId,
                     beforeMessageId = oldestMessageId,
@@ -163,7 +174,8 @@ class ChatRoomViewModel @Inject constructor(
                             nickname = response.userNickname,
                             profileImage = null,
                             message = response.message,
-                            timestamp = DateTimeUtils.formatChatTime(response.createdAt)
+                            timestamp = DateTimeUtils.formatChatTime(response.createdAt),
+                            type = MessageType.NORMAL
                         )
                     }.sortedBy { it.messageId }
 
@@ -196,7 +208,7 @@ class ChatRoomViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 // 사용자 정보 가져오기
-                val userName = "사용자 $userId" // 임시 이름
+                val userName = "사용자 $userId"
 
                 // gRPC 서버 연결
                 chatGrpcRepository.connect()
@@ -212,22 +224,50 @@ class ChatRoomViewModel @Inject constructor(
         }
     }
 
-    // 새 메시지 추가 (gRPC로 실시간 메시지 받았을 때)
+    // 일반 메시지 추가
     fun addNewMessage(message: ChatMessage) {
         val currentMessages = _uiState.value.chatMessages.toMutableList()
 
         // 중복 메시지 체크 (messageId 기준)
         if (currentMessages.none { it.messageId == message.messageId }) {
             currentMessages.add(message)
-            // MessageId 기준 오름차순
             val sortedMessages = currentMessages.sortedBy { it.messageId }
             _uiState.value = _uiState.value.copy(chatMessages = sortedMessages)
 
             // 새 메시지 도착 시 읽음 처리 (본인 메시지가 아닌 경우)
-            if (message.userId != currentGroupId) { // userId와 groupId 비교 로직은 실제 구현에 맞게 수정 필요
+            if (message.userId != currentUserId) {
                 markChatAsRead()
             }
         }
+    }
+
+    // AI 응답 처리
+    private fun handleAiResponse(aiMessage: ChatMessage) {
+        // AI 응답도 채팅 메시지로 추가
+        addNewMessage(aiMessage)
+
+        // AI 응답의 추가 정보를 상태에 반영
+        _uiState.value = _uiState.value.copy(
+            currentAiResponse = aiMessage.aiResponse,
+            suggestedTopics = aiMessage.suggestedTopics,
+            showAiSuggestions = aiMessage.suggestedTopics.isNotEmpty()
+        )
+    }
+
+    // 토론 상태 변화 처리
+    private fun handleDiscussionStatus(statusMessage: ChatMessage) {
+        // 상태 메시지도 채팅에 표시
+        addNewMessage(statusMessage)
+
+        // 토론 상태 업데이트
+        val isActive = statusMessage.type == MessageType.DISCUSSION_START
+        _uiState.value = _uiState.value.copy(
+            isDiscussionActive = isActive,
+            // 토론 종료 시 AI 관련 상태 초기화
+            showAiSuggestions = if (!isActive) false else _uiState.value.showAiSuggestions,
+            currentAiResponse = if (!isActive) null else _uiState.value.currentAiResponse,
+            suggestedTopics = if (!isActive) emptyList() else _uiState.value.suggestedTopics
+        )
     }
 
     /**
@@ -243,7 +283,6 @@ class ChatRoomViewModel @Inject constructor(
 
             try {
                 val response = chatRepositoryImpl.markChatAsRead(currentGroupId)
-
                 if (response.isSuccessful) {
                     // 읽음 처리 성공 - 특별한 UI 업데이트가 필요하다면 여기서 처리
                     // 예: 읽지 않은 메시지 카운트 업데이트 등
@@ -251,6 +290,7 @@ class ChatRoomViewModel @Inject constructor(
                     // 읽음 처리 실패 시 에러 표시 여부는 UX에 따라 결정
                     // 일반적으로 읽음 처리 실패는 사용자에게 알리지 않음
                 }
+
             } catch (e: Exception) {
                 // 네트워크 에러 등은 로그만 남기고 사용자에게는 알리지 않음
                 // Log.e(TAG, "채팅방 읽음 처리 실패", e)
@@ -260,7 +300,7 @@ class ChatRoomViewModel @Inject constructor(
         }
     }
 
-    // 메시지 전송 - gRPC로 실시간 전송
+    // 일반 메시지 전송
     fun sendMessage(messageText: String) {
         if (!_uiState.value.grpcConnected) {
             _uiState.value = _uiState.value.copy(
@@ -269,8 +309,40 @@ class ChatRoomViewModel @Inject constructor(
             return
         }
 
-        // gRPC로 실시간 메시지 전송
         chatGrpcRepository.sendMessage(messageText)
+    }
+
+    // 토론 시작
+    fun startDiscussion() {
+        if (!_uiState.value.grpcConnected) {
+            _uiState.value = _uiState.value.copy(
+                error = "실시간 채팅에 연결되지 않았습니다."
+            )
+            return
+        }
+
+        chatGrpcRepository.startDiscussion("AI 토론을 시작합니다. 자유롭게 의견을 나누어 보세요!")
+    }
+
+    // 토론 종료
+    fun endDiscussion() {
+        if (!_uiState.value.grpcConnected) {
+            return
+        }
+
+        chatGrpcRepository.endDiscussion("AI 토론을 종료합니다. 수고하셨습니다!")
+    }
+
+    // AI 추천 주제 선택
+    fun selectSuggestedTopic(topic: String) {
+        sendMessage(topic)
+        // 선택 후 추천 주제 숨기기
+        _uiState.value = _uiState.value.copy(showAiSuggestions = false)
+    }
+
+    // AI 추천 주제 패널 닫기
+    fun dismissAiSuggestions() {
+        _uiState.value = _uiState.value.copy(showAiSuggestions = false)
     }
 
     // 채팅방 나가기
@@ -286,11 +358,11 @@ class ChatRoomViewModel @Inject constructor(
     override fun onCleared() {
         super.onCleared()
         chatGrpcRepository.newMessages.removeObserver(grpcMessageObserver)
-        // ViewModel 정리 시 gRPC 연결 해제
+        chatGrpcRepository.aiResponses.removeObserver(aiResponseObserver)
+        chatGrpcRepository.discussionStatus.removeObserver(discussionStatusObserver)
         chatGrpcRepository.disconnect()
     }
 
-    // 스크롤 플래그 리셋 함수 추가
     fun resetScrollFlag() {
         _uiState.value = _uiState.value.copy(shouldScrollToBottom = false)
     }

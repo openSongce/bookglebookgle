@@ -2,9 +2,11 @@ package com.ssafy.bookglebookgle.ui.screen
 
 import android.annotation.SuppressLint
 import android.os.Build
+import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -15,6 +17,11 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.selection.LocalTextSelectionColors
 import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Face
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -34,6 +41,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
 import com.ssafy.bookglebookgle.entity.ChatMessage
+import com.ssafy.bookglebookgle.entity.MessageType
 import com.ssafy.bookglebookgle.ui.component.CustomTopAppBar
 import com.ssafy.bookglebookgle.ui.theme.BaseColor
 import com.ssafy.bookglebookgle.ui.theme.MainColor
@@ -41,10 +49,8 @@ import com.ssafy.bookglebookgle.viewmodel.ChatRoomViewModel
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.flow.first
 
-// ChatRoomScreen.kt의 핵심 수정 부분
-
+private const val TAG = "싸피_ChatRoomScreen"
 @SuppressLint("NewApi")
 @Composable
 fun ChatRoomScreen(
@@ -95,7 +101,7 @@ fun ChatRoomScreen(
             scope.launch {
                 listState.scrollToItem(uiState.chatMessages.size - 1)
                 previousMessageCount = uiState.chatMessages.size
-                kotlinx.coroutines.delay(500) // 스크롤 감지 로직 안정화 시간 확보
+                kotlinx.coroutines.delay(500)
                 viewModel.resetScrollFlag()
                 viewModel.markChatAsRead()
             }
@@ -113,6 +119,7 @@ fun ChatRoomScreen(
             val firstVisibleItem = layoutInfo.visibleItemsInfo.firstOrNull()
             val isFirstItemFullyVisible = firstVisibleItem?.let { item ->
                 item.index == 0 && item.offset >= -10 // 약간의 여유를 둠
+
             } ?: false
 
             // 마지막 아이템이 보이는지 확인 (읽음처리용)
@@ -124,8 +131,7 @@ fun ChatRoomScreen(
             Triple(firstVisibleIndex, totalItemsCount, isFirstItemFullyVisible) to isLastItemVisible
         }
             .distinctUntilChanged()
-            .collect {  (triple, isLastItemVisible) ->
-
+            .collect { (triple, isLastItemVisible) ->
                 val (firstVisibleIndex, totalItemsCount, isFirstItemFullyVisible) = triple
 
                 // 스크롤 방향 감지
@@ -159,7 +165,7 @@ fun ChatRoomScreen(
             }
     }
 
-    // 이전 메시지 로드 완료 시 스크롤 위치 조정 - 더 안정적으로 개선
+    // 이전 메시지 로드 완료 시 스크롤 위치 조정
     LaunchedEffect(uiState.isLoadingMore) {
         if (uiState.isLoadingMore && scrollPositionBeforeLoad == null) {
             previousMessageCount = uiState.chatMessages.size
@@ -247,6 +253,86 @@ fun ChatRoomScreen(
             isChatScreen = true,
             navController = navController,
         )
+
+        // 토론 컨트롤 패널 (기존 앱바 아래에 추가)
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shadowElevation = 2.dp,
+            color = Color.White
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // 왼쪽: 토론 상태 표시
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (uiState.isDiscussionActive) {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .background(MainColor, CircleShape)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "AI 토론 진행 중",
+                            fontSize = 12.sp,
+                            color = MainColor,
+                            fontWeight = FontWeight.Medium
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .background(Color.Gray, CircleShape)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "일반 채팅",
+                            fontSize = 12.sp,
+                            color = Color.Gray,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+
+                // 오른쪽: 토론 시작/종료 버튼
+                Button(
+                    onClick = {
+                        Log.d(TAG,"토론 버튼 클릭됨! 현재 상태: ${uiState.isDiscussionActive}")
+                        if (uiState.isDiscussionActive) {
+                            Log.d(TAG,"토론 종료 호출")
+                            viewModel.endDiscussion()
+                        } else {
+                            Log.d(TAG,"토론 시작 호출")
+                            viewModel.startDiscussion()
+                        }
+                    },
+                    modifier = Modifier.height(32.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (uiState.isDiscussionActive) Color.Red.copy(alpha = 0.5f) else Color.Green.copy(alpha = 0.5f)
+                    ),
+                    contentPadding = PaddingValues(horizontal = 12.dp)
+                ) {
+                    Icon(
+                        imageVector = if (uiState.isDiscussionActive) Icons.Default.Close else Icons.Default.PlayArrow,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = Color.White
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = if (uiState.isDiscussionActive) "토론 종료" else "토론 시작",
+                        fontSize = 12.sp,
+                        color = Color.White
+                    )
+                }
+            }
+        }
 
         Box(
             modifier = Modifier
@@ -367,7 +453,7 @@ fun ChatRoomScreen(
                     }
                 }
 
-                // 채팅 메시지들 - key로 안정성 보장
+                // 채팅 메시지들
                 items(
                     items = uiState.chatMessages,
                     key = { message -> message.messageId }
@@ -379,7 +465,93 @@ fun ChatRoomScreen(
                 }
             }
 
-            // 빈 상태 메시지
+            // AI 추천 주제 오버레이
+            if (uiState.showAiSuggestions && uiState.suggestedTopics.isNotEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.3f))
+                        .clickable {
+                            Log.d(TAG,"AI 추천 주제 배경 클릭 - 닫기")
+                            viewModel.dismissAiSuggestions()
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth(0.9f)
+                            .clickable { }, // 카드 클릭 시 배경 클릭 방지
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "🤖 AI 추천 주제",
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = BaseColor
+                                )
+                                IconButton(
+                                    onClick = {
+                                        Log.d(TAG,"AI 추천 주제 X 버튼 클릭")
+                                        viewModel.dismissAiSuggestions()
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = "닫기"
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            if (uiState.currentAiResponse != null) {
+                                Text(
+                                    text = uiState.currentAiResponse!!,
+                                    fontSize = 14.sp,
+                                    color = Color.Gray,
+                                    modifier = Modifier.padding(bottom = 12.dp)
+                                )
+                            }
+
+                            LazyColumn(
+                                modifier = Modifier.heightIn(max = 300.dp)
+                            ) {
+                                items(uiState.suggestedTopics) { topic ->
+                                    Card(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 4.dp)
+                                            .clickable {
+                                                Log.d(TAG,"추천 주제 선택: $topic")
+                                                viewModel.selectSuggestedTopic(topic)
+                                            },
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = MainColor.copy(alpha = 0.1f)
+                                        )
+                                    ) {
+                                        Text(
+                                            text = topic,
+                                            modifier = Modifier.padding(12.dp),
+                                            fontSize = 14.sp
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 빈 상태 메시지 (토론 테스트 버튼 추가)
             if (!uiState.isLoading && uiState.chatMessages.isEmpty() && uiState.error == null) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
@@ -399,27 +571,6 @@ fun ChatRoomScreen(
                             fontSize = 14.sp,
                             color = Color.Gray
                         )
-
-                        // gRPC 연결 상태 표시
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(8.dp)
-                                    .background(
-                                        color = if (uiState.grpcConnected) Color.Green else Color.Red,
-                                        shape = CircleShape
-                                    )
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = if (uiState.grpcConnected) "연결됨" else "연결 중...",
-                                fontSize = 12.sp,
-                                color = Color.Gray
-                            )
-                        }
                     }
                 }
             }
@@ -430,83 +581,114 @@ fun ChatRoomScreen(
             modifier = Modifier.fillMaxWidth(),
             shadowElevation = 4.dp
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(64.dp)
-                    .padding(8.dp),
-                verticalAlignment = Alignment.Bottom
-            ) {
-                CompositionLocalProvider(
-                    LocalTextSelectionColors provides TextSelectionColors(
-                        handleColor = BaseColor,
-                        backgroundColor = BaseColor.copy(alpha = 0.3f)
-                    )
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .heightIn(min = 40.dp)
-                            .border(
-                                width = 1.dp,
-                                color = if (messageText.isNotEmpty()) BaseColor else Color.Gray.copy(
-                                    alpha = 0.5f
-                                ),
-                                shape = RoundedCornerShape(16.dp)
-                            )
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        contentAlignment = Alignment.Center
+            Column {
+                // 토론 중일 때 상태 표시바
+                if (uiState.isDiscussionActive) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = BaseColor.copy(alpha = 0.1f)
                     ) {
-                        BasicTextField(
-                            value = messageText,
-                            onValueChange = {
-                                messageText = it
-                                if (uiState.error != null) viewModel.clearError()
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            textStyle = TextStyle(
-                                fontSize = 14.sp,
-                                lineHeight = 20.sp,
-                                color = Color.Black
-                            ),
-                            maxLines = 4,
-                            cursorBrush = SolidColor(BaseColor),
-                            decorationBox = { innerTextField ->
-                                Box(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    contentAlignment = Alignment.CenterStart
-                                ) {
-                                    if (messageText.isEmpty()) {
-                                        Text(
-                                            text = "메시지 입력",
-                                            fontSize = 14.sp,
-                                            color = Color.Gray
-                                        )
-                                    }
-                                    innerTextField()
-                                }
-                            }
-                        )
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Call,
+                                contentDescription = null,
+                                tint = BaseColor,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "AI 토론이 진행 중입니다. AI가 대화를 분석하고 피드백을 제공합니다.",
+                                fontSize = 12.sp,
+                                color = BaseColor
+                            )
+                        }
                     }
                 }
 
-                Spacer(modifier = Modifier.width(8.dp))
-
-                FloatingActionButton(
-                    onClick = {
-                        if (messageText.isNotBlank() && uiState.grpcConnected) {
-                            viewModel.sendMessage(messageText.trim())
-                            messageText = ""
-                        }
-                    },
-                    modifier = Modifier.size(40.dp),
-                    containerColor = if (messageText.isNotBlank() && uiState.grpcConnected) MainColor else Color.Gray
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(64.dp)
+                        .padding(8.dp),
+                    verticalAlignment = Alignment.Bottom
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Send,
-                        contentDescription = "메시지 전송",
-                        tint = Color.White
-                    )
+                    CompositionLocalProvider(
+                        LocalTextSelectionColors provides TextSelectionColors(
+                            handleColor = BaseColor,
+                            backgroundColor = BaseColor.copy(alpha = 0.3f)
+                        )
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .heightIn(min = 40.dp)
+                                .border(
+                                    width = 1.dp,
+                                    color = if (messageText.isNotEmpty()) BaseColor else Color.Gray.copy(
+                                        alpha = 0.5f
+                                    ),
+                                    shape = RoundedCornerShape(16.dp)
+                                )
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            BasicTextField(
+                                value = messageText,
+                                onValueChange = {
+                                    messageText = it
+                                    if (uiState.error != null) viewModel.clearError()
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                textStyle = TextStyle(
+                                    fontSize = 14.sp,
+                                    lineHeight = 20.sp,
+                                    color = Color.Black
+                                ),
+                                maxLines = 4,
+                                cursorBrush = SolidColor(BaseColor),
+                                decorationBox = { innerTextField ->
+                                    Box(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        contentAlignment = Alignment.CenterStart
+                                    ) {
+                                        if (messageText.isEmpty()) {
+                                            Text(
+                                                text = "메시지 입력",
+                                                fontSize = 14.sp,
+                                                color = Color.Gray
+                                            )
+                                        }
+                                        innerTextField()
+                                    }
+                                }
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    FloatingActionButton(
+                        onClick = {
+                            if (messageText.isNotBlank() && uiState.grpcConnected) {
+                                Log.d(TAG,"메시지 전송: $messageText")
+                                viewModel.sendMessage(messageText.trim())
+                                messageText = ""
+                            } else {
+                                Log.d(TAG,"메시지 전송 실패 - 텍스트: '$messageText', gRPC 연결: ${uiState.grpcConnected}")
+                            }
+                        },
+                        modifier = Modifier.size(40.dp),
+                        containerColor = if (messageText.isNotBlank() && uiState.grpcConnected) MainColor else Color.Gray
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Send,
+                            contentDescription = "메시지 전송",
+                            tint = Color.White
+                        )
+                    }
                 }
             }
         }
@@ -519,6 +701,145 @@ fun ChatMessageItem(
     message: ChatMessage,
     isMyMessage: Boolean
 ) {
+    // 메시지 타입에 따른 렌더링 분기
+    when (message.type) {
+        MessageType.AI_RESPONSE -> {
+            AiResponseMessageItem(message = message)
+        }
+        MessageType.DISCUSSION_START, MessageType.DISCUSSION_END -> {
+            SystemMessageItem(message = message)
+        }
+        else -> {
+            RegularMessageItem(message = message, isMyMessage = isMyMessage)
+        }
+    }
+}
+
+@Composable
+fun AiResponseMessageItem(message: ChatMessage) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp)
+    ) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = BaseColor.copy(alpha = 0.1f)
+            )
+        ) {
+            Row(
+                modifier = Modifier.padding(12.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Face,
+                    contentDescription = "AI",
+                    tint = BaseColor,
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = "AI 분석 결과",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = BaseColor
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    // AI 응답 내용
+                    if (message.aiResponse != null) {
+                        Text(
+                            text = message.aiResponse!!,
+                            fontSize = 14.sp,
+                            color = Color.Black
+                        )
+                    }
+
+                    // 일반 메시지 내용도 표시 (필요한 경우)
+                    if (message.message.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = message.message,
+                            fontSize = 14.sp,
+                            color = Color.Gray
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = message.timestamp,
+                        fontSize = 10.sp,
+                        color = Color.Gray
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun SystemMessageItem(message: ChatMessage) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Card(
+            colors = CardDefaults.cardColors(
+                containerColor = when (message.type) {
+                    MessageType.DISCUSSION_START -> Color.Green.copy(alpha = 0.06f)
+                    MessageType.DISCUSSION_END -> Color.Red.copy(alpha = 0.06f)
+                    else -> Color.Gray.copy(alpha = 0.1f)
+                }
+            )
+        ) {
+            Row(
+                modifier = Modifier.padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = when (message.type) {
+                        MessageType.DISCUSSION_START -> Icons.Default.PlayArrow
+                        MessageType.DISCUSSION_END -> Icons.Default.Close
+                        else -> Icons.Default.Info
+                    },
+                    contentDescription = null,
+                    tint = when (message.type) {
+                        MessageType.DISCUSSION_START -> Color.Green
+                        MessageType.DISCUSSION_END -> Color.Red
+                        else -> Color.Gray
+                    },
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Column {
+                    Text(
+                        text = message.message,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color.Black
+                    )
+                    Text(
+                        text = message.timestamp,
+                        fontSize = 10.sp,
+                        color = Color.Gray
+                    )
+                }
+            }
+        }
+    }
+}
+
+@RequiresApi(Build.VERSION_CODES.O)
+@Composable
+fun RegularMessageItem(
+    message: ChatMessage,
+    isMyMessage: Boolean
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -526,7 +847,6 @@ fun ChatMessageItem(
         horizontalArrangement = if (isMyMessage) Arrangement.End else Arrangement.Start
     ) {
         if (!isMyMessage) {
-            // 상대방 프로필 이미지 또는 기본 아바타
             if (message.profileImage != null) {
                 AsyncImage(
                     model = message.profileImage,
@@ -538,7 +858,6 @@ fun ChatMessageItem(
                     contentScale = ContentScale.Crop
                 )
             } else {
-                // 프로필 이미지가 없을 때 기본 아바타
                 Box(
                     modifier = Modifier
                         .size(40.dp)
@@ -547,7 +866,7 @@ fun ChatMessageItem(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = message.nickname.take(1), // 닉네임 첫 글자
+                        text = message.nickname.take(1),
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = BaseColor
@@ -563,7 +882,6 @@ fun ChatMessageItem(
             modifier = Modifier.widthIn(max = 280.dp)
         ) {
             if (!isMyMessage) {
-                // 상대방 닉네임
                 Text(
                     text = message.nickname,
                     fontSize = 12.sp,
@@ -578,7 +896,6 @@ fun ChatMessageItem(
                 horizontalArrangement = if (isMyMessage) Arrangement.End else Arrangement.Start
             ) {
                 if (isMyMessage) {
-                    // 내 메시지 - 시간이 왼쪽
                     Text(
                         text = message.timestamp,
                         fontSize = 10.sp,
@@ -587,7 +904,6 @@ fun ChatMessageItem(
                     )
                 }
 
-                // 메시지 말풍선
                 Surface(
                     shape = RoundedCornerShape(
                         topStart = if (isMyMessage) 16.dp else 4.dp,
@@ -613,7 +929,6 @@ fun ChatMessageItem(
                 }
 
                 if (!isMyMessage) {
-                    // 상대방 메시지 - 시간이 오른쪽
                     Text(
                         text = message.timestamp,
                         fontSize = 10.sp,
