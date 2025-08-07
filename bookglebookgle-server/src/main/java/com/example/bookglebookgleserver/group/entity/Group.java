@@ -1,5 +1,6 @@
 package com.example.bookglebookgleserver.group.entity;
 
+import com.example.bookglebookgleserver.chat.entity.ChatRoom;
 import com.example.bookglebookgleserver.pdf.entity.PdfFile;
 import com.example.bookglebookgleserver.user.entity.User;
 import jakarta.persistence.*;
@@ -88,4 +89,6 @@ public class Group {
     @Builder.Default
     private List<GroupMember> groupMembers = new ArrayList<>();
 
+    @OneToOne(mappedBy = "group", cascade = CascadeType.ALL, orphanRemoval = true)
+    private ChatRoom chatRoom;
 }

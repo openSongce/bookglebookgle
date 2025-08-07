@@ -73,4 +73,29 @@ public class ChatRoomController {
         // (필요 시 customUser.getUser()로 권한 검증)
         return chatRoomService.getMessagesByRoomIdAndBeforeId(roomId, beforeId, size);
     }
+
+    @Operation(
+            summary = "채팅방 입장/읽음 처리",
+            description = """
+        사용자가 특정 채팅방에 입장하거나, 메시지를 모두 읽은 경우 호출하는 API입니다.<br>
+        이 API를 호출하면 사용자의 읽지 않은 메시지 수가 0으로 초기화됩니다.<br>
+        JWT 인증 필요 (Authorization 헤더)<br>
+        (Android: 채팅방 입장, 스크롤 맨 아래까지 내릴 때 호출)
+        """
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "읽음 처리 성공"),
+            @ApiResponse(responseCode = "401", description = "인증 필요"),
+            @ApiResponse(responseCode = "404", description = "채팅방 없음"),
+            @ApiResponse(responseCode = "500", description = "서버 오류")
+    })
+    @PostMapping("/{roomId}/read")
+    public ResponseEntity<Void> markAsRead(
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails userDetails,
+            @Parameter(description = "채팅방 ID", example = "1") @PathVariable Long roomId
+    ) {
+        User user = userDetails.getUser();
+        chatRoomService.markAllMessagesAsRead(user, roomId);
+        return ResponseEntity.ok().build();
+    }
 }

@@ -8,8 +8,12 @@ import com.example.bookglebookgleserver.chat.entity.ChatRoomMember;
 import com.example.bookglebookgleserver.chat.repository.ChatMessageRepository;
 import com.example.bookglebookgleserver.chat.repository.ChatRoomMemberRepository;
 import com.example.bookglebookgleserver.chat.repository.ChatRoomRepository;
+import com.example.bookglebookgleserver.global.exception.ForbiddenException;
 import com.example.bookglebookgleserver.global.exception.NotFoundException;
+import com.example.bookglebookgleserver.group.entity.Group;
+import com.example.bookglebookgleserver.group.repository.GroupRepository;
 import com.example.bookglebookgleserver.user.entity.User;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -76,5 +80,18 @@ public class ChatRoomService {
         return messages.stream()
                 .map(ChatMessageDto::from)  // 엔티티→DTO 변환 메서드 필요
                 .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public void markAllMessagesAsRead(User user, Long roomId) {
+        ChatRoom chatRoom = chatRoomRepository.findById(roomId)
+                .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
+        ChatRoomMember member = chatRoomMemberRepository.findByUserAndChatRoom(user, chatRoom)
+                .orElseThrow(() -> new NotFoundException("채팅방 멤버 정보가 없습니다."));
+        ChatMessage lastMsg = chatMessageRepository.findFirstByChatRoomOrderByCreatedAtDesc(chatRoom);
+        if (lastMsg != null) {
+            member.setLastReadMessageId(lastMsg.getId());
+            chatRoomMemberRepository.save(member);
+        }
     }
 }
