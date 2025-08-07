@@ -19,4 +19,5 @@ public class GroupCreateRequestDto {
     private int groupMaxNum;
     private String readingMode;
     private boolean imageBased;
+    private int totalPages;
 }

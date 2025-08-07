@@ -18,6 +18,7 @@ import com.example.bookglebookgleserver.ocr.grpc.GrpcOcrClient;
 import com.example.bookglebookgleserver.ocr.service.OcrService;
 import com.example.bookglebookgleserver.pdf.entity.PdfFile;
 import com.example.bookglebookgleserver.pdf.repository.PdfFileRepository;
+import com.example.bookglebookgleserver.pdf.util.PdfUtils;
 import com.example.bookglebookgleserver.user.entity.User;
 import com.example.bookglebookgleserver.user.repository.UserRepository;
 import jakarta.transaction.Transactional;
@@ -78,6 +79,11 @@ public class GroupServiceImpl implements GroupService {
                 .build();
         pdfFileRepository.save(pdf);
 
+        int pageCount = PdfUtils.getPageCount(filePath);
+        pdf.setPageCnt(pageCount);
+        pdfFileRepository.save(pdf);
+        log.info("📄 PDF 페이지 수 추출 완료: {} 페이지", pageCount);
+
         Group group = Group.builder()
                 .roomTitle(dto.getRoomTitle())
                 .description(dto.getDescription())
@@ -88,6 +94,7 @@ public class GroupServiceImpl implements GroupService {
                 .readingMode(Group.ReadingMode.valueOf(dto.getReadingMode().toUpperCase()))
                 .hostUser(user)
                 .pdfFile(pdf)
+                .totalPages(pageCount)
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .isDeleted(false)

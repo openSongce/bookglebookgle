@@ -3,15 +3,13 @@ package com.example.bookglebookgleserver.pdf.entity;
 import com.example.bookglebookgleserver.group.entity.Group;
 import com.example.bookglebookgleserver.user.entity.User;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 import java.time.LocalDateTime;
 
 @Entity
 @Getter
+@Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
