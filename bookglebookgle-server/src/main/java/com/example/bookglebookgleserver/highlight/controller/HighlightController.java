@@ -1,5 +1,6 @@
 package com.example.bookglebookgleserver.highlight.controller;
 
+import com.example.bookglebookgleserver.highlight.dto.HighlightResponseDto;
 import com.example.bookglebookgleserver.highlight.entity.Highlight;
 import com.example.bookglebookgleserver.highlight.repository.HighlightRepository;
 import io.swagger.v3.oas.annotations.Operation;
@@ -38,8 +39,25 @@ public class HighlightController {
             )
     )
     @GetMapping("/group/{groupId}")
-    public List<Highlight> getHighlights(
-            @PathVariable Long groupId) {
-        return highlightRepository.findByGroupId(groupId);
+    public List<HighlightResponseDto> getHighlights(@PathVariable Long groupId) {
+        List<Highlight> highlights = highlightRepository.findByGroupId(groupId);
+        return highlights.stream()
+                .map(h -> new HighlightResponseDto(
+                        h.getId(),
+                        h.getGroupId(),
+                        h.getUserId(),
+                        h.getPage(),
+                        h.getSnippet(),
+                        h.getColor(),
+                        h.getStartX(),
+                        h.getStartY(),
+                        h.getEndX(),
+                        h.getEndY(),
+                        h.getPdfFile().getPdfId(),
+                        h.getPdfFile().getFileName(),
+                        h.getCreatedAt().toString()
+                ))
+                .toList();
     }
+
 }
