@@ -35,6 +35,8 @@ data class ChatRoomUiState(
     val suggestedTopics: List<String> = emptyList(),
     val showAiSuggestions: Boolean = false,
     val isDiscussionConnecting: Boolean = false,
+    // 카테고리 관련 상태 추가
+    val isReadingCategory: Boolean = false,
 )
 
 @HiltViewModel
@@ -100,6 +102,10 @@ class ChatRoomViewModel @Inject constructor(
             try {
                 val groupDetail = groupRepositoryImpl.getGroupDetail(groupId)
                 val groupTitle = groupDetail.body()?.roomTitle
+                val groupCategory = groupDetail.body()?.category
+
+                // 카테고리가 READING인지 확인
+                val isReadingCategory = groupCategory?.equals("READING", ignoreCase = true) == true
 
                 val latestMessages = chatRepositoryImpl.getLatestChatMessages(groupId, 15)
 
@@ -120,7 +126,8 @@ class ChatRoomViewModel @Inject constructor(
                     groupTitle = groupTitle ?: "채팅방",
                     isLoading = false,
                     hasMoreData = latestMessages.size >= 15,
-                    shouldScrollToBottom = true
+                    shouldScrollToBottom = true,
+                    isReadingCategory = isReadingCategory // 카테고리 상태 설정
                 )
 
                 isInitialLoad = false
@@ -257,6 +264,11 @@ class ChatRoomViewModel @Inject constructor(
 
     // 토론 상태 변화 처리
     private fun handleDiscussionStatus(statusMessage: ChatMessage) {
+        // READING 카테고리가 아닌 경우 토론 상태 메시지 무시
+        if (!_uiState.value.isReadingCategory) {
+            return
+        }
+
         // 상태 메시지도 채팅에 표시
         addNewMessage(statusMessage)
 
@@ -316,6 +328,14 @@ class ChatRoomViewModel @Inject constructor(
 
     // 토론 시작
     fun startDiscussion() {
+        // READING 카테고리가 아닌 경우 토론 시작 불가
+        if (!_uiState.value.isReadingCategory) {
+            _uiState.value = _uiState.value.copy(
+                error = "도서 카테고리 채팅방에서만 토론 기능을 사용할 수 있습니다."
+            )
+            return
+        }
+
         if (!_uiState.value.grpcConnected) {
             _uiState.value = _uiState.value.copy(
                 error = "실시간 채팅에 연결되지 않았습니다."
@@ -349,6 +369,11 @@ class ChatRoomViewModel @Inject constructor(
 
     // 토론 종료
     fun endDiscussion() {
+        // READING 카테고리가 아닌 경우 토론 종료 불가
+        if (!_uiState.value.isReadingCategory) {
+            return
+        }
+
         if (!_uiState.value.grpcConnected) {
             return
         }
@@ -366,6 +391,10 @@ class ChatRoomViewModel @Inject constructor(
 
     // AI 추천 주제 선택
     fun selectSuggestedTopic(topic: String) {
+        if (!_uiState.value.isReadingCategory) {
+            return
+        }
+
         sendMessage(topic)
         // 선택 후 추천 주제 숨기기
         _uiState.value = _uiState.value.copy(showAiSuggestions = false)
@@ -379,7 +408,10 @@ class ChatRoomViewModel @Inject constructor(
     // 채팅방 나가기
     fun leaveChatRoom() {
         markChatAsRead()
-        endDiscussion()
+        // READING 카테고리인 경우에만 토론 종료
+        if (_uiState.value.isReadingCategory) {
+            endDiscussion()
+        }
         chatGrpcRepository.disconnect()
     }
 

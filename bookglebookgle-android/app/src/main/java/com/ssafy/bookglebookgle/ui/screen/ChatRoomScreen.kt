@@ -257,85 +257,89 @@ fun ChatRoomScreen(
                 navController = navController,
             )
 
-            // 토론 컨트롤 패널 (기존 앱바 아래에 추가)
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shadowElevation = 2.dp,
-                color = Color.White
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+            // 토론 컨트롤 패널 (READING 카테고리일 때만 표시)
+            if (uiState.isReadingCategory) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shadowElevation = 2.dp,
+                    color = Color.White
                 ) {
-                    // 왼쪽: 토론 상태 표시
                     Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        if (uiState.isDiscussionActive) {
-                            Box(
-                                modifier = Modifier
-                                    .size(8.dp)
-                                    .background(MainColor, CircleShape)
+                        // 왼쪽: 토론 상태 표시
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (uiState.isDiscussionActive) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .background(MainColor, CircleShape)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "AI 토론 진행 중",
+                                    fontSize = 12.sp,
+                                    color = MainColor,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .background(Color.Gray, CircleShape)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "일반 채팅",
+                                    fontSize = 12.sp,
+                                    color = Color.Gray,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+
+                        // 오른쪽: 토론 시작/종료 버튼
+                        Button(
+                            onClick = {
+                                Log.d(TAG, "토론 버튼 클릭됨! 현재 상태: ${uiState.isDiscussionActive}")
+                                if (uiState.isDiscussionActive) {
+                                    Log.d(TAG, "토론 종료 호출")
+                                    viewModel.endDiscussion()
+                                } else {
+                                    Log.d(TAG, "토론 시작 호출")
+                                    viewModel.startDiscussion()
+                                }
+                            },
+                            modifier = Modifier.height(32.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (uiState.isDiscussionActive) Color.Red.copy(
+                                    alpha = 0.5f
+                                ) else Color.Green.copy(
+                                    alpha = 0.5f
+                                )
+                            ),
+                            contentPadding = PaddingValues(horizontal = 12.dp),
+                            enabled = !uiState.isDiscussionConnecting // 연결 중일 때 버튼 비활성화
+                        ) {
+                            Icon(
+                                imageVector = if (uiState.isDiscussionActive) Icons.Default.Close else Icons.Default.PlayArrow,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = Color.White
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = "AI 토론 진행 중",
+                                text = if (uiState.isDiscussionActive) "토론 종료" else "토론 시작",
                                 fontSize = 12.sp,
-                                color = MainColor,
-                                fontWeight = FontWeight.Medium
-                            )
-                        } else {
-                            Box(
-                                modifier = Modifier
-                                    .size(8.dp)
-                                    .background(Color.Gray, CircleShape)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "일반 채팅",
-                                fontSize = 12.sp,
-                                color = Color.Gray,
-                                fontWeight = FontWeight.Medium
+                                color = Color.White
                             )
                         }
-                    }
-
-                    // 오른쪽: 토론 시작/종료 버튼
-                    Button(
-                        onClick = {
-                            Log.d(TAG, "토론 버튼 클릭됨! 현재 상태: ${uiState.isDiscussionActive}")
-                            if (uiState.isDiscussionActive) {
-                                Log.d(TAG, "토론 종료 호출")
-                                viewModel.endDiscussion()
-                            } else {
-                                Log.d(TAG, "토론 시작 호출")
-                                viewModel.startDiscussion()
-                            }
-                        },
-                        modifier = Modifier.height(32.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (uiState.isDiscussionActive) Color.Red.copy(alpha = 0.5f) else Color.Green.copy(
-                                alpha = 0.5f
-                            )
-                        ),
-                        contentPadding = PaddingValues(horizontal = 12.dp),
-                        enabled = !uiState.isDiscussionConnecting // 연결 중일 때 버튼 비활성화
-                    ) {
-                        Icon(
-                            imageVector = if (uiState.isDiscussionActive) Icons.Default.Close else Icons.Default.PlayArrow,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                            tint = Color.White
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = if (uiState.isDiscussionActive) "토론 종료" else "토론 시작",
-                            fontSize = 12.sp,
-                            color = Color.White
-                        )
                     }
                 }
             }
@@ -472,7 +476,7 @@ fun ChatRoomScreen(
                 }
 
                 // AI 추천 주제 오버레이
-                if (uiState.showAiSuggestions && uiState.suggestedTopics.isNotEmpty()) {
+                if (uiState.isReadingCategory && uiState.showAiSuggestions && uiState.suggestedTopics.isNotEmpty()) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -589,7 +593,7 @@ fun ChatRoomScreen(
             ) {
                 Column {
                     // 토론 중일 때 상태 표시바
-                    if (uiState.isDiscussionActive) {
+                    if (uiState.isReadingCategory && uiState.isDiscussionActive) {
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
                             color = BaseColor.copy(alpha = 0.1f)
@@ -704,7 +708,7 @@ fun ChatRoomScreen(
         }
 
         // 토론 연결 중 로딩 오버레이
-        if (uiState.isDiscussionConnecting) {
+        if (uiState.isReadingCategory && uiState.isDiscussionConnecting) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
