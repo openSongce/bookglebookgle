@@ -27,6 +27,7 @@ enum ActionType {
   UPDATE = 2;
   DELETE = 3;
   LEADERSHIP_TRANSFER = 4;
+  JOIN_ROOM = 5;
 }
 
 enum AnnotationType {
