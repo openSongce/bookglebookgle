@@ -11,6 +11,7 @@ message ChatMessage {
   string senderName = 3;
   string content = 4;
   int64 timestamp = 5;
+  string type = 6; // "NORMAL", "DISCUSSION_START", "DISCUSSION_END"
 }
 
 service ChatService {

@@ -43,36 +43,42 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
                     log.info("[gRPC-Chat] 그룹 {}에 클라이언트 연결! 현재 접속 수: {}", groupId, roomObservers.get(groupId).size());
                 }
 
-                // 채팅방/유저 조회 및 예외처리
-                ChatRoom chatRoom = chatRoomRepository.findById(groupId).orElse(null);
-                if (chatRoom == null) {
-                    log.warn("[gRPC-Chat] groupId={} ChatRoom 없음! 메시지 저장/전송 생략: {}", groupId, message.getContent());
-                    return;
-                }
-                User sender = userRepository.findById(message.getSenderId()).orElse(null);
-                if (sender == null) {
-                    log.warn("[gRPC-Chat] senderId={} User 없음! 메시지 저장/전송 생략", message.getSenderId());
-                    return;
+                // === [1] 토론 시그널 분기 ===
+                String msgType = message.getType();
+                if ("DISCUSSION_START".equals(msgType)) {
+                    log.info("[gRPC-Chat] 토론 시작 시그널 수신 - groupId={}", groupId);
+                    // 1. AI 서버에 토론 세션 생성 요청 (ai_service gRPC 호출)
+                    aiServiceClient.initializeDiscussion(groupId, ... /* 필요 정보 */);
+                } else if ("DISCUSSION_END".equals(msgType)) {
+                    log.info("[gRPC-Chat] 토론 종료 시그널 수신 - groupId={}", groupId);
+                    // 2. AI 서버에 토론 세션 종료 요청 (ai_service gRPC 호출)
+                    aiServiceClient.endDiscussion(groupId, ... /* 필요 정보 */);
+                } else {
+                    // === [2] 일반 채팅 메시지 처리 ===
+                    // 기존 DB 저장 로직, 유저/채팅방 확인 등
+                    ChatRoom chatRoom = chatRoomRepository.findById(groupId).orElse(null);
+                    if (chatRoom == null) { ... }
+                    User sender = userRepository.findById(message.getSenderId()).orElse(null);
+                    if (sender == null) { ... }
+                    // DB 저장
+                    try {
+                        com.example.bookglebookgleserver.chat.entity.ChatMessage entity =
+                                com.example.bookglebookgleserver.chat.entity.ChatMessage.builder()
+                                        .chatRoom(chatRoom)
+                                        .sender(sender)
+                                        .content(message.getContent())
+                                        .createdAt(Instant.ofEpochMilli(message.getTimestamp())
+                                                .atZone(ZoneId.systemDefault())
+                                                .toLocalDateTime())
+                                        .build();
+                        chatMessageRepository.save(entity);
+                        log.info("[gRPC-Chat] 메시지 저장: roomId={}, sender={}, content={}", groupId, sender.getId(), message.getContent());
+                    } catch (Exception ex) {
+                        log.error("[gRPC-Chat] 메시지 저장 에러: {}", ex.getMessage(), ex);
+                    }
                 }
 
-                // DB 저장
-                try {
-                    com.example.bookglebookgleserver.chat.entity.ChatMessage entity =
-                            com.example.bookglebookgleserver.chat.entity.ChatMessage.builder()
-                                    .chatRoom(chatRoom)
-                                    .sender(sender)
-                                    .content(message.getContent())
-                                    .createdAt(Instant.ofEpochMilli(message.getTimestamp())
-                                            .atZone(ZoneId.systemDefault())
-                                            .toLocalDateTime())
-                                    .build();
-                    chatMessageRepository.save(entity);
-                    log.info("[gRPC-Chat] 메시지 저장: roomId={}, sender={}, content={}", groupId, sender.getId(), message.getContent());
-                } catch (Exception ex) {
-                    log.error("[gRPC-Chat] 메시지 저장 에러: {}", ex.getMessage(), ex);
-                }
-
-                // 모든 Observer에게 브로드캐스트
+                // === [3] 모든 Observer에게 브로드캐스트(기존과 동일) ===
                 Set<StreamObserver<ChatMessage>> observers = roomObservers.getOrDefault(groupId, Set.of());
                 for (StreamObserver<ChatMessage> observer : observers) {
                     try {
@@ -80,11 +86,7 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
                     } catch (Exception e) {
                         log.warn("[gRPC-Chat] Observer 메시지 전송 중 예외: {}", e.getMessage(), e);
                         observers.remove(observer);
-                        try {
-                            observer.onCompleted();
-                        } catch (Exception ex) {
-                            log.error("[gRPC-Chat] observer.onCompleted() 호출 중 예외: {}", ex.getMessage(), ex);
-                        }
+                        try { observer.onCompleted(); } catch (Exception ex) { }
                     }
                 }
             }
