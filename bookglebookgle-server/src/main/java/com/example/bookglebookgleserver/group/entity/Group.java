@@ -48,6 +48,8 @@ public class Group {
 
     private int groupMaxNum;
 
+    private int totalPages;
+
     @Enumerated(EnumType.STRING)
     private ReadingMode readingMode;
 
