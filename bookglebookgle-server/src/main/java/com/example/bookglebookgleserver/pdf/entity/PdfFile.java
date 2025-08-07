@@ -1,8 +1,6 @@
 package com.example.bookglebookgleserver.pdf.entity;
 
-import com.example.bookglebookgleserver.comment.entity.Comment;
 import com.example.bookglebookgleserver.group.entity.Group;
-import com.example.bookglebookgleserver.highlight.entity.Highlight;
 import com.example.bookglebookgleserver.user.entity.User;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -11,8 +9,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
 
 @Entity
 @Getter
@@ -51,13 +47,5 @@ public class PdfFile {
     public void setGroup(Group group) {
         this.group = group;
     }
-
-    @OneToMany(mappedBy = "pdfFile", cascade = CascadeType.ALL, orphanRemoval = true)
-    @Builder.Default
-    private List<Highlight> highlights = new ArrayList<>();
-
-    @OneToMany(mappedBy = "pdfFile", cascade = CascadeType.ALL, orphanRemoval = true)
-    @Builder.Default
-    private List<Comment> comments = new ArrayList<>();
 
 }
