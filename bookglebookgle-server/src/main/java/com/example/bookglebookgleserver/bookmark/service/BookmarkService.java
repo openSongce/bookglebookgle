@@ -5,6 +5,7 @@ import com.example.bookglebookgleserver.bookmark.dto.BookmarkResponse;
 import com.example.bookglebookgleserver.bookmark.entity.Bookmark;
 import com.example.bookglebookgleserver.bookmark.repository.BookmarkRepository;
 import com.example.bookglebookgleserver.global.exception.BadRequestException;
+import com.example.bookglebookgleserver.global.exception.ForbiddenException;
 import com.example.bookglebookgleserver.global.exception.NotFoundException;
 import com.example.bookglebookgleserver.group.entity.Group;
 import com.example.bookglebookgleserver.group.repository.GroupRepository;
@@ -13,7 +14,6 @@ import com.example.bookglebookgleserver.user.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-
 
 import java.util.List;
 
@@ -69,5 +69,14 @@ public class BookmarkService {
                 .toList();
     }
 
+    @Transactional
+    public void deleteBookmark(Long userId, Long bookmarkId) {
+        Bookmark bookmark = bookmarkRepository.findById(bookmarkId)
+                .orElseThrow(() -> new NotFoundException("북마크를 찾을 수 없습니다."));
+        if (!bookmark.getUser().getId().equals(userId)) {
+            throw new ForbiddenException("본인의 북마크만 삭제할 수 있습니다.");
+        }
+        bookmarkRepository.delete(bookmark);
+    }
 }
 
