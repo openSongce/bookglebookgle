@@ -33,7 +33,8 @@ data class ChatRoomUiState(
     val isDiscussionActive: Boolean = false,
     val currentAiResponse: String? = null,
     val suggestedTopics: List<String> = emptyList(),
-    val showAiSuggestions: Boolean = false
+    val showAiSuggestions: Boolean = false,
+    val isDiscussionConnecting: Boolean = false,
 )
 
 @HiltViewModel
@@ -263,6 +264,7 @@ class ChatRoomViewModel @Inject constructor(
         val isActive = statusMessage.type == MessageType.DISCUSSION_START
         _uiState.value = _uiState.value.copy(
             isDiscussionActive = isActive,
+            isDiscussionConnecting = false,
             // 토론 종료 시 AI 관련 상태 초기화
             showAiSuggestions = if (!isActive) false else _uiState.value.showAiSuggestions,
             currentAiResponse = if (!isActive) null else _uiState.value.currentAiResponse,
@@ -321,7 +323,28 @@ class ChatRoomViewModel @Inject constructor(
             return
         }
 
-        chatGrpcRepository.startDiscussion("AI 토론을 시작합니다. 자유롭게 의견을 나누어 보세요!")
+        viewModelScope.launch {
+            try {
+                // 토론 연결 시작 - 로딩 상태 활성화
+                _uiState.value = _uiState.value.copy(
+                    isDiscussionConnecting = true,
+                    error = null
+                )
+
+                // 토론 시작 요청
+                chatGrpcRepository.startDiscussion("AI 토론을 시작합니다. 자유롭게 의견을 나누어 보세요!")
+
+                // 실제로는 gRPC 응답을 받으면 handleDiscussionStatus에서 로딩이 해제됩니다
+                // 만약 타임아웃이 필요하다면 여기서 설정할 수 있습니다
+
+            } catch (e: Exception) {
+                // 에러 발생 시 로딩 해제
+                _uiState.value = _uiState.value.copy(
+                    isDiscussionConnecting = false,
+                    error = "토론 시작 실패: ${e.message}"
+                )
+            }
+        }
     }
 
     // 토론 종료
@@ -330,7 +353,15 @@ class ChatRoomViewModel @Inject constructor(
             return
         }
 
-        chatGrpcRepository.endDiscussion("AI 토론을 종료합니다. 수고하셨습니다!")
+        viewModelScope.launch {
+            try {
+                chatGrpcRepository.endDiscussion("AI 토론을 종료합니다. 수고하셨습니다!")
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    error = "토론 종료 실패: ${e.message}"
+                )
+            }
+        }
     }
 
     // AI 추천 주제 선택
@@ -348,6 +379,7 @@ class ChatRoomViewModel @Inject constructor(
     // 채팅방 나가기
     fun leaveChatRoom() {
         markChatAsRead()
+        endDiscussion()
         chatGrpcRepository.disconnect()
     }
 

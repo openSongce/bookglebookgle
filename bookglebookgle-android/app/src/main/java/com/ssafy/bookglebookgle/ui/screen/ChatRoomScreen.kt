@@ -51,6 +51,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 private const val TAG = "싸피_ChatRoomScreen"
+
 @SuppressLint("NewApi")
 @Composable
 fun ChatRoomScreen(
@@ -242,332 +243,500 @@ fun ChatRoomScreen(
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.White)
-            .imePadding()
-    ) {
-        CustomTopAppBar(
-            title = uiState.groupTitle,
-            isChatScreen = true,
-            navController = navController,
-        )
-
-        // 토론 컨트롤 패널 (기존 앱바 아래에 추가)
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shadowElevation = 2.dp,
-            color = Color.White
+    Box(modifier = Modifier.fillMaxSize())
+    {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.White)
+                .imePadding()
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            CustomTopAppBar(
+                title = uiState.groupTitle,
+                isChatScreen = true,
+                navController = navController,
+            )
+
+            // 토론 컨트롤 패널 (기존 앱바 아래에 추가)
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shadowElevation = 2.dp,
+                color = Color.White
             ) {
-                // 왼쪽: 토론 상태 표시
                 Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (uiState.isDiscussionActive) {
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .background(MainColor, CircleShape)
+                    // 왼쪽: 토론 상태 표시
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (uiState.isDiscussionActive) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .background(MainColor, CircleShape)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "AI 토론 진행 중",
+                                fontSize = 12.sp,
+                                color = MainColor,
+                                fontWeight = FontWeight.Medium
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .background(Color.Gray, CircleShape)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "일반 채팅",
+                                fontSize = 12.sp,
+                                color = Color.Gray,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+
+                    // 오른쪽: 토론 시작/종료 버튼
+                    Button(
+                        onClick = {
+                            Log.d(TAG, "토론 버튼 클릭됨! 현재 상태: ${uiState.isDiscussionActive}")
+                            if (uiState.isDiscussionActive) {
+                                Log.d(TAG, "토론 종료 호출")
+                                viewModel.endDiscussion()
+                            } else {
+                                Log.d(TAG, "토론 시작 호출")
+                                viewModel.startDiscussion()
+                            }
+                        },
+                        modifier = Modifier.height(32.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (uiState.isDiscussionActive) Color.Red.copy(alpha = 0.5f) else Color.Green.copy(
+                                alpha = 0.5f
+                            )
+                        ),
+                        contentPadding = PaddingValues(horizontal = 12.dp),
+                        enabled = !uiState.isDiscussionConnecting // 연결 중일 때 버튼 비활성화
+                    ) {
+                        Icon(
+                            imageVector = if (uiState.isDiscussionActive) Icons.Default.Close else Icons.Default.PlayArrow,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = Color.White
                         )
-                        Spacer(modifier = Modifier.width(6.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "AI 토론 진행 중",
+                            text = if (uiState.isDiscussionActive) "토론 종료" else "토론 시작",
                             fontSize = 12.sp,
-                            color = MainColor,
-                            fontWeight = FontWeight.Medium
-                        )
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .background(Color.Gray, CircleShape)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "일반 채팅",
-                            fontSize = 12.sp,
-                            color = Color.Gray,
-                            fontWeight = FontWeight.Medium
+                            color = Color.White
                         )
                     }
                 }
-
-                // 오른쪽: 토론 시작/종료 버튼
-                Button(
-                    onClick = {
-                        Log.d(TAG,"토론 버튼 클릭됨! 현재 상태: ${uiState.isDiscussionActive}")
-                        if (uiState.isDiscussionActive) {
-                            Log.d(TAG,"토론 종료 호출")
-                            viewModel.endDiscussion()
-                        } else {
-                            Log.d(TAG,"토론 시작 호출")
-                            viewModel.startDiscussion()
-                        }
-                    },
-                    modifier = Modifier.height(32.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (uiState.isDiscussionActive) Color.Red.copy(alpha = 0.5f) else Color.Green.copy(alpha = 0.5f)
-                    ),
-                    contentPadding = PaddingValues(horizontal = 12.dp)
-                ) {
-                    Icon(
-                        imageVector = if (uiState.isDiscussionActive) Icons.Default.Close else Icons.Default.PlayArrow,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                        tint = Color.White
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = if (uiState.isDiscussionActive) "토론 종료" else "토론 시작",
-                        fontSize = 12.sp,
-                        color = Color.White
-                    )
-                }
             }
-        }
 
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-        ) {
-            LazyColumn(
-                state = listState,
+            Box(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                contentPadding = PaddingValues(
-                    top = 16.dp,
-                    bottom = 26.dp
-                )
+                    .weight(1f)
+                    .fillMaxWidth()
             ) {
-                // 위쪽에 더 불러오기 로딩 표시
-                if (uiState.isLoadingMore && uiState.hasMoreData) {
-                    item {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(
+                        top = 16.dp,
+                        bottom = 26.dp
+                    )
+                ) {
+                    // 위쪽에 더 불러오기 로딩 표시
+                    if (uiState.isLoadingMore && uiState.hasMoreData) {
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                contentAlignment = Alignment.Center
                             ) {
-                                CircularProgressIndicator(
-                                    color = BaseColor,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    CircularProgressIndicator(
+                                        color = BaseColor,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "이전 메시지를 불러오는 중...",
+                                        fontSize = 12.sp,
+                                        color = Color.Gray
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // 더 이상 불러올 메시지가 없을 때 표시
+                    if (!uiState.hasMoreData && uiState.chatMessages.isNotEmpty() && !uiState.isLoading) {
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 16.dp, end = 16.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
                                 Text(
-                                    text = "이전 메시지를 불러오는 중...",
+                                    text = "채팅의 시작입니다",
                                     fontSize = 12.sp,
                                     color = Color.Gray
                                 )
                             }
                         }
                     }
+
+                    // 초기 로딩
+                    if (uiState.isLoading && uiState.chatMessages.isEmpty()) {
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(600.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    CircularProgressIndicator(
+                                        color = BaseColor,
+                                        modifier = Modifier.size(32.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    Text(
+                                        text = "채팅 불러오는 중...",
+                                        fontSize = 14.sp,
+                                        color = Color.Gray
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // 에러 메시지
+                    if (uiState.error != null) {
+                        item {
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(8.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = Color.Red.copy(alpha = 0.1f)
+                                )
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(16.dp)
+                                ) {
+                                    Text(
+                                        text = uiState.error!!,
+                                        color = Color.Red,
+                                        fontSize = 14.sp
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    TextButton(
+                                        onClick = { viewModel.clearError() }
+                                    ) {
+                                        Text("확인", color = Color.Red)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // 채팅 메시지들
+                    items(
+                        items = uiState.chatMessages,
+                        key = { message -> message.messageId }
+                    ) { message ->
+                        ChatMessageItem(
+                            message = message,
+                            isMyMessage = viewModel.isMyMessage(message, userId)
+                        )
+                    }
                 }
 
-                // 더 이상 불러올 메시지가 없을 때 표시
-                if (!uiState.hasMoreData && uiState.chatMessages.isNotEmpty() && !uiState.isLoading) {
-                    item {
-                        Box(
+                // AI 추천 주제 오버레이
+                if (uiState.showAiSuggestions && uiState.suggestedTopics.isNotEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.3f))
+                            .clickable {
+                                Log.d(TAG, "AI 추천 주제 배경 클릭 - 닫기")
+                                viewModel.dismissAiSuggestions()
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Card(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(start = 16.dp, end = 16.dp),
-                            contentAlignment = Alignment.Center
+                                .fillMaxWidth(0.9f)
+                                .clickable { }, // 카드 클릭 시 배경 클릭 방지
+                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "🤖 AI 추천 주제",
+                                        fontSize = 18.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = BaseColor
+                                    )
+                                    IconButton(
+                                        onClick = {
+                                            Log.d(TAG, "AI 추천 주제 X 버튼 클릭")
+                                            viewModel.dismissAiSuggestions()
+                                        }
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = "닫기"
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                if (uiState.currentAiResponse != null) {
+                                    Text(
+                                        text = uiState.currentAiResponse!!,
+                                        fontSize = 14.sp,
+                                        color = Color.Gray,
+                                        modifier = Modifier.padding(bottom = 12.dp)
+                                    )
+                                }
+
+                                LazyColumn(
+                                    modifier = Modifier.heightIn(max = 300.dp)
+                                ) {
+                                    items(uiState.suggestedTopics) { topic ->
+                                        Card(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = 4.dp)
+                                                .clickable {
+                                                    Log.d(TAG, "추천 주제 선택: $topic")
+                                                    viewModel.selectSuggestedTopic(topic)
+                                                },
+                                            colors = CardDefaults.cardColors(
+                                                containerColor = MainColor.copy(alpha = 0.1f)
+                                            )
+                                        ) {
+                                            Text(
+                                                text = topic,
+                                                modifier = Modifier.padding(12.dp),
+                                                fontSize = 14.sp
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 빈 상태 메시지 (토론 테스트 버튼 추가)
+                if (!uiState.isLoading && uiState.chatMessages.isEmpty() && uiState.error == null) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
-                                text = "채팅의 시작입니다",
-                                fontSize = 12.sp,
+                                text = "대화내역이 없습니다.",
+                                fontSize = 16.sp,
+                                color = Color.Gray,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = "채팅을 시작해보세요!",
+                                fontSize = 14.sp,
                                 color = Color.Gray
                             )
                         }
                     }
                 }
-
-                // 초기 로딩
-                if (uiState.isLoading && uiState.chatMessages.isEmpty()) {
-                    item {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(600.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                CircularProgressIndicator(
-                                    color = BaseColor,
-                                    modifier = Modifier.size(32.dp)
-                                )
-                                Spacer(modifier = Modifier.height(16.dp))
-                                Text(
-                                    text = "채팅 불러오는 중...",
-                                    fontSize = 14.sp,
-                                    color = Color.Gray
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // 에러 메시지
-                if (uiState.error != null) {
-                    item {
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(8.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = Color.Red.copy(alpha = 0.1f)
-                            )
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(16.dp)
-                            ) {
-                                Text(
-                                    text = uiState.error!!,
-                                    color = Color.Red,
-                                    fontSize = 14.sp
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                TextButton(
-                                    onClick = { viewModel.clearError() }
-                                ) {
-                                    Text("확인", color = Color.Red)
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // 채팅 메시지들
-                items(
-                    items = uiState.chatMessages,
-                    key = { message -> message.messageId }
-                ) { message ->
-                    ChatMessageItem(
-                        message = message,
-                        isMyMessage = viewModel.isMyMessage(message, userId)
-                    )
-                }
             }
 
-            // AI 추천 주제 오버레이
-            if (uiState.showAiSuggestions && uiState.suggestedTopics.isNotEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.3f))
-                        .clickable {
-                            Log.d(TAG,"AI 추천 주제 배경 클릭 - 닫기")
-                            viewModel.dismissAiSuggestions()
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth(0.9f)
-                            .clickable { }, // 카드 클릭 시 배경 클릭 방지
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp)
+            // 메시지 입력 영역
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shadowElevation = 4.dp
+            ) {
+                Column {
+                    // 토론 중일 때 상태 표시바
+                    if (uiState.isDiscussionActive) {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = BaseColor.copy(alpha = 0.1f)
                         ) {
                             Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
+                                modifier = Modifier.padding(12.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
+                                Icon(
+                                    imageVector = Icons.Default.Call,
+                                    contentDescription = null,
+                                    tint = BaseColor,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "🤖 AI 추천 주제",
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.Bold,
+                                    text = "AI 토론이 진행 중입니다. AI가 대화를 분석하고 피드백을 제공합니다.",
+                                    fontSize = 12.sp,
                                     color = BaseColor
                                 )
-                                IconButton(
-                                    onClick = {
-                                        Log.d(TAG,"AI 추천 주제 X 버튼 클릭")
-                                        viewModel.dismissAiSuggestions()
-                                    }
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Close,
-                                        contentDescription = "닫기"
-                                    )
-                                }
                             }
+                        }
+                    }
 
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            if (uiState.currentAiResponse != null) {
-                                Text(
-                                    text = uiState.currentAiResponse!!,
-                                    fontSize = 14.sp,
-                                    color = Color.Gray,
-                                    modifier = Modifier.padding(bottom = 12.dp)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(64.dp)
+                            .padding(8.dp),
+                        verticalAlignment = Alignment.Bottom
+                    ) {
+                        CompositionLocalProvider(
+                            LocalTextSelectionColors provides TextSelectionColors(
+                                handleColor = BaseColor,
+                                backgroundColor = BaseColor.copy(alpha = 0.3f)
+                            )
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .heightIn(min = 40.dp)
+                                    .border(
+                                        width = 1.dp,
+                                        color = if (messageText.isNotEmpty()) BaseColor else Color.Gray.copy(
+                                            alpha = 0.5f
+                                        ),
+                                        shape = RoundedCornerShape(16.dp)
+                                    )
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                BasicTextField(
+                                    value = messageText,
+                                    onValueChange = {
+                                        messageText = it
+                                        if (uiState.error != null) viewModel.clearError()
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    textStyle = TextStyle(
+                                        fontSize = 14.sp,
+                                        lineHeight = 20.sp,
+                                        color = Color.Black
+                                    ),
+                                    maxLines = 4,
+                                    cursorBrush = SolidColor(BaseColor),
+                                    decorationBox = { innerTextField ->
+                                        Box(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            contentAlignment = Alignment.CenterStart
+                                        ) {
+                                            if (messageText.isEmpty()) {
+                                                Text(
+                                                    text = "메시지 입력",
+                                                    fontSize = 14.sp,
+                                                    color = Color.Gray
+                                                )
+                                            }
+                                            innerTextField()
+                                        }
+                                    }
                                 )
                             }
+                        }
 
-                            LazyColumn(
-                                modifier = Modifier.heightIn(max = 300.dp)
-                            ) {
-                                items(uiState.suggestedTopics) { topic ->
-                                    Card(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(vertical = 4.dp)
-                                            .clickable {
-                                                Log.d(TAG,"추천 주제 선택: $topic")
-                                                viewModel.selectSuggestedTopic(topic)
-                                            },
-                                        colors = CardDefaults.cardColors(
-                                            containerColor = MainColor.copy(alpha = 0.1f)
-                                        )
-                                    ) {
-                                        Text(
-                                            text = topic,
-                                            modifier = Modifier.padding(12.dp),
-                                            fontSize = 14.sp
-                                        )
-                                    }
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        FloatingActionButton(
+                            onClick = {
+                                if (messageText.isNotBlank() && uiState.grpcConnected) {
+                                    Log.d(TAG, "메시지 전송: $messageText")
+                                    viewModel.sendMessage(messageText.trim())
+                                    messageText = ""
+                                } else {
+                                    Log.d(
+                                        TAG,
+                                        "메시지 전송 실패 - 텍스트: '$messageText', gRPC 연결: ${uiState.grpcConnected}"
+                                    )
                                 }
-                            }
+                            },
+                            modifier = Modifier.size(40.dp),
+                            containerColor = if (messageText.isNotBlank() && uiState.grpcConnected) MainColor else Color.Gray
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Send,
+                                contentDescription = "메시지 전송",
+                                tint = Color.White
+                            )
                         }
                     }
                 }
             }
+        }
 
-            // 빈 상태 메시지 (토론 테스트 버튼 추가)
-            if (!uiState.isLoading && uiState.chatMessages.isEmpty() && uiState.error == null) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
+        // 토론 연결 중 로딩 오버레이
+        if (uiState.isDiscussionConnecting) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.5f))
+                    .clickable { }, // 클릭 차단
+                contentAlignment = Alignment.Center
+            ) {
+                Card(
+                    modifier = Modifier
+                        .padding(32.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
                 ) {
                     Column(
+                        modifier = Modifier.padding(32.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text(
-                            text = "대화내역이 없습니다.",
-                            fontSize = 16.sp,
-                            color = Color.Gray,
-                            fontWeight = FontWeight.Medium
+                        CircularProgressIndicator(
+                            color = BaseColor,
+                            modifier = Modifier.size(48.dp),
+                            strokeWidth = 4.dp
                         )
+                        Spacer(modifier = Modifier.height(24.dp))
                         Text(
-                            text = "채팅을 시작해보세요!",
+                            text = "토론 준비 중입니다...",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color.Black
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "AI가 토론을 준비하고 있어요",
                             fontSize = 14.sp,
                             color = Color.Gray
                         )
@@ -575,124 +744,8 @@ fun ChatRoomScreen(
                 }
             }
         }
-
-        // 메시지 입력 영역
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shadowElevation = 4.dp
-        ) {
-            Column {
-                // 토론 중일 때 상태 표시바
-                if (uiState.isDiscussionActive) {
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        color = BaseColor.copy(alpha = 0.1f)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Call,
-                                contentDescription = null,
-                                tint = BaseColor,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "AI 토론이 진행 중입니다. AI가 대화를 분석하고 피드백을 제공합니다.",
-                                fontSize = 12.sp,
-                                color = BaseColor
-                            )
-                        }
-                    }
-                }
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(64.dp)
-                        .padding(8.dp),
-                    verticalAlignment = Alignment.Bottom
-                ) {
-                    CompositionLocalProvider(
-                        LocalTextSelectionColors provides TextSelectionColors(
-                            handleColor = BaseColor,
-                            backgroundColor = BaseColor.copy(alpha = 0.3f)
-                        )
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .heightIn(min = 40.dp)
-                                .border(
-                                    width = 1.dp,
-                                    color = if (messageText.isNotEmpty()) BaseColor else Color.Gray.copy(
-                                        alpha = 0.5f
-                                    ),
-                                    shape = RoundedCornerShape(16.dp)
-                                )
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            BasicTextField(
-                                value = messageText,
-                                onValueChange = {
-                                    messageText = it
-                                    if (uiState.error != null) viewModel.clearError()
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                textStyle = TextStyle(
-                                    fontSize = 14.sp,
-                                    lineHeight = 20.sp,
-                                    color = Color.Black
-                                ),
-                                maxLines = 4,
-                                cursorBrush = SolidColor(BaseColor),
-                                decorationBox = { innerTextField ->
-                                    Box(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        contentAlignment = Alignment.CenterStart
-                                    ) {
-                                        if (messageText.isEmpty()) {
-                                            Text(
-                                                text = "메시지 입력",
-                                                fontSize = 14.sp,
-                                                color = Color.Gray
-                                            )
-                                        }
-                                        innerTextField()
-                                    }
-                                }
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    FloatingActionButton(
-                        onClick = {
-                            if (messageText.isNotBlank() && uiState.grpcConnected) {
-                                Log.d(TAG,"메시지 전송: $messageText")
-                                viewModel.sendMessage(messageText.trim())
-                                messageText = ""
-                            } else {
-                                Log.d(TAG,"메시지 전송 실패 - 텍스트: '$messageText', gRPC 연결: ${uiState.grpcConnected}")
-                            }
-                        },
-                        modifier = Modifier.size(40.dp),
-                        containerColor = if (messageText.isNotBlank() && uiState.grpcConnected) MainColor else Color.Gray
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Send,
-                            contentDescription = "메시지 전송",
-                            tint = Color.White
-                        )
-                    }
-                }
-            }
-        }
     }
+
 }
 
 @RequiresApi(Build.VERSION_CODES.O)
@@ -706,9 +759,11 @@ fun ChatMessageItem(
         MessageType.AI_RESPONSE -> {
             AiResponseMessageItem(message = message)
         }
+
         MessageType.DISCUSSION_START, MessageType.DISCUSSION_END -> {
             SystemMessageItem(message = message)
         }
+
         else -> {
             RegularMessageItem(message = message, isMyMessage = isMyMessage)
         }
