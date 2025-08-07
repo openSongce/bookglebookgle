@@ -50,4 +50,20 @@ public class BookmarkController {
         List<BookmarkResponse> bookmarkList = bookmarkService.getUserBookmarkList(user.getId());
         return ResponseEntity.ok(bookmarkList);
     }
+
+    @Operation(
+            summary = "북마크 삭제",
+            description = "지정한 북마크 ID에 해당하는 북마크를 삭제합니다."
+    )
+    @DeleteMapping("/{bookmarkId}")
+    public ResponseEntity<Void> deleteBookmark(
+            @Parameter(hidden = true)
+            @AuthenticationPrincipal CustomUserDetails customUser,
+            @Parameter(description = "삭제할 북마크 ID", example = "123")
+            @PathVariable Long bookmarkId
+    ) {
+        User user = customUser.getUser();
+        bookmarkService.deleteBookmark(user.getId(), bookmarkId);
+        return ResponseEntity.ok().build();
+    }
 }
