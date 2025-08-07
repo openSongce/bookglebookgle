@@ -2,17 +2,14 @@ package com.example.bookglebookgleserver.chat.repository;
 
 import com.example.bookglebookgleserver.chat.entity.ChatMessage;
 import com.example.bookglebookgleserver.chat.entity.ChatRoom;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
 
 public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> {
-    // 최신 30개 메시지 (최초 조회)
-    List<ChatMessage> findTop30ByChatRoomOrderByIdDesc(ChatRoom chatRoom);
-
-    // beforeId 커서 페이징
-    List<ChatMessage> findTop30ByChatRoomAndIdLessThanOrderByIdDesc(ChatRoom chatRoom, Long beforeId);
-
+    List<ChatMessage> findByChatRoomOrderByIdDesc(ChatRoom chatRoom, Pageable pageable);
+    List<ChatMessage> findByChatRoomAndIdLessThanOrderByIdDesc(ChatRoom chatRoom, Long id, Pageable pageable);
     // 최신 메시지 한 개
     ChatMessage findFirstByChatRoomOrderByCreatedAtDesc(ChatRoom chatRoom);
 
