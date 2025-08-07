@@ -11,7 +11,9 @@ message ChatMessage {
   string senderName = 3;
   string content = 4;
   int64 timestamp = 5;
-  string type = 6; // "NORMAL", "DISCUSSION_START", "DISCUSSION_END"
+  string type = 6; // "NORMAL", "AI_RESPONSE", "DISCUSSION_START", "DISCUSSION_END"
+  string aiResponse = 7; // AI 응답(있을 때만)
+  repeated string suggestedTopics = 8; // AI가 추천한 토론 주제(있을 때만)
 }
 
 service ChatService {
