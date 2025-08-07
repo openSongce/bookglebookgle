@@ -18,4 +18,17 @@ public interface GroupMemberRepository extends JpaRepository<GroupMember, Long> 
     Optional<GroupMember> findByGroupAndUser(Group group, User user);
     @Query("SELECT gm.group.id FROM GroupMember gm WHERE gm.user.id = :userId")
     List<Long> findGroupIdsByUserId(@Param("userId") Long userId);
+
+    // 특정 사용자가 참가한 모임 수 조회
+    @Query("SELECT COUNT(gm) FROM GroupMember gm WHERE gm.user.id = :userId")
+    int countJoinedGroupsByUserId(@Param("userId") Long userId);
+
+    // 완료한 모임 수
+    @Query("SELECT COUNT(gm) FROM GroupMember gm WHERE gm.user.id = :userId AND gm.progressPercent >= 100")
+    int countCompletedGroupsByProgress(@Param("userId") Long userId);
+
+    // 미완료한 모임 수
+    @Query("SELECT COUNT(gm) FROM GroupMember gm WHERE gm.user.id = :userId AND gm.progressPercent < 100")
+    int countIncompleteGroupsByProgress(@Param("userId") Long userId);
+
 }

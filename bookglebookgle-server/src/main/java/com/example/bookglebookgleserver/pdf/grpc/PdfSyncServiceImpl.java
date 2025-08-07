@@ -8,6 +8,7 @@ import com.example.bookglebookgleserver.highlight.entity.Highlight;
 import com.example.bookglebookgleserver.highlight.repository.HighlightRepository;
 import com.example.bookglebookgleserver.pdf.repository.PdfReadingProgressRepository;
 import com.example.bookglebookgleserver.pdf.service.PdfService;
+import com.example.bookglebookgleserver.user.service.ViewingSessionService;
 import io.grpc.stub.StreamObserver;
 import lombok.RequiredArgsConstructor;
 import net.devh.boot.grpc.server.service.GrpcService;
@@ -31,6 +32,7 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
     private final CommentRepository commentRepository;
     private final GroupRepository groupRepository;
     private final PdfService pdfService;
+    private final ViewingSessionService viewingSessionService;
 
     // 그룹별로 연결된 클라이언트 스트림 관리
     private final ConcurrentHashMap<Long, Set<StreamObserver<SyncMessage>>> sessions = new ConcurrentHashMap<>();
@@ -40,11 +42,13 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
         return new StreamObserver<SyncMessage>() {
             private Long groupId = null;
             private LocalDateTime enterTime;
+            private String senderId;
 
             @Override
             public void onNext(SyncMessage request) {
                 if (groupId == null) {
                     groupId = request.getGroupId();
+                    senderId=request.getUserId();
                     enterTime= LocalDateTime.now();
                     sessions.computeIfAbsent(groupId, k -> new CopyOnWriteArraySet<>()).add(responseObserver);
                     logger.info("[PDF-SYNC] 그룹 " + groupId + " 연결! 현재 세션: " + sessions.get(groupId).size());
@@ -185,10 +189,10 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
                     LocalDateTime exitTime = LocalDateTime.now();
                     Duration duration = Duration.between(enterTime, exitTime);
                     long seconds = duration.getSeconds();
-                    //log.info("📊 userId=" + senderId + ", groupId=" + groupId + ", 활동 시간=" + seconds + "초");
+                    logger.info("📊 userId=" + senderId + ", groupId=" + groupId + ", 활동 시간=" + seconds + "초");
 
                     // ✅ DB에 저장 (예: PdfViewingSession 테이블)
-                    //viewingSessionService.saveSession(Long.valueOf(senderId), groupId, enterTime, exitTime, seconds);
+                    viewingSessionService.saveSession(Long.valueOf(senderId), groupId, enterTime, exitTime, seconds);
                 }
             }
 
