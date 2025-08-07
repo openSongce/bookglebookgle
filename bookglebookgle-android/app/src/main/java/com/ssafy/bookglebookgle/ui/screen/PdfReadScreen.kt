@@ -180,7 +180,6 @@ fun PdfReadScreen(
             Log.d("PdfReadScreen", "그룹 ID 설정 및 PDF 로드 시작")
             viewModel.setGroupId(it)
             viewModel.loadGroupPdf(it, context)
-//            viewModel.loadAllAnnotations()
         }
     }
 
@@ -424,7 +423,7 @@ fun PdfReadScreen(
                                             viewModel.onPdfRenderingSuccess()
 
                                             // 기존 주석들 로드
-                                            loadAnnotations(annotations.toAnnotationList())
+                                            viewModel.loadAllAnnotations()
                                         }
 
                                         override fun onPreparationFailed(

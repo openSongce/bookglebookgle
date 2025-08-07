@@ -15,18 +15,34 @@ data class PdfNoteResponse(
 
 data class CommentResponse(
     val id: Long,
+    val pdfFileId: Long,
+    val groupId: Long,
+    val userId: Long,
+    val page: Int,
     val snippet: String,
     val text: String,
-    val page: Int,
-    val coordinates: CoordinatesResponse
+    val startX: Double,
+    val startY: Double,
+    val endX: Double,
+    val endY: Double,
+    val createdAt: String
 )
 
+// 하이라이트 응답 DTO
 data class HighlightResponse(
     val id: Long,
+    val groupId: Long,
+    val userId: Long,
+    val page: Int,
     val snippet: String,
     val color: String,
-    val page: Int,
-    val coordinates: CoordinatesResponse
+    val startX: Double,
+    val startY: Double,
+    val endX: Double,
+    val endY: Double,
+    val pdfId: Long,
+    val pdfFileName: String,
+    val createdAt: String
 )
 
 data class BookmarkResponse(

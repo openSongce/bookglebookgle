@@ -61,7 +61,7 @@ class GroupRepositoryImpl @Inject constructor(
         return try {
             Log.d(TAG, "그룹 생성(OCR 없음) 요청 시작")
 
-            val response = groupApi.createGroupWithoutOcr(
+            val response = groupApi.createGroup(
                 groupInfo = groupInfo,
                 file = file
             )

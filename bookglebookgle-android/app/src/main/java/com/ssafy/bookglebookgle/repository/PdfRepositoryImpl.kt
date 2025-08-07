@@ -4,7 +4,10 @@ import android.util.Log
 import com.ssafy.bookglebookgle.entity.pdf.AddBookmarkRequest
 import com.ssafy.bookglebookgle.entity.pdf.AddCommentRequest
 import com.ssafy.bookglebookgle.entity.pdf.AddHighlightRequest
+import com.ssafy.bookglebookgle.entity.pdf.BookmarkResponse
+import com.ssafy.bookglebookgle.entity.pdf.CommentResponse
 import com.ssafy.bookglebookgle.entity.pdf.CoordinatesRequest
+import com.ssafy.bookglebookgle.entity.pdf.HighlightResponse
 import com.ssafy.bookglebookgle.entity.pdf.UpdateCommentRequest
 import com.ssafy.bookglebookgle.network.api.PdfApi
 import com.ssafy.bookglebookgle.pdf.response.AnnotationListResponse
@@ -82,281 +85,281 @@ class PdfRepositoryImpl @Inject constructor(
         }
     }
 
-    // 댓글 관리
-    override suspend fun addComment(
-        groupId: Long,
-        snippet: String,
-        text: String,
-        page: Int,
-        coordinates: Coordinates
-    ): CommentModel? {
-        return try {
-            Log.d(TAG, "=== 댓글 추가 요청 ===")
-            Log.d(TAG, "그룹 ID: $groupId, 페이지: $page, 텍스트: $text")
-            Log.d(TAG, "좌표: startX=${coordinates.startX}, startY=${coordinates.startY}, endX=${coordinates.endX}, endY=${coordinates.endY}")
-
-            val request = AddCommentRequest(
-                snippet = snippet,
-                text = text,
-                page = page,
-                coordinates = CoordinatesRequest(
-                    startX = coordinates.startX,
-                    startY = coordinates.startY,
-                    endX = coordinates.endX,
-                    endY = coordinates.endY
-                )
-            )
-
-            val response = pdfApi.addComment(groupId, request)
-            Log.d(TAG, "응답 코드: ${response.code()}")
-
-            if (response.isSuccessful) {
-                response.body()?.let { commentResponse ->
-                    Log.d(TAG, "댓글 추가 성공: $commentResponse")
-
-                    CommentModel(
-                        id = commentResponse.id,
-                        snippet = commentResponse.snippet,
-                        text = commentResponse.text,
-                        page = commentResponse.page,
-                        coordinates = Coordinates(
-                            startX = commentResponse.coordinates.startX,
-                            startY = commentResponse.coordinates.startY,
-                            endX = commentResponse.coordinates.endX,
-                            endY = commentResponse.coordinates.endY
-                        )
-                    )
-                }
-            } else {
-                Log.e(TAG, "댓글 추가 실패: ${response.code()} ${response.message()}")
-                response.errorBody()?.string()?.let { Log.e(TAG, "에러: $it") }
-                null
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "댓글 추가 중 예외 발생", e)
-            null
-        }
-    }
-
-    override suspend fun getComments(groupId: Long): List<CommentModel>? {
-        return try {
-            Log.d(TAG, "=== 댓글 조회 요청 ===")
-            Log.d(TAG, "그룹 ID: $groupId")
-
-            val response = pdfApi.getComments(groupId)
-            Log.d(TAG, "응답 코드: ${response.code()}")
-
-            if (response.isSuccessful) {
-                response.body()?.let { commentList ->
-                    Log.d(TAG, "댓글 조회 성공 - 댓글 수: ${commentList.size}")
-
-                    commentList.map { commentResponse ->
-                        CommentModel(
-                            id = commentResponse.id,
-                            snippet = commentResponse.snippet,
-                            text = commentResponse.text,
-                            page = commentResponse.page,
-                            coordinates = Coordinates(
-                                startX = commentResponse.coordinates.startX,
-                                startY = commentResponse.coordinates.startY,
-                                endX = commentResponse.coordinates.endX,
-                                endY = commentResponse.coordinates.endY
-                            )
-                        )
-                    }
-                }
-            } else {
-                Log.e(TAG, "댓글 조회 실패: ${response.code()} ${response.message()}")
-                null
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "댓글 조회 중 예외 발생", e)
-            null
-        }
-    }
-
-    override suspend fun updateComment(commentId: Long, newText: String): CommentModel? {
-        return try {
-            Log.d(TAG, "=== 댓글 수정 요청 ===")
-            Log.d(TAG, "댓글 ID: $commentId, 새 텍스트: $newText")
-
-            val request = UpdateCommentRequest(text = newText)
-            val response = pdfApi.updateComment(commentId, request)
-            Log.d(TAG, "응답 코드: ${response.code()}")
-
-            if (response.isSuccessful) {
-                response.body()?.let { commentResponse ->
-                    Log.d(TAG, "댓글 수정 성공: $commentResponse")
-
-                    CommentModel(
-                        id = commentResponse.id,
-                        snippet = commentResponse.snippet,
-                        text = commentResponse.text,
-                        page = commentResponse.page,
-                        coordinates = Coordinates(
-                            startX = commentResponse.coordinates.startX,
-                            startY = commentResponse.coordinates.startY,
-                            endX = commentResponse.coordinates.endX,
-                            endY = commentResponse.coordinates.endY
-                        )
-                    )
-                }
-            } else {
-                Log.e(TAG, "댓글 수정 실패: ${response.code()} ${response.message()}")
-                null
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "댓글 수정 중 예외 발생", e)
-            null
-        }
-    }
-
-    override suspend fun deleteComment(commentId: Long): DeleteAnnotationResponse? {
-        return try {
-            Log.d(TAG, "=== 댓글 삭제 요청 ===")
-            Log.d(TAG, "댓글 ID: $commentId")
-
-            val response = pdfApi.deleteComment(commentId)
-            Log.d(TAG, "응답 코드: ${response.code()}")
-
-            if (response.isSuccessful) {
-                response.body()?.let { apiDeleteResponse ->
-                    Log.d(TAG, "댓글 삭제 성공 - 삭제된 ID들: ${apiDeleteResponse.deletedIds}")
-
-                    // API Response를 내부 모델로 변환
-                    DeleteAnnotationResponse(
-                        deletedIds = apiDeleteResponse.deletedIds
-                    )
-                }
-            } else {
-                Log.e(TAG, "댓글 삭제 실패: ${response.code()} ${response.message()}")
-                null
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "댓글 삭제 중 예외 발생", e)
-            null
-        }
-    }
-
-    // 하이라이트 관리
-    override suspend fun addHighlight(
-        groupId: Long,
-        snippet: String,
-        color: String,
-        page: Int,
-        coordinates: Coordinates
-    ): HighlightModel? {
-        return try {
-            Log.d(TAG, "=== 하이라이트 추가 요청 ===")
-            Log.d(TAG, "그룹 ID: $groupId, 페이지: $page, 색상: $color")
-            Log.d(TAG, "좌표: startX=${coordinates.startX}, startY=${coordinates.startY}, endX=${coordinates.endX}, endY=${coordinates.endY}")
-
-            val request = AddHighlightRequest(
-                snippet = snippet,
-                color = color,
-                page = page,
-                coordinates = CoordinatesRequest(
-                    startX = coordinates.startX,
-                    startY = coordinates.startY,
-                    endX = coordinates.endX,
-                    endY = coordinates.endY
-                )
-            )
-
-            val response = pdfApi.addHighlight(groupId, request)
-            Log.d(TAG, "응답 코드: ${response.code()}")
-
-            if (response.isSuccessful) {
-                response.body()?.let { highlightResponse ->
-                    Log.d(TAG, "하이라이트 추가 성공: $highlightResponse")
-
-                    HighlightModel(
-                        id = highlightResponse.id,
-                        snippet = highlightResponse.snippet,
-                        color = highlightResponse.color,
-                        page = highlightResponse.page,
-                        coordinates = Coordinates(
-                            startX = highlightResponse.coordinates.startX,
-                            startY = highlightResponse.coordinates.startY,
-                            endX = highlightResponse.coordinates.endX,
-                            endY = highlightResponse.coordinates.endY
-                        )
-                    )
-                }
-            } else {
-                Log.e(TAG, "하이라이트 추가 실패: ${response.code()} ${response.message()}")
-                response.errorBody()?.string()?.let { Log.e(TAG, "에러: $it") }
-                null
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "하이라이트 추가 중 예외 발생", e)
-            null
-        }
-    }
-
-    override suspend fun getHighlights(groupId: Long): List<HighlightModel>? {
-        return try {
-            Log.d(TAG, "=== 하이라이트 조회 요청 ===")
-            Log.d(TAG, "그룹 ID: $groupId")
-
-            val response = pdfApi.getHighlights(groupId)
-            Log.d(TAG, "응답 코드: ${response.code()}")
-
-            if (response.isSuccessful) {
-                response.body()?.let { highlightList ->
-                    Log.d(TAG, "하이라이트 조회 성공 - 하이라이트 수: ${highlightList.size}")
-
-                    highlightList.map { highlightResponse ->
-                        HighlightModel(
-                            id = highlightResponse.id,
-                            snippet = highlightResponse.snippet,
-                            color = highlightResponse.color,
-                            page = highlightResponse.page,
-                            coordinates = Coordinates(
-                                startX = highlightResponse.coordinates.startX,
-                                startY = highlightResponse.coordinates.startY,
-                                endX = highlightResponse.coordinates.endX,
-                                endY = highlightResponse.coordinates.endY
-                            )
-                        )
-                    }
-                }
-            } else {
-                Log.e(TAG, "하이라이트 조회 실패: ${response.code()} ${response.message()}")
-                null
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "하이라이트 조회 중 예외 발생", e)
-            null
-        }
-    }
-
-    override suspend fun deleteHighlight(highlightId: Long): DeleteAnnotationResponse? {
-        return try {
-            Log.d(TAG, "=== 하이라이트 삭제 요청 ===")
-            Log.d(TAG, "하이라이트 ID: $highlightId")
-
-            val response = pdfApi.deleteHighlight(highlightId)
-            Log.d(TAG, "응답 코드: ${response.code()}")
-
-            if (response.isSuccessful) {
-                response.body()?.let { apiDeleteResponse ->
-                    Log.d(TAG, "하이라이트 삭제 성공 - 삭제된 ID들: ${apiDeleteResponse.deletedIds}")
-
-                    // API Response를 내부 모델로 변환
-                    DeleteAnnotationResponse(
-                        deletedIds = apiDeleteResponse.deletedIds
-                    )
-                }
-            } else {
-                Log.e(TAG, "하이라이트 삭제 실패: ${response.code()} ${response.message()}")
-                null
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "하이라이트 삭제 중 예외 발생", e)
-            null
-        }
-    }
+//    // 댓글 관리
+//    override suspend fun addComment(
+//        groupId: Long,
+//        snippet: String,
+//        text: String,
+//        page: Int,
+//        coordinates: Coordinates
+//    ): CommentModel? {
+//        return try {
+//            Log.d(TAG, "=== 댓글 추가 요청 ===")
+//            Log.d(TAG, "그룹 ID: $groupId, 페이지: $page, 텍스트: $text")
+//            Log.d(TAG, "좌표: startX=${coordinates.startX}, startY=${coordinates.startY}, endX=${coordinates.endX}, endY=${coordinates.endY}")
+//
+//            val request = AddCommentRequest(
+//                snippet = snippet,
+//                text = text,
+//                page = page,
+//                coordinates = CoordinatesRequest(
+//                    startX = coordinates.startX,
+//                    startY = coordinates.startY,
+//                    endX = coordinates.endX,
+//                    endY = coordinates.endY
+//                )
+//            )
+//
+//            val response = pdfApi.addComment(groupId, request)
+//            Log.d(TAG, "응답 코드: ${response.code()}")
+//
+//            if (response.isSuccessful) {
+//                response.body()?.let { commentResponse ->
+//                    Log.d(TAG, "댓글 추가 성공: $commentResponse")
+//
+//                    CommentModel(
+//                        id = commentResponse.id,
+//                        snippet = commentResponse.snippet,
+//                        text = commentResponse.text,
+//                        page = commentResponse.page,
+//                        coordinates = Coordinates(
+//                            startX = commentResponse.coordinates.startX,
+//                            startY = commentResponse.coordinates.startY,
+//                            endX = commentResponse.coordinates.endX,
+//                            endY = commentResponse.coordinates.endY
+//                        )
+//                    )
+//                }
+//            } else {
+//                Log.e(TAG, "댓글 추가 실패: ${response.code()} ${response.message()}")
+//                response.errorBody()?.string()?.let { Log.e(TAG, "에러: $it") }
+//                null
+//            }
+//        } catch (e: Exception) {
+//            Log.e(TAG, "댓글 추가 중 예외 발생", e)
+//            null
+//        }
+//    }
+//
+//    override suspend fun getComments(groupId: Long): List<CommentModel>? {
+//        return try {
+//            Log.d(TAG, "=== 댓글 조회 요청 ===")
+//            Log.d(TAG, "그룹 ID: $groupId")
+//
+//            val response = pdfApi.getComments(groupId)
+//            Log.d(TAG, "응답 코드: ${response.code()}")
+//
+//            if (response.isSuccessful) {
+//                response.body()?.let { commentList ->
+//                    Log.d(TAG, "댓글 조회 성공 - 댓글 수: ${commentList.size}")
+//
+//                    commentList.map { commentResponse ->
+//                        CommentModel(
+//                            id = commentResponse.id,
+//                            snippet = commentResponse.snippet,
+//                            text = commentResponse.text,
+//                            page = commentResponse.page,
+//                            coordinates = Coordinates(
+//                                startX = commentResponse.coordinates.startX,
+//                                startY = commentResponse.coordinates.startY,
+//                                endX = commentResponse.coordinates.endX,
+//                                endY = commentResponse.coordinates.endY
+//                            )
+//                        )
+//                    }
+//                }
+//            } else {
+//                Log.e(TAG, "댓글 조회 실패: ${response.code()} ${response.message()}")
+//                null
+//            }
+//        } catch (e: Exception) {
+//            Log.e(TAG, "댓글 조회 중 예외 발생", e)
+//            null
+//        }
+//    }
+//
+//    override suspend fun updateComment(commentId: Long, newText: String): CommentModel? {
+//        return try {
+//            Log.d(TAG, "=== 댓글 수정 요청 ===")
+//            Log.d(TAG, "댓글 ID: $commentId, 새 텍스트: $newText")
+//
+//            val request = UpdateCommentRequest(text = newText)
+//            val response = pdfApi.updateComment(commentId, request)
+//            Log.d(TAG, "응답 코드: ${response.code()}")
+//
+//            if (response.isSuccessful) {
+//                response.body()?.let { commentResponse ->
+//                    Log.d(TAG, "댓글 수정 성공: $commentResponse")
+//
+//                    CommentModel(
+//                        id = commentResponse.id,
+//                        snippet = commentResponse.snippet,
+//                        text = commentResponse.text,
+//                        page = commentResponse.page,
+//                        coordinates = Coordinates(
+//                            startX = commentResponse.coordinates.startX,
+//                            startY = commentResponse.coordinates.startY,
+//                            endX = commentResponse.coordinates.endX,
+//                            endY = commentResponse.coordinates.endY
+//                        )
+//                    )
+//                }
+//            } else {
+//                Log.e(TAG, "댓글 수정 실패: ${response.code()} ${response.message()}")
+//                null
+//            }
+//        } catch (e: Exception) {
+//            Log.e(TAG, "댓글 수정 중 예외 발생", e)
+//            null
+//        }
+//    }
+//
+//    override suspend fun deleteComment(commentId: Long): DeleteAnnotationResponse? {
+//        return try {
+//            Log.d(TAG, "=== 댓글 삭제 요청 ===")
+//            Log.d(TAG, "댓글 ID: $commentId")
+//
+//            val response = pdfApi.deleteComment(commentId)
+//            Log.d(TAG, "응답 코드: ${response.code()}")
+//
+//            if (response.isSuccessful) {
+//                response.body()?.let { apiDeleteResponse ->
+//                    Log.d(TAG, "댓글 삭제 성공 - 삭제된 ID들: ${apiDeleteResponse.deletedIds}")
+//
+//                    // API Response를 내부 모델로 변환
+//                    DeleteAnnotationResponse(
+//                        deletedIds = apiDeleteResponse.deletedIds
+//                    )
+//                }
+//            } else {
+//                Log.e(TAG, "댓글 삭제 실패: ${response.code()} ${response.message()}")
+//                null
+//            }
+//        } catch (e: Exception) {
+//            Log.e(TAG, "댓글 삭제 중 예외 발생", e)
+//            null
+//        }
+//    }
+//
+//    // 하이라이트 관리
+//    override suspend fun addHighlight(
+//        groupId: Long,
+//        snippet: String,
+//        color: String,
+//        page: Int,
+//        coordinates: Coordinates
+//    ): HighlightModel? {
+//        return try {
+//            Log.d(TAG, "=== 하이라이트 추가 요청 ===")
+//            Log.d(TAG, "그룹 ID: $groupId, 페이지: $page, 색상: $color")
+//            Log.d(TAG, "좌표: startX=${coordinates.startX}, startY=${coordinates.startY}, endX=${coordinates.endX}, endY=${coordinates.endY}")
+//
+//            val request = AddHighlightRequest(
+//                snippet = snippet,
+//                color = color,
+//                page = page,
+//                coordinates = CoordinatesRequest(
+//                    startX = coordinates.startX,
+//                    startY = coordinates.startY,
+//                    endX = coordinates.endX,
+//                    endY = coordinates.endY
+//                )
+//            )
+//
+//            val response = pdfApi.addHighlight(groupId, request)
+//            Log.d(TAG, "응답 코드: ${response.code()}")
+//
+//            if (response.isSuccessful) {
+//                response.body()?.let { highlightResponse ->
+//                    Log.d(TAG, "하이라이트 추가 성공: $highlightResponse")
+//
+//                    HighlightModel(
+//                        id = highlightResponse.id,
+//                        snippet = highlightResponse.snippet,
+//                        color = highlightResponse.color,
+//                        page = highlightResponse.page,
+//                        coordinates = Coordinates(
+//                            startX = highlightResponse.coordinates.startX,
+//                            startY = highlightResponse.coordinates.startY,
+//                            endX = highlightResponse.coordinates.endX,
+//                            endY = highlightResponse.coordinates.endY
+//                        )
+//                    )
+//                }
+//            } else {
+//                Log.e(TAG, "하이라이트 추가 실패: ${response.code()} ${response.message()}")
+//                response.errorBody()?.string()?.let { Log.e(TAG, "에러: $it") }
+//                null
+//            }
+//        } catch (e: Exception) {
+//            Log.e(TAG, "하이라이트 추가 중 예외 발생", e)
+//            null
+//        }
+//    }
+//
+//    override suspend fun getHighlights(groupId: Long): List<HighlightModel>? {
+//        return try {
+//            Log.d(TAG, "=== 하이라이트 조회 요청 ===")
+//            Log.d(TAG, "그룹 ID: $groupId")
+//
+//            val response = pdfApi.getHighlights(groupId)
+//            Log.d(TAG, "응답 코드: ${response.code()}")
+//
+//            if (response.isSuccessful) {
+//                response.body()?.let { highlightList ->
+//                    Log.d(TAG, "하이라이트 조회 성공 - 하이라이트 수: ${highlightList.size}")
+//
+//                    highlightList.map { highlightResponse ->
+//                        HighlightModel(
+//                            id = highlightResponse.id,
+//                            snippet = highlightResponse.snippet,
+//                            color = highlightResponse.color,
+//                            page = highlightResponse.page,
+//                            coordinates = Coordinates(
+//                                startX = highlightResponse.coordinates.startX,
+//                                startY = highlightResponse.coordinates.startY,
+//                                endX = highlightResponse.coordinates.endX,
+//                                endY = highlightResponse.coordinates.endY
+//                            )
+//                        )
+//                    }
+//                }
+//            } else {
+//                Log.e(TAG, "하이라이트 조회 실패: ${response.code()} ${response.message()}")
+//                null
+//            }
+//        } catch (e: Exception) {
+//            Log.e(TAG, "하이라이트 조회 중 예외 발생", e)
+//            null
+//        }
+//    }
+//
+//    override suspend fun deleteHighlight(highlightId: Long): DeleteAnnotationResponse? {
+//        return try {
+//            Log.d(TAG, "=== 하이라이트 삭제 요청 ===")
+//            Log.d(TAG, "하이라이트 ID: $highlightId")
+//
+//            val response = pdfApi.deleteHighlight(highlightId)
+//            Log.d(TAG, "응답 코드: ${response.code()}")
+//
+//            if (response.isSuccessful) {
+//                response.body()?.let { apiDeleteResponse ->
+//                    Log.d(TAG, "하이라이트 삭제 성공 - 삭제된 ID들: ${apiDeleteResponse.deletedIds}")
+//
+//                    // API Response를 내부 모델로 변환
+//                    DeleteAnnotationResponse(
+//                        deletedIds = apiDeleteResponse.deletedIds
+//                    )
+//                }
+//            } else {
+//                Log.e(TAG, "하이라이트 삭제 실패: ${response.code()} ${response.message()}")
+//                null
+//            }
+//        } catch (e: Exception) {
+//            Log.e(TAG, "하이라이트 삭제 중 예외 발생", e)
+//            null
+//        }
+//    }
 
     // 북마크 관리
     override suspend fun addBookmark(groupId: Long, page: Int): BookmarkModel? {
@@ -477,69 +480,76 @@ class PdfRepositoryImpl @Inject constructor(
             Log.d(TAG, "=== 전체 주석 조회 요청 ===")
             Log.d(TAG, "PDF ID: $pdfId")
 
-            val response = pdfApi.getAllAnnotations(pdfId)
-            Log.d(TAG, "응답 코드: ${response.code()}")
+            // 1) 댓글, 하이라이트, 북마크 각각 호출
+            val commentsResp   = pdfApi.getComments(pdfId)
+            Log.d(TAG, "댓글 응답 코드: ${commentsResp.code()}")
+            val highlightsResp = pdfApi.getHighlights(pdfId)
+            Log.d(TAG, "하이라이트 응답 코드: ${highlightsResp.code()}")
+//            val bookmarksResp  = pdfApi.getBookmarks(pdfId)
+//            Log.d(TAG, "북마크 응답 코드: ${bookmarksResp.code()}")
 
-            if (response.isSuccessful) {
-                response.body()?.let { apiAnnotationResponse ->
-                    Log.d(TAG, "전체 주석 조회 성공")
-                    Log.d(TAG, "댓글 수: ${apiAnnotationResponse.comments.size}")
-                    Log.d(TAG, "하이라이트 수: ${apiAnnotationResponse.highlights.size}")
-                    Log.d(TAG, "북마크 수: ${apiAnnotationResponse.bookmarks.size}")
+            // 2) 세 API가 모두 성공일 때만 합치기
+            if (commentsResp.isSuccessful &&
+                highlightsResp.isSuccessful // &&
+//                bookmarksResp.isSuccessful
+            ) {
+                val commentsBody   = commentsResp.body()   ?: emptyList<CommentResponse>()
+                val highlightsBody = highlightsResp.body() ?: emptyList<HighlightResponse>()
+//                val bookmarksBody  = bookmarksResp.body()  ?: emptyList<BookmarkResponse>()
 
-                    // API Response를 내부 모델로 변환
-                    val convertedComments = apiAnnotationResponse.comments.map { commentResponse ->
-                        CommentModel(
-                            id = commentResponse.id,
-                            snippet = commentResponse.snippet,
-                            text = commentResponse.text,
-                            page = commentResponse.page,
-                            coordinates = commentResponse.coordinates?.let { coords ->
-                                Coordinates(
-                                    startX = coords.startX,
-                                    startY = coords.startY,
-                                    endX = coords.endX,
-                                    endY = coords.endY
-                                )
-                            }
+                // 3) DTO → 내부 모델 변환
+                val convertedComments = commentsBody.map { dto ->
+                    CommentModel(
+                        id          = dto.id,
+                        page        = dto.page,
+                        snippet     = dto.snippet,
+                        text        = dto.text,
+                        coordinates = Coordinates(
+                            startX = dto.startX,
+                            startY = dto.startY,
+                            endX   = dto.endX,
+                            endY   = dto.endY
                         )
-                    }
-
-                    val convertedHighlights = apiAnnotationResponse.highlights.map { highlightResponse ->
-                        HighlightModel(
-                            id = highlightResponse.id,
-                            snippet = highlightResponse.snippet,
-                            color = highlightResponse.color,
-                            page = highlightResponse.page,
-                            coordinates = highlightResponse.coordinates?.let { coords ->
-                                Coordinates(
-                                    startX = coords.startX,
-                                    startY = coords.startY,
-                                    endX = coords.endX,
-                                    endY = coords.endY
-                                )
-                            }
-                        )
-                    }
-
-                    val convertedBookmarks = apiAnnotationResponse.bookmarks.map { bookmarkResponse ->
-                        BookmarkModel(
-                            id = bookmarkResponse.id,
-                            page = bookmarkResponse.page
-                        )
-                    }
-
-                    Log.d(TAG, "변환 완료 - 댓글: ${convertedComments.size}개, 하이라이트: ${convertedHighlights.size}개, 북마크: ${convertedBookmarks.size}개")
-
-                    // 내부 모델의 AnnotationListResponse 생성
-                    AnnotationListResponse(
-                        comments = ArrayList(convertedComments),
-                        highlights = ArrayList(convertedHighlights),
-                        bookmarks = ArrayList(convertedBookmarks)
                     )
                 }
+                Log.d(TAG, "댓글 변환 완료: ${convertedComments.size}개")
+
+                val convertedHighlights = highlightsBody.map { dto ->
+                    HighlightModel(
+                        id          = dto.id,
+                        page        = dto.page,
+                        snippet     = dto.snippet,
+                        color       = dto.color,
+                        coordinates = Coordinates(
+                            startX = dto.startX,
+                            startY = dto.startY,
+                            endX   = dto.endX,
+                            endY   = dto.endY
+                        )
+                    )
+                }
+                Log.d(TAG, "하이라이트 변환 완료: ${convertedHighlights.size}개")
+
+//                val convertedBookmarks = bookmarksBody.map { dto ->
+//                    BookmarkModel(
+//                        id   = dto.id,
+//                        page = dto.page
+//                    )
+//                }
+//                Log.d(TAG, "북마크 변환 완료: ${convertedBookmarks.size}개")
+
+                // 4) AnnotationListResponse로 묶어서 반환
+                AnnotationListResponse(
+                    comments   = ArrayList(convertedComments),
+                    highlights = ArrayList(convertedHighlights),
+//                    bookmarks  = ArrayList(convertedBookmarks)
+                )
             } else {
-                Log.e(TAG, "전체 주석 조회 실패: ${response.code()} ${response.message()}")
+                Log.e(TAG, "하나 이상의 API 호출 실패: " +
+                        "comments=${commentsResp.code()}, " +
+                        "highlights=${highlightsResp.code()}, " // +
+//                        "bookmarks=${bookmarksResp.code()}"
+                )
                 null
             }
         } catch (e: Exception) {
@@ -547,6 +557,7 @@ class PdfRepositoryImpl @Inject constructor(
             null
         }
     }
+
 
     private fun extractFileNameFromHeaders(response: Response<ResponseBody>): String {
         Log.d(TAG, "=== PDF 파일명 추출 ===")

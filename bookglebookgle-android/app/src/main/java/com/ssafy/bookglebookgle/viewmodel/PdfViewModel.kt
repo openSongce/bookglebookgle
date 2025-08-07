@@ -4,12 +4,10 @@ import android.graphics.PointF
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.ssafy.bookglebookgle.pdf.exception.ValidationErrorException
 import com.ssafy.bookglebookgle.pdf.response.AnnotationListResponse
 import com.ssafy.bookglebookgle.pdf.state.ResponseState
 import com.ssafy.bookglebookgle.pdf.tools.OperationsStateHandler
 import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.CommentModel
-import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.Coordinates
 import com.ssafy.bookglebookgle.repository.PdfRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,8 +20,19 @@ import android.graphics.Bitmap
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
 import androidx.lifecycle.Observer
+import com.example.bookglebookgleserver.pdf.grpc.ActionType
+import com.example.bookglebookgleserver.pdf.grpc.AnnotationPayload
+import com.example.bookglebookgleserver.pdf.grpc.AnnotationType
+// UI 좌표
+import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.Coordinates as UiCoordinates
+// gRPC 좌표
+import com.example.bookglebookgleserver.pdf.grpc.Coordinates as GrpcCoordinates
+import com.ssafy.bookglebookgle.entity.CommentSync
+import com.ssafy.bookglebookgle.entity.HighlightSync
+import com.ssafy.bookglebookgle.entity.PdfPageSync
+import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.HighlightModel
+import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.PdfAnnotationModel
 import com.ssafy.bookglebookgle.repository.PdfGrpcRepository
-import com.ssafy.bookglebookgle.repository.PdfPageSync
 import com.ssafy.bookglebookgle.repository.PdfSyncConnectionStatus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.update
@@ -108,11 +117,24 @@ class PdfViewModel @Inject constructor(
 
     val annotationListResponse = OperationsStateHandler(viewModelScope)
 
+    // Thumbnails
     private val _thumbnails = MutableStateFlow<List<Bitmap>>(emptyList())
     val thumbnails: StateFlow<List<Bitmap>> = _thumbnails.asStateFlow()
 
+    // gRPC
+    private val _syncConnected = MutableStateFlow(false)
+    val syncConnected: StateFlow<Boolean> = _syncConnected.asStateFlow()
+
+    private val _syncError = MutableStateFlow<String?>(null)
+    val syncError: StateFlow<String?> = _syncError.asStateFlow()
 
 
+    private val highlightAddObserver = Observer<HighlightSync> { sync -> handleRemoteHighlightAdd(sync) }
+    private val highlightDeleteObserver = Observer<Long> { id -> handleRemoteHighlightDelete(id) }
+
+    private val commentAddObserver = Observer<CommentSync> { sync -> handleRemoteCommentAdd(sync) }
+    private val commentUpdateObserver = Observer<CommentSync> { sync -> handleRemoteCommentUpdate(sync) }
+    private val commentDeleteObserver = Observer<Long> { id -> handleRemoteCommentDelete(id) }
 
 
 
@@ -289,125 +311,128 @@ class PdfViewModel @Inject constructor(
     /**
      * 댓글 추가
      */
-    fun addComment(snippet: String, text: String, page: Int, coordinates: Coordinates?) {
-        val groupId = currentGroupId
-        Log.d(TAG, "==== 댓글 추가 요청 ====")
-        Log.d(TAG, "그룹 ID: $groupId")
-        Log.d(TAG, "페이지: $page")
-        Log.d(TAG, "스니펫: $snippet")
-        Log.d(TAG, "텍스트: $text")
-        Log.d(TAG, "좌표: $coordinates")
-
-        if (groupId == null) {
-            Log.e(TAG, "댓글 추가 실패: 그룹 ID가 설정되지 않음")
+    fun addComment(snippet: String, text: String, page: Int, coordinates: UiCoordinates) {
+        val gid = currentGroupId
+        Log.d(TAG, "[addComment] 요청 시작  snippet=$snippet, text=$text, page=$page, coords=$coordinates, groupId=$gid")
+        if (gid == null) {
+            Log.e(TAG, "[addComment] 실패: groupId가 설정되지 않음")
             return
         }
 
-        addCommentResponse.load {
-            try {
-                if (coordinates == null) {
-                    Log.e(TAG, "댓글 추가 실패: 좌표 정보가 없음")
-                    throw ValidationErrorException(1, "좌표 정보가 필요합니다.")
-                }
+        // 1) 로컬 즉시 반영
+        val tempId = System.currentTimeMillis()
+        val model = CommentModel(
+            id = tempId,
+            page = page,
+            snippet = snippet,
+            text = text,
+            coordinates = coordinates
+        )
+        Log.d(TAG, "[addComment] 로컬 반영 전 annotations.size=${_annotations.value.comments.size}")
+        currentPdfView?.addComment(model)
+        _annotations.update { it.copy(comments = ArrayList(it.comments + model)) }
+        Log.d(TAG, "[addComment] 로컬 반영 후 annotations.size=${_annotations.value.comments.size}")
 
-                Log.d(TAG, "Repository에서 댓글 추가 요청 시작")
-                val result = pdfRepository.addComment(groupId, snippet, text, page, coordinates)
+        // 2) gRPC 메시지 전송
+        // 2) gRPC 좌표 메시지 변환
+        val grpcCoords = GrpcCoordinates.newBuilder()
+            .setStartX(coordinates.startX)
+            .setStartY(coordinates.startY)
+            .setEndX(coordinates.endX)
+            .setEndY(coordinates.endY)
+            .build()
+        Log.d(TAG, "[addComment] grpcCoords=$grpcCoords")
 
-                if (result != null) {
-                    Log.d(TAG, "댓글 추가 성공")
-                    Log.d(TAG, "생성된 댓글: $result")
+        // 3) AnnotationPayload 생성
+        val payload = AnnotationPayload.newBuilder()
+            .setPage(page)
+            .setSnippet(snippet)
+            .setText(text)
+            .setCoordinates(grpcCoords)   // positional argument
+            .build()
+        Log.d(TAG, "[addComment] payload=$payload")
 
-                    // 로컬 상태 업데이트
-                    val currentAnnotations = _annotations.value
-                    val updatedComments = currentAnnotations.comments.toMutableList()
-                    updatedComments.add(result)
-                    _annotations.value = currentAnnotations.copy(comments = ArrayList(updatedComments))
 
-                    Log.d(TAG, "로컬 상태 업데이트 완료 - 총 댓글 수: ${updatedComments.size}")
-
-                    ResponseState.Success(result)
-                } else {
-                    Log.e(TAG, "댓글 추가 실패: 서버에서 null 응답")
-                    throw Exception("댓글 추가에 실패했습니다.")
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "댓글 추가 예외 발생", e)
-                throw e
-            }
-        }
+        Log.d(TAG, "[addComment] gRPC 전송 payload=$payload")
+        pdfGrpcRepository.sendAnnotation(
+            gid,
+            userId ?: return,
+            AnnotationType.COMMENT,
+            payload,
+            ActionType.ADD
+        )
+        Log.d(TAG, "[addComment] gRPC 전송 완료")
     }
 
-    /**
-     * 댓글 수정
-     */
     fun updateComment(commentId: Long, newText: String) {
-        Log.d(TAG, "==== 댓글 수정 요청 ====")
-        Log.d(TAG, "댓글 ID: $commentId")
-        Log.d(TAG, "새 텍스트: $newText")
-
-        updateCommentResponse.load {
-            try {
-                Log.d(TAG, "Repository에서 댓글 수정 요청 시작")
-                val result = pdfRepository.updateComment(commentId, newText)
-
-                if (result != null) {
-                    Log.d(TAG, "댓글 수정 성공")
-                    Log.d(TAG, "수정된 댓글: $result")
-
-                    // 로컬 상태 업데이트
-                    val currentAnnotations = _annotations.value
-                    val updatedComments = currentAnnotations.comments.map { comment ->
-                        if (comment.id == commentId) {
-                            comment.copy(text = newText)
-                        } else {
-                            comment
-                        }
-                    }
-                    _annotations.value = currentAnnotations.copy(comments = ArrayList(updatedComments))
-
-                    Log.d(TAG, "로컬 상태 업데이트 완료")
-
-                    ResponseState.Success(result)
-                } else {
-                    Log.e(TAG, "댓글 수정 실패: 서버에서 null 응답")
-                    throw Exception("댓글 수정에 실패했습니다.")
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "댓글 수정 예외 발생", e)
-                throw e
-            }
+        val gid = currentGroupId
+        Log.d(TAG, "[updateComment] 요청 시작  commentId=$commentId, newText=$newText, groupId=$gid")
+        if (gid == null) {
+            Log.e(TAG, "[updateComment] 실패: groupId가 설정되지 않음")
+            return
         }
+
+        // 1) 로컬 즉시 반영
+        val original = _annotations.value.comments.find { it.id == commentId }
+        if (original == null) {
+            Log.e(TAG, "[updateComment] 실패: 로컬에 commentId=$commentId 없음")
+            return
+        }
+        val updated = original.copy(text = newText)
+        Log.d(TAG, "[updateComment] 로컬 반영 전: ${original.text}")
+        currentPdfView?.updateComment(updated)
+        _annotations.update {
+            it.copy(comments = ArrayList(it.comments.map { c -> if (c.id == commentId) updated else c }))
+        }
+        Log.d(TAG, "[updateComment] 로컬 반영 후: ${updated.text}")
+
+        // 2) gRPC 메시지 전송
+        val payload = AnnotationPayload.newBuilder()
+            .setId(commentId)
+            .setText(newText)
+            .build()
+
+        Log.d(TAG, "[updateComment] gRPC 전송 payload=$payload")
+        pdfGrpcRepository.sendAnnotation(
+            gid,
+            userId ?: return,
+            AnnotationType.COMMENT,
+            payload,
+            ActionType.UPDATE
+        )
+        Log.d(TAG, "[updateComment] gRPC 전송 완료")
     }
 
-    /**
-     * 댓글 삭제
-     */
     fun deleteComment(commentId: Long) {
-        Log.d(TAG, "==== 댓글 삭제 요청 ====")
-        Log.d(TAG, "댓글 ID: $commentId")
-
-        deleteCommentResponse.load {
-            try {
-                Log.d(TAG, "Repository에서 댓글 삭제 요청 시작")
-                val result = pdfRepository.deleteComment(commentId)
-
-                if (result != null) {
-                    Log.d(TAG, "댓글 삭제 성공")
-                    Log.d(TAG, "삭제된 ID들: ${result.deletedIds}")
-
-                    // 로컬 상태 업데이트
-                    removeCommentsFromLocal(result.deletedIds)
-
-                    ResponseState.Success(result)
-                } else {
-                    Log.e(TAG, "댓글 삭제 실패: 서버에서 null 응답")
-                    throw Exception("댓글 삭제에 실패했습니다.")
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "댓글 삭제 예외 발생", e)
-                throw e
-            }
+        val gid = currentGroupId
+        Log.d(TAG, "[deleteComment] 요청 시작  commentId=$commentId, groupId=$gid")
+        if (gid == null) {
+            Log.e(TAG, "[deleteComment] 실패: groupId가 설정되지 않음")
+            return
         }
+
+        // 1) 로컬 즉시 반영
+        Log.d(TAG, "[deleteComment] 로컬 반영 전 annotations.size=${_annotations.value.comments.size}")
+        currentPdfView?.removeCommentAnnotations(listOf(commentId))
+        _annotations.update {
+            it.copy(comments = ArrayList(it.comments.filterNot { it.id == commentId }))
+        }
+        Log.d(TAG, "[deleteComment] 로컬 반영 후 annotations.size=${_annotations.value.comments.size}")
+
+        // 2) gRPC 메시지 전송
+        val payload = AnnotationPayload.newBuilder()
+            .setId(commentId)
+            .build()
+
+        Log.d(TAG, "[deleteComment] gRPC 전송 payload=$payload")
+        pdfGrpcRepository.sendAnnotation(
+            gid,
+            userId ?: return,
+            AnnotationType.COMMENT,
+            payload,
+            ActionType.DELETE
+        )
+        Log.d(TAG, "[deleteComment] gRPC 전송 완료")
     }
 
     // ========== 하이라이트 관리 ==========
@@ -415,78 +440,86 @@ class PdfViewModel @Inject constructor(
     /**
      * 하이라이트 추가
      */
-    fun addHighlight(snippet: String, color: String, page: Int, coordinates: Coordinates) {
-        val groupId = currentGroupId
-        Log.d(TAG, "==== 하이라이트 추가 요청 ====")
-        Log.d(TAG, "그룹 ID: $groupId")
-        Log.d(TAG, "페이지: $page")
-        Log.d(TAG, "색상: $color")
-        Log.d(TAG, "스니펫: $snippet")
-        Log.d(TAG, "좌표: $coordinates")
-
-        if (groupId == null) {
-            Log.e(TAG, "하이라이트 추가 실패: 그룹 ID가 설정되지 않음")
+    fun addHighlight(snippet: String, color: String, page: Int, coordinates: UiCoordinates) {
+        val gid = currentGroupId
+        Log.d(TAG, "[addHighlight] 요청 시작  snippet=$snippet, color=$color, page=$page, coords=$coordinates, groupId=$gid")
+        if (gid == null) {
+            Log.e(TAG, "[addHighlight] 실패: groupId가 설정되지 않음")
             return
         }
 
-        addHighlightResponse.load {
-            try {
-                Log.d(TAG, "Repository에서 하이라이트 추가 요청 시작")
-                val result = pdfRepository.addHighlight(groupId, snippet, color, page, coordinates)
+        // 1) 로컬 즉시 반영
+        val tempId = System.currentTimeMillis()
+        val model = HighlightModel(
+            id = tempId,
+            page = page,
+            snippet = snippet,
+            color = color,
+            coordinates = coordinates
+        )
+        Log.d(TAG, "[addHighlight] 로컬 반영 전 highlights.size=${_annotations.value.highlights.size}")
+        currentPdfView?.addHighlight(model)
+        _annotations.update { it.copy(highlights = ArrayList(it.highlights + model)) }
+        Log.d(TAG, "[addHighlight] 로컬 반영 후 highlights.size=${_annotations.value.highlights.size}")
 
-                if (result != null) {
-                    Log.d(TAG, "하이라이트 추가 성공")
-                    Log.d(TAG, "생성된 하이라이트: $result")
+        // 2) gRPC 메시지 전송
+        // 2) gRPC 좌표 메시지 변환
+        val grpcCoords = GrpcCoordinates.newBuilder()
+            .setStartX(coordinates.startX)
+            .setStartY(coordinates.startY)
+            .setEndX(coordinates.endX)
+            .setEndY(coordinates.endY)
+            .build()
+        Log.d(TAG, "[addHighlight] grpcCoords=$grpcCoords")
 
-                    // 로컬 상태 업데이트
-                    val currentAnnotations = _annotations.value
-                    val updatedHighlights = currentAnnotations.highlights.toMutableList()
-                    updatedHighlights.add(result)
-                    _annotations.value = currentAnnotations.copy(highlights = ArrayList(updatedHighlights))
+        // 3) AnnotationPayload 생성
+        val payload = AnnotationPayload.newBuilder()
+            .setPage(page)
+            .setSnippet(snippet)
+            .setColor(color)
+            .setCoordinates(grpcCoords)   // positional argument
+            .build()
+        Log.d(TAG, "[addHighlight] payload=$payload")
 
-                    Log.d(TAG, "로컬 상태 업데이트 완료 - 총 하이라이트 수: ${updatedHighlights.size}")
-
-                    ResponseState.Success(result)
-                } else {
-                    Log.e(TAG, "하이라이트 추가 실패: 서버에서 null 응답")
-                    throw Exception("하이라이트 추가에 실패했습니다.")
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "하이라이트 추가 예외 발생", e)
-                throw e
-            }
-        }
+        Log.d(TAG, "[addHighlight] gRPC 전송 payload=$payload")
+        pdfGrpcRepository.sendAnnotation(
+            gid,
+            userId ?: return,
+            AnnotationType.HIGHLIGHT,
+            payload,
+            ActionType.ADD
+        )
+        Log.d(TAG, "[addHighlight] gRPC 전송 완료")
     }
 
-    /**
-     * 하이라이트 삭제
-     */
     fun deleteHighlight(highlightId: Long) {
-        Log.d(TAG, "==== 하이라이트 삭제 요청 ====")
-        Log.d(TAG, "하이라이트 ID: $highlightId")
-
-        deleteHighlightResponse.load {
-            try {
-                Log.d(TAG, "Repository에서 하이라이트 삭제 요청 시작")
-                val result = pdfRepository.deleteHighlight(highlightId)
-
-                if (result != null) {
-                    Log.d(TAG, "하이라이트 삭제 성공")
-                    Log.d(TAG, "삭제된 ID들: ${result.deletedIds}")
-
-                    // 로컬 상태 업데이트
-                    removeHighlightsFromLocal(result.deletedIds)
-
-                    ResponseState.Success(result)
-                } else {
-                    Log.e(TAG, "하이라이트 삭제 실패: 서버에서 null 응답")
-                    throw Exception("하이라이트 삭제에 실패했습니다.")
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "하이라이트 삭제 예외 발생", e)
-                throw e
-            }
+        val gid = currentGroupId
+        Log.d(TAG, "[deleteHighlight] 요청 시작  highlightId=$highlightId, groupId=$gid")
+        if (gid == null) {
+            Log.e(TAG, "[deleteHighlight] 실패: groupId가 설정되지 않음")
+            return
         }
+
+        // 1) 로컬 즉시 반영
+        Log.d(TAG, "[deleteHighlight] 로컬 반영 전 highlights.size=${_annotations.value.highlights.size}")
+        currentPdfView?.removeHighlightAnnotations(listOf(highlightId))
+        _annotations.update {
+            it.copy(highlights = ArrayList(it.highlights.filterNot { it.id == highlightId }))
+        }
+        Log.d(TAG, "[deleteHighlight] 로컬 반영 후 highlights.size=${_annotations.value.highlights.size}")
+
+        // 2) gRPC 메시지 전송
+        val payload = AnnotationPayload.newBuilder().setId(highlightId).build()
+
+        Log.d(TAG, "[deleteHighlight] gRPC 전송 payload=$payload")
+        pdfGrpcRepository.sendAnnotation(
+            gid,
+            userId ?: return,
+            AnnotationType.HIGHLIGHT,
+            payload,
+            ActionType.DELETE
+        )
+        Log.d(TAG, "[deleteHighlight] gRPC 전송 완료")
     }
 
     // ========== 전체 주석 관리 ==========
@@ -521,6 +554,8 @@ class PdfViewModel @Inject constructor(
                     result.highlights.forEachIndexed { index, highlight ->
                         Log.d(TAG, "하이라이트 $index: ID=${highlight.id}, 페이지=${highlight.page}, 색상=${highlight.color}")
                     }
+
+                    currentPdfView?.loadAnnotations(result.toAnnotationList())
 
                     _annotations.value = result
                     Log.d(TAG, "로컬 상태 업데이트 완료")
@@ -610,11 +645,8 @@ class PdfViewModel @Inject constructor(
 
     //gRPC
 
-    private val _syncConnected = MutableStateFlow(false)
-    val syncConnected: StateFlow<Boolean> = _syncConnected.asStateFlow()
 
-    private val _syncError = MutableStateFlow<String?>(null)
-    val syncError: StateFlow<String?> = _syncError.asStateFlow()
+
 
 
     // Observer들 - Chat과 동일한 패턴
@@ -652,6 +684,12 @@ class PdfViewModel @Inject constructor(
         // Observer 등록 - Chat과 동일한 패턴
         pdfGrpcRepository.newPageUpdates.observeForever(pdfPageObserver)
         pdfGrpcRepository.connectionStatus.observeForever(connectionObserver)
+        // 새로 추가한 하이라이트/코멘트 옵저버 등록
+        pdfGrpcRepository.newHighlights.observeForever(highlightAddObserver)
+        pdfGrpcRepository.deletedHighlights.observeForever(highlightDeleteObserver)
+        pdfGrpcRepository.newComments.observeForever(commentAddObserver)
+        pdfGrpcRepository.updatedComments.observeForever(commentUpdateObserver)
+        pdfGrpcRepository.deletedComments.observeForever(commentDeleteObserver)
     }
 
 
@@ -716,11 +754,88 @@ class PdfViewModel @Inject constructor(
         _syncError.value = null
     }
 
+    // 1) 하이라이트 추가
+    private fun handleRemoteHighlightAdd(sync: HighlightSync) {
+        val model = com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.HighlightModel(
+            id         = sync.id,
+            page       = sync.page,
+            snippet    = sync.snippet,
+            color      = sync.color,
+            coordinates = com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.Coordinates(
+                sync.startX, sync.startY, sync.endX, sync.endY
+            )
+        )
+        currentPdfView?.addHighlight(model)
+        _annotations.update {
+            it.copy(highlights = ArrayList(it.highlights + model))
+        }
+    }
+
+    // 3) 하이라이트 삭제 (ID 리스트로 호출)
+    private fun handleRemoteHighlightDelete(id: Long) {
+        currentPdfView?.removeHighlightAnnotations(listOf(id))
+        _annotations.update { state ->
+            state.copy(
+                highlights = ArrayList(state.highlights.filterNot { it.id == id })
+            )
+        }
+    }
+
+    // 4) 댓글 추가
+    private fun handleRemoteCommentAdd(sync: CommentSync) {
+        val model = CommentModel(
+            id          = sync.id,
+            page        = sync.page,
+            snippet     = sync.snippet,
+            text        = sync.text,
+            coordinates = com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.Coordinates(
+                sync.startX,
+                sync.startY,
+                sync.endX,
+                sync.endY
+            )
+        )
+        currentPdfView?.addComment(model)
+        _annotations.update {
+            it.copy(comments = ArrayList(it.comments + model))
+        }
+    }
+
+    // 5) 댓글 수정
+    private fun handleRemoteCommentUpdate(sync: CommentSync) {
+        val original = _annotations.value.comments.find { it.id == sync.id } ?: return
+        val updatedModel = original.copy(text = sync.text)
+        currentPdfView?.updateComment(updatedModel)
+        _annotations.update { state ->
+            state.copy(
+                comments = ArrayList(
+                    state.comments.map { if (it.id == sync.id) updatedModel else it }
+                )
+            )
+        }
+    }
+
+    // 6) 댓글 삭제 (ID 리스트로 호출)
+    private fun handleRemoteCommentDelete(id: Long) {
+        currentPdfView?.removeCommentAnnotations(listOf(id))
+        _annotations.update { state ->
+            state.copy(
+                comments = ArrayList(state.comments.filterNot { it.id == id })
+            )
+        }
+    }
+
+
     override fun onCleared() {
         super.onCleared()
         // Observer 해제
         pdfGrpcRepository.newPageUpdates.removeObserver(pdfPageObserver)
         pdfGrpcRepository.connectionStatus.removeObserver(connectionObserver)
+        pdfGrpcRepository.newHighlights.removeObserver(highlightAddObserver)
+        pdfGrpcRepository.deletedHighlights.removeObserver(highlightDeleteObserver)
+        pdfGrpcRepository.newComments.removeObserver(commentAddObserver)
+        pdfGrpcRepository.updatedComments.removeObserver(commentUpdateObserver)
+        pdfGrpcRepository.deletedComments.removeObserver(commentDeleteObserver)
 
         // 연결 종료
         pdfGrpcRepository.leaveRoom()
@@ -786,6 +901,23 @@ class PdfViewModel @Inject constructor(
                 Log.e(TAG, "썸네일 생성 중 오류 발생: ${e.message}", e)
             }
         }
+    }
+
+    // 확장 함수: AnnotationListResponse를 PdfAnnotationModel 리스트로 변환
+    private fun AnnotationListResponse.toAnnotationList(): List<PdfAnnotationModel> {
+        val annotationList = mutableListOf<PdfAnnotationModel>()
+
+        // 댓글을 PdfAnnotationModel로 변환
+        annotationList.addAll(comments.map { comment ->
+            comment.updateAnnotationData()
+        })
+
+        // 하이라이트를 PdfAnnotationModel로 변환
+        annotationList.addAll(highlights.map { highlight ->
+            highlight.updateAnnotationData()
+        })
+
+        return annotationList
     }
 
 

@@ -10,6 +10,9 @@ import com.example.bookglebookgleserver.pdf.grpc.AnnotationType
 import com.example.bookglebookgleserver.pdf.grpc.ActionType
 import com.example.bookglebookgleserver.pdf.grpc.PdfSyncServiceGrpc
 import com.example.bookglebookgleserver.pdf.grpc.SyncMessage
+import com.ssafy.bookglebookgle.entity.CommentSync
+import com.ssafy.bookglebookgle.entity.HighlightSync
+import com.ssafy.bookglebookgle.entity.PdfPageSync
 import io.grpc.ManagedChannel
 import io.grpc.ManagedChannelBuilder
 import io.grpc.stub.StreamObserver
@@ -19,13 +22,6 @@ import javax.inject.Singleton
 
 private const val TAG = "PdfSyncRepo"
 
-/**
- * 페이지만 동기화하는 간단 모델
- */
-data class PdfPageSync(
-    val page: Int,
-    val fromUserId: String
-)
 
 /**
  * 연결 상태 표현
@@ -40,14 +36,33 @@ sealed class PdfSyncConnectionStatus {
 /**
  * gRPC 양방향 스트림으로 페이지 이동만 Sync
  */
+// gRPC 구현체
 @Singleton
-class PdfGrpcRepositoryImpl @Inject constructor() : PdfGrpcRepository {
+class PdfGrpcRepositoryImpl @Inject constructor(): PdfGrpcRepository {
+    private val TAG = "PdfSyncRepo"
 
     private val _newPageUpdates = MutableLiveData<PdfPageSync>()
     override val newPageUpdates: LiveData<PdfPageSync> = _newPageUpdates
 
-    private val _connectionStatus =
-        MutableLiveData<PdfSyncConnectionStatus>(PdfSyncConnectionStatus.DISCONNECTED)
+    private val _newHighlights = MutableLiveData<HighlightSync>()
+    override val newHighlights: LiveData<HighlightSync> = _newHighlights
+
+    private val _newComments = MutableLiveData<CommentSync>()
+    override val newComments: LiveData<CommentSync> = _newComments
+
+    private val _updatedHighlights = MutableLiveData<HighlightSync>()
+    override val updatedHighlights: LiveData<HighlightSync> = _updatedHighlights
+
+    private val _updatedComments = MutableLiveData<CommentSync>()
+    override val updatedComments: LiveData<CommentSync> = _updatedComments
+
+    private val _deletedHighlights = MutableLiveData<Long>()
+    override val deletedHighlights: LiveData<Long> = _deletedHighlights
+
+    private val _deletedComments = MutableLiveData<Long>()
+    override val deletedComments: LiveData<Long> = _deletedComments
+
+    private val _connectionStatus = MutableLiveData<PdfSyncConnectionStatus>(PdfSyncConnectionStatus.DISCONNECTED)
     override val connectionStatus: LiveData<PdfSyncConnectionStatus> = _connectionStatus
 
     private var channel: ManagedChannel? = null
@@ -56,14 +71,11 @@ class PdfGrpcRepositoryImpl @Inject constructor() : PdfGrpcRepository {
 
     private var groupId: Long? = null
     private var userId: String? = null
-
     private var isActive = false
     private var shouldReconnect = false
 
     override fun connectAndJoinRoom(groupId: Long, userId: String) {
-        // 이미 활성 스트림 있으면 skip
         if (isActive && channel?.isTerminated == false) return
-
         this.groupId = groupId
         this.userId = userId
         isActive = true
@@ -81,51 +93,93 @@ class PdfGrpcRepositoryImpl @Inject constructor() : PdfGrpcRepository {
 
             stub = PdfSyncServiceGrpc.newStub(channel)
 
-            // 양방향 스트림 열기
             requestObserver = stub!!.sync(object : StreamObserver<SyncMessage> {
                 override fun onNext(msg: SyncMessage) {
                     if (!isActive) return
-                    if (msg.actionType == ActionType.PAGE_MOVE) {
-                        Handler(Looper.getMainLooper()).post {
-                            _newPageUpdates.postValue(
-                                PdfPageSync(
-                                    msg.payload.page,
-                                    msg.userId
-                                )
-                            )
+                    when (msg.actionType) {
+                        ActionType.PAGE_MOVE -> {
+                            Handler(Looper.getMainLooper()).post {
+                                _newPageUpdates.value = PdfPageSync(msg.payload.page, msg.userId)
+                            }
                         }
+                        ActionType.ADD,
+                        ActionType.UPDATE -> {
+                            when (msg.annotationType) {
+                                AnnotationType.HIGHLIGHT -> {
+                                    val sync = HighlightSync(
+                                        id = msg.payload.id,
+                                        page = msg.payload.page,
+                                        snippet = msg.payload.snippet,
+                                        color = msg.payload.color,
+                                        startX = msg.payload.coordinates.startX,
+                                        startY = msg.payload.coordinates.startY,
+                                        endX = msg.payload.coordinates.endX,
+                                        endY = msg.payload.coordinates.endY,
+                                        userId = msg.userId
+                                    )
+                                    Handler(Looper.getMainLooper()).post {
+                                        if (msg.actionType == ActionType.ADD) _newHighlights.value = sync
+                                        else _updatedHighlights.value = sync
+                                    }
+                                }
+                                AnnotationType.COMMENT -> {
+                                    val sync = CommentSync(
+                                        id = msg.payload.id,
+                                        page = msg.payload.page,
+                                        snippet = msg.payload.snippet,
+                                        text = msg.payload.text,
+                                        startX = msg.payload.coordinates.startX,
+                                        startY = msg.payload.coordinates.startY,
+                                        endX = msg.payload.coordinates.endX,
+                                        endY = msg.payload.coordinates.endY,
+                                        userId = msg.userId
+                                    )
+                                    Handler(Looper.getMainLooper()).post {
+                                        if (msg.actionType == ActionType.ADD) _newComments.value = sync
+                                        else _updatedComments.value = sync
+                                    }
+                                }
+                                else -> {}
+                            }
+                        }
+                        ActionType.DELETE -> {
+                            when (msg.annotationType) {
+                                AnnotationType.HIGHLIGHT -> {
+                                    Handler(Looper.getMainLooper()).post {
+                                        _deletedHighlights.value = msg.payload.id
+                                    }
+                                }
+                                AnnotationType.COMMENT -> {
+                                    Handler(Looper.getMainLooper()).post {
+                                        _deletedComments.value = msg.payload.id
+                                    }
+                                }
+                                else -> {}
+                            }
+                        }
+                        else -> {}
                     }
                 }
 
                 override fun onError(t: Throwable) {
                     if (!shouldReconnect) return
                     isActive = false
-                    _connectionStatus.postValue(
-                        PdfSyncConnectionStatus.ERROR("연결 오류: ${t.message}")
-                    )
-                    Handler(Looper.getMainLooper()).postDelayed({
-                        if (shouldReconnect) reconnect()
-                    }, 2_000)
+                    _connectionStatus.postValue(PdfSyncConnectionStatus.ERROR("연결 오류: ${t.message}"))
+                    Handler(Looper.getMainLooper()).postDelayed({ if (shouldReconnect) reconnect() }, 2000)
                 }
 
                 override fun onCompleted() {
                     isActive = false
                     _connectionStatus.postValue(PdfSyncConnectionStatus.DISCONNECTED)
-                    if (shouldReconnect) {
-                        Handler(Looper.getMainLooper()).postDelayed({
-                            reconnect()
-                        }, 1_000)
-                    }
+                    if (shouldReconnect) Handler(Looper.getMainLooper()).postDelayed({ reconnect() }, 1000)
                 }
             })
 
-            // 스트림이 열렸으니 연결 성공
             _connectionStatus.value = PdfSyncConnectionStatus.CONNECTED
 
         } catch (e: Exception) {
-            Log.e(TAG, "gRPC 연결 예외 발생", e)
-            _connectionStatus.value =
-                PdfSyncConnectionStatus.ERROR("연결 실패: ${e.message}")
+            Log.e(TAG, "gRPC 연결 예외", e)
+            _connectionStatus.value = PdfSyncConnectionStatus.ERROR("연결 실패: ${e.message}")
         }
     }
 
@@ -135,7 +189,6 @@ class PdfGrpcRepositoryImpl @Inject constructor() : PdfGrpcRepository {
             return
         }
         if (!isActive) return
-
         val msg = SyncMessage.newBuilder()
             .setGroupId(groupId ?: return)
             .setUserId(userId ?: return)
@@ -143,22 +196,39 @@ class PdfGrpcRepositoryImpl @Inject constructor() : PdfGrpcRepository {
             .setAnnotationType(AnnotationType.PAGE)
             .setPayload(AnnotationPayload.newBuilder().setPage(page).build())
             .build()
+        obs.onNext(msg)
+    }
 
+    override fun sendAnnotation(
+        groupId: Long,
+        userId: String,
+        type: AnnotationType,
+        payload: AnnotationPayload,
+        actionType: ActionType
+    ) {
+        val obs = requestObserver ?: run {
+            Log.w(TAG, "stream not open")
+            return
+        }
+        if (!isActive) return
+        val msg = SyncMessage.newBuilder()
+            .setGroupId(groupId)
+            .setUserId(userId)
+            .setActionType(actionType)
+            .setAnnotationType(type)
+            .setPayload(payload)
+            .build()
         obs.onNext(msg)
     }
 
     override fun reconnect() {
         if (!shouldReconnect) return
         disconnect()
-        val gid = groupId
-        val uid = userId
+        val gid = groupId; val uid = userId
         if (gid != null && uid != null) {
-            Handler(Looper.getMainLooper()).postDelayed({
-                connectAndJoinRoom(gid, uid)
-            }, 1_000)
+            Handler(Looper.getMainLooper()).postDelayed({ connectAndJoinRoom(gid, uid) }, 1000)
         } else {
-            _connectionStatus.value =
-                PdfSyncConnectionStatus.ERROR("재연결 정보 부족")
+            _connectionStatus.value = PdfSyncConnectionStatus.ERROR("재연결 정보 부족")
         }
     }
 
@@ -170,20 +240,12 @@ class PdfGrpcRepositoryImpl @Inject constructor() : PdfGrpcRepository {
         _connectionStatus.value = PdfSyncConnectionStatus.DISCONNECTED
     }
 
-    override fun isConnected(): Boolean {
-        return _connectionStatus.value == PdfSyncConnectionStatus.CONNECTED && isActive
-    }
+    override fun isConnected(): Boolean =
+        connectionStatus.value == PdfSyncConnectionStatus.CONNECTED && isActive
 
     private fun disconnect() {
-        try {
-            channel?.shutdownNow()
-            Log.d(TAG, "gRPC 연결 종료됨")
-        } catch (e: Exception) {
-            Log.e(TAG, "연결 종료 중 오류", e)
-        } finally {
-            channel = null
-            stub = null
-            requestObserver = null
-        }
+        try { channel?.shutdownNow(); Log.d(TAG, "gRPC 연결 종료") }
+        catch(e: Exception) { Log.e(TAG, "연결 종료 중 오류", e) }
+        finally { channel = null; stub = null; requestObserver = null }
     }
 }

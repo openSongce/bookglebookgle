@@ -40,66 +40,66 @@ interface PdfApi {
     suspend fun getGroupPdf(
         @Path("groupId") groupId: Long
     ): Response<ResponseBody>
-
-    /**
-    * 댓글 추가
-    */
-    @POST("pdf/{groupId}/comment")
-    suspend fun addComment(
-        @Path("groupId") groupId: Long,
-        @Body request: AddCommentRequest
-    ): Response<CommentResponse>
+//
+//    /**
+//    * 댓글 추가
+//    */
+//    @POST("pdf/{groupId}/comment")
+//    suspend fun addComment(
+//        @Path("groupId") groupId: Long,
+//        @Body request: AddCommentRequest
+//    ): Response<CommentResponse>
 
     /**
      * 특정 PDF의 모든 댓글 조회
      */
-    @GET("pdf/{groupId}/comments")
+    @GET("/comment/group/{groupId}")
     suspend fun getComments(
         @Path("groupId") groupId: Long
     ): Response<List<CommentResponse>>
 
-    /**
-     * 댓글 수정
-     */
-    @PUT("pdf/comment/{commentId}")
-    suspend fun updateComment(
-        @Path("commentId") commentId: Long,
-        @Body request: UpdateCommentRequest
-    ): Response<CommentResponse>
-
-    /**
-     * 댓글 삭제
-     */
-    @DELETE("pdf/comment/{commentId}")
-    suspend fun deleteComment(
-        @Path("commentId") commentId: Long
-    ): Response<DeleteAnnotationResponse>
-
-    /**
-     * 하이라이트 추가
-     */
-    @POST("pdf/{groupId}/highlight")
-    suspend fun addHighlight(
-        @Path("groupId") groupId: Long,
-        @Body request: AddHighlightRequest
-    ): Response<HighlightResponse>
+//    /**
+//     * 댓글 수정
+//     */
+//    @PUT("pdf/comment/{commentId}")
+//    suspend fun updateComment(
+//        @Path("commentId") commentId: Long,
+//        @Body request: UpdateCommentRequest
+//    ): Response<CommentResponse>
+//
+//    /**
+//     * 댓글 삭제
+//     */
+//    @DELETE("pdf/comment/{commentId}")
+//    suspend fun deleteComment(
+//        @Path("commentId") commentId: Long
+//    ): Response<DeleteAnnotationResponse>
+//
+//    /**
+//     * 하이라이트 추가
+//     */
+//    @POST("pdf/{groupId}/highlight")
+//    suspend fun addHighlight(
+//        @Path("groupId") groupId: Long,
+//        @Body request: AddHighlightRequest
+//    ): Response<HighlightResponse>
 
     /**
      * 특정 PDF의 모든 하이라이트 조회
      */
-    @GET("pdf/{groupId}/highlights")
+    @GET("/highlight/group/{groupId}")
     suspend fun getHighlights(
         @Path("groupId") groupId: Long
     ): Response<List<HighlightResponse>>
 
-    /**
-     * 하이라이트 삭제
-     */
-    @DELETE("pdf/highlight/{highlightId}")
-    suspend fun deleteHighlight(
-        @Path("highlightId") highlightId: Long
-    ): Response<DeleteAnnotationResponse>
-
+//    /**
+//     * 하이라이트 삭제
+//     */
+//    @DELETE("pdf/highlight/{highlightId}")
+//    suspend fun deleteHighlight(
+//        @Path("highlightId") highlightId: Long
+//    ): Response<DeleteAnnotationResponse>
+//
     /**
      * 북마크 추가
      */

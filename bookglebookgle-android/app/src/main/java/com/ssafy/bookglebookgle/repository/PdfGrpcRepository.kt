@@ -1,10 +1,22 @@
 package com.ssafy.bookglebookgle.repository
 
 import androidx.lifecycle.LiveData
+import com.example.bookglebookgleserver.pdf.grpc.ActionType
+import com.example.bookglebookgleserver.pdf.grpc.AnnotationPayload
+import com.example.bookglebookgleserver.pdf.grpc.AnnotationType
+import com.ssafy.bookglebookgle.entity.CommentSync
+import com.ssafy.bookglebookgle.entity.HighlightSync
+import com.ssafy.bookglebookgle.entity.PdfPageSync
 
 interface PdfGrpcRepository {
 
     val newPageUpdates: LiveData<PdfPageSync>
+    val newHighlights: LiveData<HighlightSync>
+    val newComments: LiveData<CommentSync>
+    val updatedHighlights: LiveData<HighlightSync>
+    val updatedComments: LiveData<CommentSync>
+    val deletedHighlights: LiveData<Long>
+    val deletedComments: LiveData<Long>
 
     /** 현재 gRPC 연결 상태 */
     val connectionStatus: LiveData<PdfSyncConnectionStatus>
@@ -14,6 +26,15 @@ interface PdfGrpcRepository {
 
     /** 현재 페이지를 서버에 전송 */
     fun sendPageUpdate(page: Int)
+
+    /** Annotation 서버에 전송 */
+    fun sendAnnotation(
+        groupId: Long,
+        userId: String,
+        type: AnnotationType,
+        payload: AnnotationPayload,
+        actionType: ActionType = ActionType.ADD
+    )
 
     /** 명시적으로 방 나가기 및 연결 종료 */
     fun leaveRoom()
