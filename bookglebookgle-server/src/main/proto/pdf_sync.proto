@@ -2,6 +2,7 @@ syntax = "proto3";
 
 package bgbg.pdf;
 
+// ❗ 이 부분을 실제 서버 패키지와 일치하게 수정
 option java_package = "com.example.bookglebookgleserver.pdf.grpc";
 option java_multiple_files = true;
 
