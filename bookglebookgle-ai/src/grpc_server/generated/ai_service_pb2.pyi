@@ -25,16 +25,14 @@ class User(_message.Message):
     def __init__(self, user_id: _Optional[str] = ..., nickname: _Optional[str] = ...) -> None: ...
 
 class QuizRequest(_message.Message):
-    __slots__ = ("document_id", "meeting_id", "content", "progress_percentage")
+    __slots__ = ("document_id", "meeting_id", "progress_percentage")
     DOCUMENT_ID_FIELD_NUMBER: _ClassVar[int]
     MEETING_ID_FIELD_NUMBER: _ClassVar[int]
-    CONTENT_FIELD_NUMBER: _ClassVar[int]
     PROGRESS_PERCENTAGE_FIELD_NUMBER: _ClassVar[int]
     document_id: str
     meeting_id: str
-    content: TextContent
     progress_percentage: int
-    def __init__(self, document_id: _Optional[str] = ..., meeting_id: _Optional[str] = ..., content: _Optional[_Union[TextContent, _Mapping]] = ..., progress_percentage: _Optional[int] = ...) -> None: ...
+    def __init__(self, document_id: _Optional[str] = ..., meeting_id: _Optional[str] = ..., progress_percentage: _Optional[int] = ...) -> None: ...
 
 class Question(_message.Message):
     __slots__ = ("question_text", "options", "correct_answer_index")

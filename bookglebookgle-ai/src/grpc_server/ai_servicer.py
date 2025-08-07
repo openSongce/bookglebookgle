@@ -14,7 +14,7 @@ from loguru import logger
 from .generated import ai_service_pb2, ai_service_pb2_grpc
 
 from src.services.discussion_service import DiscussionService
-from src.services.simplified_ocr_service import SimplifiedOCRService
+from src.services.tailscale_ocr_client import TailscaleOCRClient
 from src.services.vector_db import VectorDBManager
 from src.services.meeting_service import MeetingService
 from src.config.settings import get_settings
@@ -29,8 +29,8 @@ class AIServicer(ai_service_pb2_grpc.AIServiceServicer):
         self.discussion_service = DiscussionService()
         self.meeting_service = MeetingService()  # 새로 추가
         
-        # Initialize SimplifiedOCRService with LLM post-processing enabled
-        self.ocr_service = SimplifiedOCRService(enable_llm_postprocessing=True)
+        # Initialize TailscaleOCRClient for remote OCR processing
+        self.ocr_service = TailscaleOCRClient()
         
         # Use the initialized services passed from the outside
         self.vector_db_manager = vector_db_manager
@@ -50,8 +50,11 @@ class AIServicer(ai_service_pb2_grpc.AIServiceServicer):
             # Initialize meeting service with vector DB and discussion service
             await self.meeting_service.initialize(self.vector_db_manager, self.discussion_service)
             
-            # Initialize OCR service
+            # Initialize Tailscale OCR service (critical for EC2)
             ocr_success = await self.initialize_ocr_service()
+            if not ocr_success:
+                logger.error("❌ Tailscale OCR service initialization failed - EC2 cannot start without local OCR")
+                raise Exception("EC2 requires Tailscale OCR service - server cannot start without it")
             
             # Log service availability status
             self._log_service_status()
@@ -71,7 +74,7 @@ class AIServicer(ai_service_pb2_grpc.AIServiceServicer):
             "Quiz Service": self.quiz_service is not None,
             "Proofreading Service": self.proofreading_service is not None,
             "Discussion Service": True,  # Always available
-            "OCR Service": True  # Always available
+            "Tailscale OCR Service": getattr(self.ocr_service, 'initialized', False)
         }
         
         logger.info("📊 AI Servicer Service Status:")
@@ -85,16 +88,20 @@ class AIServicer(ai_service_pb2_grpc.AIServiceServicer):
         logger.info(f"🧠 AI Features (Quiz/Proofreading): {feature_status}")
     
     async def initialize_ocr_service(self):
-        """Initialize the OCR service asynchronously"""
+        """Initialize the Tailscale OCR service asynchronously"""
         try:
+            logger.info("🌐 Initializing Tailscale OCR client connection...")
             success = await self.ocr_service.initialize()
             if success:
-                logger.info("✅ SimplifiedOCRService initialized successfully")
+                logger.info("✅ Tailscale OCR client initialized successfully")
+                logger.info(f"🔗 Connected to: {self.ocr_service.host}:{self.ocr_service.port}")
             else:
-                logger.error("❌ SimplifiedOCRService initialization failed")
+                logger.error("❌ Tailscale OCR client initialization failed")
+                logger.error("🚨 EC2 server cannot start without local OCR service connection")
             return success
         except Exception as e:
-            logger.error(f"❌ SimplifiedOCRService initialization error: {e}")
+            logger.error(f"❌ Tailscale OCR client initialization error: {e}")
+            logger.error("🚨 EC2 server requires Tailscale OCR service to be running")
             return False
     
     # 퀴즈 생성과 교정 기능은 나중에 구현 예정으로 제거
@@ -447,6 +454,11 @@ class AIServicer(ai_service_pb2_grpc.AIServiceServicer):
         """Generate quiz based on progress percentage (50% or 100%)"""
         try:
             logger.info(f"Quiz generation requested for document: {request.document_id}, meeting: {request.meeting_id}, progress: {request.progress_percentage}%")
+            
+            # DEBUG: QuizService 상태 확인
+            logger.info(f"🔍 DEBUG - AIServicer QuizService: {'Available' if self.quiz_service else 'None'}")
+            if self.quiz_service:
+                logger.info(f"🔍 DEBUG - QuizService VectorDB: {'Available' if self.quiz_service.vector_db else 'None'}")
 
             doc_id = request.document_id
             meeting_id = request.meeting_id
@@ -467,38 +479,37 @@ class AIServicer(ai_service_pb2_grpc.AIServiceServicer):
                 context.set_details("Progress percentage must be 50 or 100")
                 return None
 
-            # 벡터DB에서 진도율에 맞는 컨텐츠 검색
-            content_chunks = await self.vector_db_manager.search_by_progress(
-                meeting_id=meeting_id,
-                document_id=doc_id,
-                progress_percentage=progress
-            )
-
-            if not content_chunks:
-                return ai_service_pb2.QuizResponse(
-                    success=False,
-                    message="No content found for the specified progress percentage"
-                )
-
-            # QuizService를 통한 퀴즈 생성
+            # QuizService를 통한 퀴즈 생성 (벡터DB 연동은 QuizService 내부에서 처리)
             quiz_data = {
                 "document_id": doc_id,
-                "content": " ".join(content_chunks),
-                "progress_percentage": progress,
-                "question_count": 5,
-                "difficulty_level": "medium",
-                "language": "ko"
+                "meeting_id": meeting_id,
+                "progress_percentage": progress
             }
             
             # QuizService 초기화 확인
             if not self.quiz_service:
                 logger.warning("QuizService not initialized, using mock data")
-                # Fallback to basic mock quiz
+                # Fallback to basic mock quiz (4 questions fixed)
                 questions = [
                     ai_service_pb2.Question(
-                        question_text="문서의 주요 내용은 무엇인가요?",
-                        options=["개념 A", "개념 B", "개념 C", "개념 D"],
+                        question_text=f"문서 {progress}% 진도의 주요 내용은 무엇인가요?",
+                        options=["기본 개념", "심화 내용", "응용 사례", "참고 자료"],
                         correct_answer_index=0
+                    ),
+                    ai_service_pb2.Question(
+                        question_text=f"{progress}% 진도에서 다루는 핵심 주제는?",
+                        options=["주제 A", "주제 B", "주제 C", "주제 D"],
+                        correct_answer_index=1
+                    ),
+                    ai_service_pb2.Question(
+                        question_text=f"문서 {progress}% 구간의 특징은?",
+                        options=["도입부", "전개부", "심화부", "결론부"],
+                        correct_answer_index=2 if progress == 100 else 0
+                    ),
+                    ai_service_pb2.Question(
+                        question_text=f"{progress}% 진도 완료 시 이해할 수 있는 것은?",
+                        options=["기초 이해", "부분 이해", "전체 이해", "심화 이해"],
+                        correct_answer_index=3 if progress == 100 else 1
                     )
                 ]
                 quiz_id = f"quiz_{uuid.uuid4().hex[:8]}"
@@ -684,29 +695,26 @@ class AIServicer(ai_service_pb2_grpc.AIServiceServicer):
             response_text_blocks = []
             
             # OCR 결과에서 실제 블록 정보 사용 (타입 안전성 검사 포함)
-            text_blocks_data = ocr_result.get("text_blocks", [])
+            text_blocks_data = ocr_result.get("ocr_blocks", [])
             if not isinstance(text_blocks_data, list):
-                logger.warning(f"text_blocks is not a list: {type(text_blocks_data)}")
+                logger.warning(f"ocr_blocks is not a list: {type(text_blocks_data)}")
                 text_blocks_data = []
                 
-            for text_block in text_blocks_data:
-                if not isinstance(text_block, dict):
-                    logger.warning(f"text_block is not a dict: {type(text_block)}")
-                    continue
-                    
+            for ocr_block in text_blocks_data:
+                # OCRBlock 객체에서 속성 직접 접근
                 try:
                     response_text_blocks.append(ai_service_pb2.TextBlock(
-                        text=str(text_block.get("text", "")),
-                        page_number=int(text_block.get("page_number", 0)),
-                        x0=float(text_block.get("x0", 0.0)),
-                        y0=float(text_block.get("y0", 0.0)), 
-                        x1=float(text_block.get("x1", 0.0)),
-                        y1=float(text_block.get("y1", 0.0)),
-                        block_type=str(text_block.get("block_type", "text")),
-                        confidence=float(text_block.get("confidence", 0.0))
+                        text=str(ocr_block.text),
+                        page_number=int(ocr_block.page_number),
+                        x0=float(ocr_block.bbox.x0),
+                        y0=float(ocr_block.bbox.y0), 
+                        x1=float(ocr_block.bbox.x1),
+                        y1=float(ocr_block.bbox.y1),
+                        block_type=str(ocr_block.block_type),
+                        confidence=float(ocr_block.confidence)
                     ))
-                except (ValueError, TypeError) as e:
-                    logger.warning(f"Failed to convert text_block data: {e}, block: {text_block}")
+                except (ValueError, TypeError, AttributeError) as e:
+                    logger.warning(f"Failed to convert OCRBlock data: {e}, block: {ocr_block}")
                     continue
 
             return ai_service_pb2.ProcessPdfResponse(

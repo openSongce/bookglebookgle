@@ -32,14 +32,18 @@ class QuizService:
         try:
             logger.info("Initializing Quiz Service...")
             
-            # Initialize LLM client
-            self.llm_client = LLMClient()
-            await self.llm_client.initialize()
-            
-            self.quiz_llm_client = QuizLLMClient(self.llm_client)
+            # Initialize LLM client only if not already set by ServiceInitializer
+            if self.llm_client is None:
+                logger.info("🔧 Creating new LLM client for Quiz Service")
+                self.llm_client = LLMClient()
+                await self.llm_client.initialize()
+                self.quiz_llm_client = QuizLLMClient(self.llm_client)
+            else:
+                logger.info("🔄 Using existing LLM client for Quiz Service")
+                # quiz_llm_client는 ServiceInitializer에서 이미 설정됨
             
             # Note: VectorDB is managed by ServiceInitializer, not initialized here
-            self.vector_db = None  # Will be set by ServiceInitializer if needed
+            # self.vector_db is already set by ServiceInitializer - do not reset to None!
             
             logger.info("Quiz Service initialized successfully")
             
@@ -49,16 +53,13 @@ class QuizService:
     
     async def generate_quiz(self, quiz_data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Generate quiz questions from document content
+        Generate quiz questions from document content using VectorDB
         
         Args:
             quiz_data: Dict containing:
                 - document_id: str
-                - content: str  
-                - language: str (default: "ko")
+                - meeting_id: str
                 - progress_percentage: int (50 or 100)
-                - question_count: int (default: 5)
-                - difficulty_level: str (easy/medium/hard)
         
         Returns:
             Dict with success status, quiz_id, and questions
@@ -66,22 +67,65 @@ class QuizService:
         try:
             logger.info(f"Generating quiz for document: {quiz_data.get('document_id')}")
             
+            # DEBUG: VectorDB 상태 확인
+            logger.info(f"🔍 DEBUG - VectorDB status: {'Available' if self.vector_db else 'None'}")
+            if self.vector_db:
+                logger.info(f"🔍 DEBUG - VectorDB type: {type(self.vector_db)}")
+            
             # Validate input
             if not self._validate_quiz_request(quiz_data):
                 return {"success": False, "error": "Invalid quiz request data"}
             
+            # VectorDB에서 진도율별 문서 내용 검색 (fallback 포함)
+            combined_content = ""
+            if self.vector_db:
+                try:
+                    content_chunks = await self.vector_db.search_by_progress(
+                        meeting_id=quiz_data["meeting_id"],
+                        document_id=quiz_data["document_id"],
+                        progress_percentage=quiz_data["progress_percentage"],
+                        max_chunks=3
+                    )
+                    
+                    if content_chunks:
+                        combined_content = "\n\n".join(content_chunks)
+                        logger.info(f"Retrieved {len(content_chunks)} chunks from VectorDB")
+                    else:
+                        logger.warning(f"No content found in VectorDB for document {quiz_data['document_id']} at {quiz_data['progress_percentage']}% progress")
+                except Exception as e:
+                    logger.warning(f"VectorDB search failed: {e}")
+            else:
+                logger.warning("VectorDB not available, using fallback content")
+            
+            # Fallback: VectorDB에서 내용을 가져올 수 없을 때 기본 내용 사용
+            if not combined_content:
+                progress = quiz_data["progress_percentage"]
+                if progress == 50:
+                    combined_content = f"문서 전반부(50% 진도) 내용: 기본 개념과 도입부 설명이 포함되어 있습니다. 주요 용어와 기초 이론을 다루며, 이해하기 쉬운 예시들로 구성되어 있습니다."
+                else:  # 100%
+                    combined_content = f"문서 전체(100% 진도) 내용: 기본 개념부터 심화 내용까지 포괄적으로 다룹니다. 이론적 배경, 실무 적용 사례, 결론 및 요약이 포함되어 있습니다."
+                logger.info(f"Using fallback content for {progress}% progress")
+            
+            quiz_data_with_content = {
+                **quiz_data,
+                "content": combined_content,
+                "language": "ko",
+                "question_count": 4,
+                "difficulty_level": "medium"
+            }
+            
             # 실제 LLM 연동 또는 Mock 선택
             if not self.settings.ai.MOCK_AI_RESPONSES and self.quiz_llm_client:
                 # 실제 LLM을 사용한 퀴즈 생성
-                llm_questions = await self._generate_llm_questions(quiz_data)
+                llm_questions = await self._generate_llm_questions(quiz_data_with_content)
                 if llm_questions:
                     mock_questions = llm_questions
                 else:
                     logger.warning("LLM quiz generation failed, falling back to mock")
-                    mock_questions = self._generate_mock_questions(quiz_data)
+                    mock_questions = self._generate_mock_questions(quiz_data_with_content)
             else:
                 # Mock 응답 사용
-                mock_questions = self._generate_mock_questions(quiz_data)
+                mock_questions = self._generate_mock_questions(quiz_data_with_content)
             
             # Validate generated questions
             validated_questions = self._validate_questions(mock_questions)
@@ -94,11 +138,13 @@ class QuizService:
             quiz_record = {
                 "quiz_id": quiz_id,
                 "document_id": quiz_data["document_id"],
-                "progress_percentage": quiz_data.get("progress_percentage"),
+                "meeting_id": quiz_data["meeting_id"],
+                "progress_percentage": quiz_data["progress_percentage"],
                 "questions": validated_questions,
                 "created_at": datetime.utcnow().isoformat(),
-                "difficulty_level": quiz_data.get("difficulty_level", "medium"),
-                "language": quiz_data.get("language", "ko")
+                "difficulty_level": "medium",
+                "language": "ko",
+                "question_count": 4
             }
             
             # Store quiz for future reference
@@ -145,7 +191,7 @@ class QuizService:
     
     def _validate_quiz_request(self, quiz_data: Dict[str, Any]) -> bool:
         """Validate quiz generation request"""
-        required_fields = ["document_id", "content"]
+        required_fields = ["document_id", "meeting_id", "progress_percentage"]
         
         for field in required_fields:
             if field not in quiz_data or not quiz_data[field]:
@@ -154,14 +200,8 @@ class QuizService:
         
         # Validate progress percentage
         progress = quiz_data.get("progress_percentage")
-        if progress and progress not in [50, 100]:
-            logger.error(f"Invalid progress percentage: {progress}")
-            return False
-        
-        # Validate question count
-        question_count = quiz_data.get("question_count", 5)
-        if not isinstance(question_count, int) or question_count < 1 or question_count > 10:
-            logger.error(f"Invalid question count: {question_count}")
+        if progress not in [50, 100]:
+            logger.error(f"Invalid progress percentage: {progress}. Must be 50 or 100")
             return False
         
         return True
@@ -169,90 +209,75 @@ class QuizService:
     def _generate_mock_questions(self, quiz_data: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Generate mock quiz questions for testing"""
         content = quiz_data.get("content", "")
-        language = quiz_data.get("language", "ko")
-        question_count = quiz_data.get("question_count", 5)
-        difficulty = quiz_data.get("difficulty_level", "medium")
+        progress = quiz_data.get("progress_percentage", 100)
+        question_count = 4  # 고정값
         
-        # Mock questions based on content type and language
-        if language == "ko":
+        # Mock questions based on progress percentage
+        if progress == 50:
             mock_questions = [
                 {
-                    "question": "이 문서의 주요 주제는 무엇입니까?",
-                    "options": ["인공지능과 머신러닝", "웹 개발", "데이터베이스 설계", "클라우드 컴퓨팅"],
+                    "question": "문서 전반부(50% 진도)의 주요 내용은 무엇입니까?",
+                    "options": ["기본 개념 소개", "심화 내용", "결론 및 요약", "참고 자료"],
                     "correct_answer": 0,
-                    "explanation": "문서는 주로 AI와 머신러닝에 관한 내용을 다루고 있습니다.",
-                    "category": "주요 개념"
+                    "explanation": "문서 전반부는 주로 기본 개념을 소개하는 내용입니다.",
+                    "category": "전반부 내용"
                 },
                 {
-                    "question": "딥러닝은 무엇의 하위 분야입니까?",
-                    "options": ["데이터베이스", "머신러닝", "웹 개발", "네트워킹"],
-                    "correct_answer": 1,
-                    "explanation": "딥러닝은 머신러닝의 한 분야입니다.",
-                    "category": "기술 분류"
+                    "question": "문서에서 처음 등장하는 핵심 용어는?",
+                    "options": ["기본 용어", "전문 용어", "고급 용어", "결론 용어"],
+                    "correct_answer": 0,
+                    "explanation": "문서 초반부에는 기본적인 용어들이 주로 등장합니다.",
+                    "category": "용어 이해"
                 },
                 {
-                    "question": "AI 기술이 활용되는 분야가 아닌 것은?",
-                    "options": ["자율주행차", "의료 진단", "전통 농업", "금융 서비스"],
-                    "correct_answer": 2,
-                    "explanation": "전통 농업은 AI 기술 활용이 상대적으로 제한적입니다.",
-                    "category": "응용 분야"
+                    "question": "문서 전반부에서 강조하는 주요 포인트는?",
+                    "options": ["기초 이해", "실무 적용", "고급 기법", "최종 평가"],
+                    "correct_answer": 0,
+                    "explanation": "전반부에서는 기초적인 이해를 강조합니다.",
+                    "category": "학습 목표"
                 },
                 {
-                    "question": "머신러닝의 주요 유형이 아닌 것은?",
-                    "options": ["지도학습", "비지도학습", "강화학습", "수동학습"],
-                    "correct_answer": 3,
-                    "explanation": "수동학습은 머신러닝의 유형이 아닙니다.",
-                    "category": "학습 유형"
-                },
-                {
-                    "question": "CNN이 주로 사용되는 분야는?",
-                    "options": ["자연어 처리", "이미지 처리", "음성 인식", "데이터 분석"],
-                    "correct_answer": 1,
-                    "explanation": "CNN(Convolutional Neural Network)은 주로 이미지 처리에 사용됩니다.",
-                    "category": "신경망 유형"
+                    "question": "문서 전반부의 구성 방식은?",
+                    "options": ["단계별 설명", "무작위 배치", "결론 우선", "참고자료 위주"],
+                    "correct_answer": 0,
+                    "explanation": "전반부는 단계적으로 내용을 설명하는 구성입니다.",
+                    "category": "구성 방식"
                 }
             ]
-        else:  # English
+        else:  # progress == 100
             mock_questions = [
                 {
-                    "question": "What is the main topic of this document?",
-                    "options": ["Database design", "Web development", "Machine Learning", "Network security"],
-                    "correct_answer": 2,
-                    "explanation": "The document primarily discusses machine learning concepts.",
-                    "category": "Main Concepts"
-                },
-                {
-                    "question": "What does ACID stand for in databases?",
-                    "options": ["Atomicity, Consistency, Isolation, Durability", "Access, Control, Index, Data", "Authentication, Configuration, Integration, Deployment", "Application, Cache, Interface, Database"],
+                    "question": "전체 문서(100% 진도)의 핵심 메시지는?",
+                    "options": ["전체적 이해", "부분적 지식", "기초 개념", "세부 사항"],
                     "correct_answer": 0,
-                    "explanation": "ACID represents the four properties of database transactions.",
-                    "category": "Database Concepts"
+                    "explanation": "전체 문서를 통해 포괄적인 이해를 목표로 합니다.",
+                    "category": "전체 요약"
                 },
                 {
-                    "question": "Which is NOT a software architecture pattern?",
-                    "options": ["MVC", "Microservices", "Event-driven", "Database-first"],
-                    "correct_answer": 3,
-                    "explanation": "Database-first is a development approach, not an architecture pattern.",
-                    "category": "Architecture Patterns"
+                    "question": "문서 후반부에서 다루는 고급 내용은?",
+                    "options": ["심화 개념", "기본 개념", "도입부", "목차"],
+                    "correct_answer": 0,
+                    "explanation": "후반부에는 심화된 개념들이 주로 다뤄집니다.",
+                    "category": "후반부 내용"
                 },
                 {
-                    "question": "What does CQRS stand for?",
-                    "options": ["Command Query Response Segregation", "Command Query Responsibility Segregation", "Complex Query Result System", "Centralized Query Resource Service"],
-                    "correct_answer": 1,
-                    "explanation": "CQRS stands for Command Query Responsibility Segregation.",
-                    "category": "Design Patterns"
+                    "question": "문서의 결론 부분에서 제시하는 것은?",
+                    "options": ["종합적 정리", "새로운 시작", "기초 설명", "용어 정의"],
+                    "correct_answer": 0,
+                    "explanation": "결론 부분에서는 전체 내용을 종합적으로 정리합니다.",
+                    "category": "결론"
                 },
                 {
-                    "question": "Which is a benefit of microservices architecture?",
-                    "options": ["Reduced complexity", "Single point of failure", "Independent deployment", "Centralized data"],
-                    "correct_answer": 2,
-                    "explanation": "Microservices allow for independent deployment of services.",
-                    "category": "Architecture Benefits"
+                    "question": "전체 문서를 통해 얻을 수 있는 최종 이해는?",
+                    "options": ["완전한 이해", "부분적 지식", "기초 수준", "입문 수준"],
+                    "correct_answer": 0,
+                    "explanation": "전체 문서를 통해 주제에 대한 완전한 이해를 얻을 수 있습니다.",
+                    "category": "최종 목표"
                 }
             ]
         
-        # Return only the requested number of questions
-        return mock_questions[:question_count]
+        # Return fixed 4 questions
+        return mock_questions[:4]
     
     def _clean_json_response(self, response: str) -> str:
         """LLM 응답에서 JSON을 정리하고 수정"""
@@ -352,7 +377,7 @@ CRITICAL: 반드시 유효한 JSON 배열 형식으로만 응답하세요. 다�
 - 마지막 요소 뒤에는 쉼표를 붙이지 마세요
 - 모든 질문과 선택지는 한국어로 작성하세요"""
             
-            prompt = f"""다음 문서 내용을 바탕으로 {question_count}개의 객관식 퀴즈를 생성해주세요.
+            prompt = f"""다음 문서 내용을 바탕으로 4개의 객관식 퀴즈를 생성해주세요.
 
 문서 내용:
 {content[:2000]}  # 토큰 제한을 위해 내용 제한
@@ -369,7 +394,8 @@ CRITICAL: 반드시 유효한 JSON 배열 형식으로만 응답하세요. 다�
                 prompt=prompt,
                 system_message=system_message,
                 max_tokens=2000,
-                temperature=0.7
+                temperature=0.7,
+                provider=LLMProvider.GMS
             )
             
             logger.debug(f"LLM Response: {response[:500]}...")  # 디버깅용 로그

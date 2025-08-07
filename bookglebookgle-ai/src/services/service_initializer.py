@@ -87,8 +87,11 @@ class ServiceInitializer:
             # 1. 기본 서비스들 초기화 (병렬)
             basic_services = await self._initialize_basic_services()
             
-            # 2. LLM 기반 서비스들 초기화 (순차)
-            ai_services = await self._initialize_ai_services(basic_services.get('llm_client'))
+            # 2. LLM 기반 서비스들 초기화 (순차) - basic_services 전달
+            ai_services = await self._initialize_ai_services(
+                basic_services.get('llm_client'),
+                basic_services  # basic_services 전달
+            )
             
             # 3. 모든 서비스 통합
             all_services = {**basic_services, **ai_services}
@@ -160,7 +163,11 @@ class ServiceInitializer:
         
         return services
     
-    async def _initialize_ai_services(self, llm_client: Optional[LLMClient]) -> Dict[str, Any]:
+    async def _initialize_ai_services(
+        self, 
+        llm_client: Optional[LLMClient],
+        basic_services: Dict[str, Any] = None
+    ) -> Dict[str, Any]:
         """LLM 기반 AI 서비스들을 초기화"""
         logger.info("🧠 Initializing AI services...")
         
@@ -172,10 +179,23 @@ class ServiceInitializer:
             services['proofreading_service'] = None
             return services
         
+        # VectorDB 가져오기 (QuizService에서 필요) - basic_services에서 직접 가져오기
+        vector_db = basic_services.get('vector_db') if basic_services else None
+        
         # Quiz Service 초기화
         try:
             logger.info("📝 Initializing Quiz Service...")
             quiz_service = QuizService()
+            # LLM Client 재사용하여 초기화
+            quiz_service.llm_client = llm_client
+            if llm_client:
+                from src.services.llm_client import QuizLLMClient
+                quiz_service.quiz_llm_client = QuizLLMClient(llm_client)
+            
+            # VectorDB 주입 (중요!)
+            quiz_service.vector_db = vector_db
+            logger.info(f"📊 QuizService VectorDB injection: {'✅ Success' if vector_db else '❌ VectorDB not available'}")
+            
             await quiz_service.initialize()
             services['quiz_service'] = quiz_service
             self.status.quiz_service = True
@@ -190,6 +210,11 @@ class ServiceInitializer:
         try:
             logger.info("✏️ Initializing Proofreading Service...")
             proofreading_service = ProofreadingService()
+            # LLM Client 재사용하여 초기화
+            proofreading_service.llm_client = llm_client
+            if llm_client:
+                from src.services.llm_client import ProofreadingLLMClient
+                proofreading_service.proofreading_llm_client = ProofreadingLLMClient(llm_client)
             await proofreading_service.initialize()
             services['proofreading_service'] = proofreading_service
             self.status.proofreading_service = True

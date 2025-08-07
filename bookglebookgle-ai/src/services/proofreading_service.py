@@ -27,12 +27,16 @@ class ProofreadingService:
         try:
             logger.info("Initializing Proofreading Service...")
             
-            # Initialize LLM client
-            if not self.settings.ai.MOCK_AI_RESPONSES:
+            # Initialize LLM client only if not already set by ServiceInitializer
+            if self.llm_client is None and not self.settings.ai.MOCK_AI_RESPONSES:
+                logger.info("🔧 Creating new LLM client for Proofreading Service")
                 self.llm_client = LLMClient()
                 await self.llm_client.initialize()
                 self.proofreading_llm_client = ProofreadingLLMClient(self.llm_client)
                 logger.info("LLM client initialized for proofreading")
+            elif self.llm_client is not None:
+                logger.info("🔄 Using existing LLM client for Proofreading Service")
+                # proofreading_llm_client는 ServiceInitializer에서 이미 설정됨
             else:
                 logger.info("Using mock responses for proofreading")
                 
@@ -137,12 +141,14 @@ class ProofreadingService:
 
 문법, 맞춤법, 문체의 오류를 찾아 교정하고, 각 수정사항에 대한 설명을 제공해주세요."""
             
-            # LLM 호출
+            # LLM 호출 (GMS API 사용)
+            from src.services.llm_client import LLMProvider
             response = await self.llm_client.generate_completion(
                 prompt=prompt,
                 system_message=system_message,
                 max_tokens=1500,
-                temperature=0.3  # 교정 작업이므로 낮은 temperature 사용
+                temperature=0.3,  # 교정 작업이므로 낮은 temperature 사용
+                provider=LLMProvider.GMS
             )
             
             # JSON 응답 파싱
