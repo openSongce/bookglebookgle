@@ -1,9 +1,9 @@
 package com.example.bookglebookgleserver.comment.controller;
 
+import com.example.bookglebookgleserver.comment.dto.CommentResponseDto;
 import com.example.bookglebookgleserver.comment.entity.Comment;
 import com.example.bookglebookgleserver.comment.repository.CommentRepository;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -31,13 +31,28 @@ public class CommentController {
                     responseCode = "200",
                     description = "조회 성공",
                     content = @Content(mediaType = "application/json",
-                            schema = @Schema(implementation = Comment.class))
+                            schema = @Schema(implementation = CommentResponseDto.class))
             )
     )
     @GetMapping("/group/{groupId}")
-    public List<Comment> getComments(
-            @Parameter(description = "그룹 ID", example = "1")
-            @PathVariable Long groupId) {
-        return commentRepository.findByGroupId(groupId);
+    public List<CommentResponseDto> getComments(@PathVariable Long groupId) {
+        List<Comment> comments = commentRepository.findByGroupId(groupId);
+        return comments.stream()
+                .map(c -> new CommentResponseDto(
+                        c.getId(),
+                        c.getPdfFile().getPdfId(),
+                        c.getGroupId(),
+                        c.getUserId(),
+                        c.getPage(),
+                        c.getSnippet(),
+                        c.getText(),
+                        c.getStartX(),
+                        c.getStartY(),
+                        c.getEndX(),
+                        c.getEndY(),
+                        c.getCreatedAt().toString()
+                ))
+                .toList();
     }
+
 }
