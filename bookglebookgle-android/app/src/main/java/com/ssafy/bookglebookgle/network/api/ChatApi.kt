@@ -4,6 +4,7 @@ import com.ssafy.bookglebookgle.entity.ChatListResponse
 import com.ssafy.bookglebookgle.entity.ChatMessagesResponse
 import retrofit2.Response
 import retrofit2.http.GET
+import retrofit2.http.POST
 import retrofit2.http.Path
 import retrofit2.http.Query
 
@@ -16,6 +17,11 @@ interface ChatApi {
     suspend fun getChatMessages(
         @Path("roomId") roomId: Long,
         @Query("beforeId") beforeId: Long? = null,
-        @Query("size") size: Int = 20
+        @Query("size") size: Int = 15
     ): Response<List<ChatMessagesResponse>>
+
+    @POST("chat/{roomId}/read")
+    suspend fun markChatAsRead(
+        @Path("roomId") roomId: Long
+    ): Response<Unit>
 }

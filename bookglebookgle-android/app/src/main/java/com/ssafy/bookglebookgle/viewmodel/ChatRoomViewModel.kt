@@ -6,7 +6,6 @@ import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ssafy.bookglebookgle.entity.ChatMessage
-import com.ssafy.bookglebookgle.entity.ChatMessagesResponse
 import com.ssafy.bookglebookgle.repository.ChatRepositoryImpl
 import com.ssafy.bookglebookgle.repository.GroupRepositoryImpl
 import com.ssafy.bookglebookgle.repository.ChatGrpcRepository
@@ -26,7 +25,9 @@ data class ChatRoomUiState(
     val isLoadingMore: Boolean = false,
     val hasMoreData: Boolean = true,
     val error: String? = null,
-    val grpcConnected: Boolean = false
+    val grpcConnected: Boolean = false,
+    val shouldScrollToBottom: Boolean = false,
+    val isMarkingAsRead: Boolean = false
 )
 
 @HiltViewModel
@@ -70,7 +71,6 @@ class ChatRoomViewModel @Inject constructor(
         return message.userId == userId
     }
 
-    // 채팅방 입장 - REST API + gRPC 연결
     @RequiresApi(Build.VERSION_CODES.O)
     fun enterChatRoom(groupId: Long, userId: Long) {
         viewModelScope.launch {
@@ -83,7 +83,7 @@ class ChatRoomViewModel @Inject constructor(
                 val groupTitle = groupDetail.body()?.roomTitle
 
                 // 최신 메시지 불러오기
-                val latestMessages = chatRepositoryImpl.getLatestChatMessages(groupId, 20)
+                val latestMessages = chatRepositoryImpl.getLatestChatMessages(groupId, 15)
 
                 val chatMessages = latestMessages.map { response ->
                     ChatMessage(
@@ -94,13 +94,14 @@ class ChatRoomViewModel @Inject constructor(
                         message = response.message,
                         timestamp = DateTimeUtils.formatChatTime(response.createdAt)
                     )
-                }.sortedBy { it.messageId } // 메시지 ID 기준 오름차순 정렬
+                }.sortedBy  { it.messageId } // 메시지 ID 기준 오름차순 정렬 유지
 
                 _uiState.value = _uiState.value.copy(
                     chatMessages = chatMessages,
                     groupTitle = groupTitle ?: "채팅방",
                     isLoading = false,
-                    hasMoreData = latestMessages.size >= 20
+                    hasMoreData = latestMessages.size >= 15,
+                    shouldScrollToBottom = true // 스크롤 플래그 추가
                 )
 
                 isInitialLoad = false
@@ -117,10 +118,16 @@ class ChatRoomViewModel @Inject constructor(
         }
     }
 
-    // 이전 메시지 불러오기 (스크롤 페이징)
     @RequiresApi(Build.VERSION_CODES.O)
     fun loadMoreMessages() {
-        if (_uiState.value.isLoadingMore || !_uiState.value.hasMoreData || isInitialLoad) {
+//        if (_uiState.value.isLoadingMore || !_uiState.value.hasMoreData || isInitialLoad) {
+//            return
+//        }
+        // 중복 호출 방지를 위한 더 엄격한 체크
+        if (_uiState.value.isLoadingMore ||
+            !_uiState.value.hasMoreData ||
+            isInitialLoad ||
+            _uiState.value.isLoading) {
             return
         }
 
@@ -134,13 +141,18 @@ class ChatRoomViewModel @Inject constructor(
                     return@launch
                 }
 
-                val oldestMessageId = currentMessages.firstOrNull()?.messageId ?: return@launch
+                val oldestMessageId = currentMessages.firstOrNull()?.messageId ?: run {
+                    _uiState.value = _uiState.value.copy(isLoadingMore = false)
+                    return@launch
+                }
+
+//                val oldestMessageId = currentMessages.firstOrNull()?.messageId ?: return@launch
 
                 // 이전 메시지들 불러오기
                 val olderMessages = chatRepositoryImpl.getOlderChatMessages(
                     roomId = currentGroupId,
                     beforeMessageId = oldestMessageId,
-                    20
+                    15
                 )
 
                 if (olderMessages.isNotEmpty()) {
@@ -155,13 +167,13 @@ class ChatRoomViewModel @Inject constructor(
                         )
                     }.sortedBy { it.messageId }
 
-                    // 기존 메시지 앞에 이전 메시지들 추가
+                    // 메시지 순서 보장 - 이전 메시지를 앞에, 기존 메시지를 뒤에
                     val updatedMessages = newChatMessages + currentMessages
 
                     _uiState.value = _uiState.value.copy(
                         chatMessages = updatedMessages,
                         isLoadingMore = false,
-                        hasMoreData = olderMessages.size >= 20
+                        hasMoreData = olderMessages.size >= 15
                     )
                 } else {
                     _uiState.value = _uiState.value.copy(
@@ -178,7 +190,6 @@ class ChatRoomViewModel @Inject constructor(
             }
         }
     }
-
 
     // gRPC 실시간 채팅 연결
     private fun connectToGrpcChat(groupId: Long, userId: Long) {
@@ -208,8 +219,44 @@ class ChatRoomViewModel @Inject constructor(
         // 중복 메시지 체크 (messageId 기준)
         if (currentMessages.none { it.messageId == message.messageId }) {
             currentMessages.add(message)
+            // MessageId 기준 오름차순
             val sortedMessages = currentMessages.sortedBy { it.messageId }
             _uiState.value = _uiState.value.copy(chatMessages = sortedMessages)
+
+            // 새 메시지 도착 시 읽음 처리 (본인 메시지가 아닌 경우)
+            if (message.userId != currentGroupId) { // userId와 groupId 비교 로직은 실제 구현에 맞게 수정 필요
+                markChatAsRead()
+            }
+        }
+    }
+
+    /**
+     * 채팅방 읽음 처리
+     * */
+    fun markChatAsRead() {
+        if (_uiState.value.isMarkingAsRead || currentGroupId == 0L) {
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isMarkingAsRead = true)
+
+            try {
+                val response = chatRepositoryImpl.markChatAsRead(currentGroupId)
+
+                if (response.isSuccessful) {
+                    // 읽음 처리 성공 - 특별한 UI 업데이트가 필요하다면 여기서 처리
+                    // 예: 읽지 않은 메시지 카운트 업데이트 등
+                } else {
+                    // 읽음 처리 실패 시 에러 표시 여부는 UX에 따라 결정
+                    // 일반적으로 읽음 처리 실패는 사용자에게 알리지 않음
+                }
+            } catch (e: Exception) {
+                // 네트워크 에러 등은 로그만 남기고 사용자에게는 알리지 않음
+                // Log.e(TAG, "채팅방 읽음 처리 실패", e)
+            } finally {
+                _uiState.value = _uiState.value.copy(isMarkingAsRead = false)
+            }
         }
     }
 
@@ -228,6 +275,7 @@ class ChatRoomViewModel @Inject constructor(
 
     // 채팅방 나가기
     fun leaveChatRoom() {
+        markChatAsRead()
         chatGrpcRepository.disconnect()
     }
 
@@ -240,5 +288,10 @@ class ChatRoomViewModel @Inject constructor(
         chatGrpcRepository.newMessages.removeObserver(grpcMessageObserver)
         // ViewModel 정리 시 gRPC 연결 해제
         chatGrpcRepository.disconnect()
+    }
+
+    // 스크롤 플래그 리셋 함수 추가
+    fun resetScrollFlag() {
+        _uiState.value = _uiState.value.copy(shouldScrollToBottom = false)
     }
 }

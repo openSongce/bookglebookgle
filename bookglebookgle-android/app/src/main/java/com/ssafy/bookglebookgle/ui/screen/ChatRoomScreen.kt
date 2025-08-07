@@ -1,5 +1,6 @@
 package com.ssafy.bookglebookgle.ui.screen
 
+import android.annotation.SuppressLint
 import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
@@ -36,10 +37,15 @@ import com.ssafy.bookglebookgle.entity.ChatMessage
 import com.ssafy.bookglebookgle.ui.component.CustomTopAppBar
 import com.ssafy.bookglebookgle.ui.theme.BaseColor
 import com.ssafy.bookglebookgle.ui.theme.MainColor
-import com.ssafy.bookglebookgle.util.DateTimeUtils
 import com.ssafy.bookglebookgle.viewmodel.ChatRoomViewModel
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
 
+// ChatRoomScreen.kt의 핵심 수정 부분
+
+@SuppressLint("NewApi")
 @Composable
 fun ChatRoomScreen(
     navController: NavHostController,
@@ -51,6 +57,15 @@ fun ChatRoomScreen(
     var messageText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
+
+    // 스크롤 제어를 위한 상태들
+    var previousMessageCount by remember { mutableStateOf(0) }
+    var scrollPositionBeforeLoad by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+
+    // 중복 호출 방지를 위한 강화된 상태 관리
+    var lastLoadRequestTime by remember { mutableStateOf(0L) }
+    var isScrollingUp by remember { mutableStateOf(false) }
+    var lastFirstVisibleIndex by remember { mutableStateOf(-1) }
 
     // 키보드 상태 감지
     val density = LocalDensity.current
@@ -71,20 +86,134 @@ fun ChatRoomScreen(
     // 채팅방 입장
     LaunchedEffect(groupId) {
         viewModel.enterChatRoom(groupId, userId)
+        viewModel.markChatAsRead()
     }
 
-    // 새 메시지가 추가될 때마다 맨 아래로 스크롤
-    LaunchedEffect(uiState.chatMessages.size) {
-        if (uiState.chatMessages.isNotEmpty()) {
+    // 초기 로드 완료 시 맨 아래로 스크롤
+    LaunchedEffect(uiState.shouldScrollToBottom) {
+        if (uiState.shouldScrollToBottom && uiState.chatMessages.isNotEmpty()) {
             scope.launch {
-                // 이미 맨 아래에 있을 때만 스크롤
-                val lastVisibleItem = listState.layoutInfo.visibleItemsInfo.lastOrNull()
-                val isAtBottom = lastVisibleItem?.index == uiState.chatMessages.size - 1 ||
-                        listState.firstVisibleItemIndex >= uiState.chatMessages.size - 2
+                listState.scrollToItem(uiState.chatMessages.size - 1)
+                previousMessageCount = uiState.chatMessages.size
+                kotlinx.coroutines.delay(500) // 스크롤 감지 로직 안정화 시간 확보
+                viewModel.resetScrollFlag()
+                viewModel.markChatAsRead()
+            }
+        }
+    }
 
-                if (isAtBottom) {
-                    listState.animateScrollToItem(uiState.chatMessages.size - 1)
+    // 개선된 스크롤 감지 로직 - 중복 호출 방지 강화
+    LaunchedEffect(listState) {
+        snapshotFlow {
+            val layoutInfo = listState.layoutInfo
+            val firstVisibleIndex = layoutInfo.visibleItemsInfo.firstOrNull()?.index ?: -1
+            val totalItemsCount = layoutInfo.totalItemsCount
+
+            // 첫 번째 아이템이 완전히 보이는지 확인
+            val firstVisibleItem = layoutInfo.visibleItemsInfo.firstOrNull()
+            val isFirstItemFullyVisible = firstVisibleItem?.let { item ->
+                item.index == 0 && item.offset >= -10 // 약간의 여유를 둠
+            } ?: false
+
+            // 마지막 아이템이 보이는지 확인 (읽음처리용)
+            val lastVisibleItem = layoutInfo.visibleItemsInfo.lastOrNull()
+            val isLastItemVisible = lastVisibleItem?.let { item ->
+                item.index == totalItemsCount - 1
+            } ?: false
+
+            Triple(firstVisibleIndex, totalItemsCount, isFirstItemFullyVisible) to isLastItemVisible
+        }
+            .distinctUntilChanged()
+            .collect {  (triple, isLastItemVisible) ->
+
+                val (firstVisibleIndex, totalItemsCount, isFirstItemFullyVisible) = triple
+
+                // 스크롤 방향 감지
+                if (firstVisibleIndex != lastFirstVisibleIndex) {
+                    isScrollingUp = firstVisibleIndex < lastFirstVisibleIndex
+                    lastFirstVisibleIndex = firstVisibleIndex
                 }
+
+                val currentTime = System.currentTimeMillis()
+
+                // 이전 메시지 로드 조건을 더 엄격하게 체크
+                val shouldLoadMore = isFirstItemFullyVisible &&
+                        firstVisibleIndex == 0 &&
+                        totalItemsCount > 0 &&
+                        !uiState.isLoadingMore &&
+                        !uiState.isLoading &&
+                        !uiState.shouldScrollToBottom &&
+                        uiState.hasMoreData &&
+                        isScrollingUp && // 위로 스크롤할 때만
+                        (currentTime - lastLoadRequestTime) > 1500L // 최소 1.5초 간격으로 증가
+
+                if (shouldLoadMore) {
+                    lastLoadRequestTime = currentTime
+                    viewModel.loadMoreMessages()
+                }
+
+                // 맨 아래 스크롤 시 읽음 처리
+                if (isLastItemVisible && !uiState.isLoadingMore && !uiState.isLoading) {
+                    viewModel.markChatAsRead()
+                }
+            }
+    }
+
+    // 이전 메시지 로드 완료 시 스크롤 위치 조정 - 더 안정적으로 개선
+    LaunchedEffect(uiState.isLoadingMore) {
+        if (uiState.isLoadingMore && scrollPositionBeforeLoad == null) {
+            previousMessageCount = uiState.chatMessages.size
+            scrollPositionBeforeLoad = Pair(0, 0)
+        }
+
+        if (!uiState.isLoadingMore && scrollPositionBeforeLoad != null) {
+            val currentMessageCount = uiState.chatMessages.size
+            val addedMessageCount = currentMessageCount - previousMessageCount
+
+            if (addedMessageCount > 0) {
+                scope.launch {
+                    try {
+                        // 더 긴 지연시간으로 안정성 확보
+                        kotlinx.coroutines.delay(100)
+
+                        // 새로 불러온 메시지 수만큼 스크롤 위치 조정
+                        val targetIndex = (addedMessageCount - 1).coerceAtLeast(0)
+                        listState.scrollToItem(targetIndex, scrollOffset = 0)
+
+                        // 스크롤 완료 후 추가 안정화 시간
+                        kotlinx.coroutines.delay(200)
+
+                    } catch (e: Exception) {
+                        listState.scrollToItem(0)
+                    }
+                }
+            }
+
+            scrollPositionBeforeLoad = null
+            // 로드 완료 후 잠시 대기하여 연속 호출 방지
+            kotlinx.coroutines.delay(500)
+        }
+    }
+
+    // 새 메시지 도착 시 스크롤 처리
+    LaunchedEffect(uiState.chatMessages.size) {
+        if (uiState.chatMessages.isNotEmpty() && !uiState.shouldScrollToBottom && !uiState.isLoadingMore) {
+            val currentMessageCount = uiState.chatMessages.size
+
+            if (currentMessageCount > previousMessageCount) {
+                // 새 메시지 도착 시 맨 아래 근처에 있으면 스크롤
+                scope.launch {
+                    val lastVisibleItem = listState.layoutInfo.visibleItemsInfo.lastOrNull()
+                    val totalItems = listState.layoutInfo.totalItemsCount
+                    val isNearBottom = lastVisibleItem?.index != null &&
+                            (totalItems - lastVisibleItem.index) <= 5
+
+                    if (isNearBottom) {
+                        listState.animateScrollToItem(currentMessageCount - 1)
+                        viewModel.markChatAsRead()
+                    }
+                }
+                previousMessageCount = currentMessageCount
             }
         }
     }
@@ -93,9 +222,16 @@ fun ChatRoomScreen(
     LaunchedEffect(imeVisible) {
         if (imeVisible && uiState.chatMessages.isNotEmpty()) {
             scope.launch {
-                // 약간의 딜레이 후 스크롤 (키보드 애니메이션 고려)
-                kotlinx.coroutines.delay(100)
-                listState.animateScrollToItem(uiState.chatMessages.size - 1)
+                val lastVisibleItem = listState.layoutInfo.visibleItemsInfo.lastOrNull()
+                val totalItems = listState.layoutInfo.totalItemsCount
+                val isNearBottom = lastVisibleItem?.index != null &&
+                        (totalItems - lastVisibleItem.index) <= 3
+
+                if (isNearBottom) {
+                    kotlinx.coroutines.delay(100)
+                    listState.animateScrollToItem(uiState.chatMessages.size - 1)
+                    viewModel.markChatAsRead()
+                }
             }
         }
     }
@@ -178,10 +314,25 @@ fun ChatRoomScreen(
                 if (uiState.isLoading && uiState.chatMessages.isEmpty()) {
                     item {
                         Box(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(600.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            CircularProgressIndicator(color = BaseColor)
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                CircularProgressIndicator(
+                                    color = BaseColor,
+                                    modifier = Modifier.size(32.dp)
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text(
+                                    text = "채팅 불러오는 중...",
+                                    fontSize = 14.sp,
+                                    color = Color.Gray
+                                )
+                            }
                         }
                     }
                 }
@@ -216,25 +367,15 @@ fun ChatRoomScreen(
                     }
                 }
 
-                // 채팅 메시지들
-                items(uiState.chatMessages) { message ->
+                // 채팅 메시지들 - key로 안정성 보장
+                items(
+                    items = uiState.chatMessages,
+                    key = { message -> message.messageId }
+                ) { message ->
                     ChatMessageItem(
                         message = message,
                         isMyMessage = viewModel.isMyMessage(message, userId)
                     )
-                }
-            }
-
-            // 스크롤 감지로 이전 메시지 로드
-            LaunchedEffect(listState.canScrollBackward) {
-                snapshotFlow {
-                    listState.layoutInfo.visibleItemsInfo.firstOrNull()?.index
-                }.collect { firstVisibleIndex ->
-                    // 맨 위에서 2번째 아이템이 보이면 더 불러오기
-                    if (firstVisibleIndex != null && firstVisibleIndex <= 1 &&
-                        !uiState.isLoadingMore && uiState.hasMoreData) {
-                        viewModel.loadMoreMessages()
-                    }
                 }
             }
 
@@ -259,7 +400,7 @@ fun ChatRoomScreen(
                             color = Color.Gray
                         )
 
-                        // 🔧 추가: gRPC 연결 상태 표시
+                        // gRPC 연결 상태 표시
                         Spacer(modifier = Modifier.height(8.dp))
                         Row(
                             verticalAlignment = Alignment.CenterVertically
@@ -296,7 +437,6 @@ fun ChatRoomScreen(
                     .padding(8.dp),
                 verticalAlignment = Alignment.Bottom
             ) {
-                // 입력 필드 추가
                 CompositionLocalProvider(
                     LocalTextSelectionColors provides TextSelectionColors(
                         handleColor = BaseColor,
@@ -360,7 +500,7 @@ fun ChatRoomScreen(
                         }
                     },
                     modifier = Modifier.size(40.dp),
-                    containerColor = if (uiState.grpcConnected || messageText.isNotBlank()) MainColor else Color.Gray
+                    containerColor = if (messageText.isNotBlank() && uiState.grpcConnected) MainColor else Color.Gray
                 ) {
                     Icon(
                         imageVector = Icons.Default.Send,

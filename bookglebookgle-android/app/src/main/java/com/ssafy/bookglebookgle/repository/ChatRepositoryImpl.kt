@@ -5,6 +5,7 @@ import com.example.bookglebookgleserver.chat.ChatMessage
 import com.ssafy.bookglebookgle.entity.ChatListResponse
 import com.ssafy.bookglebookgle.entity.ChatMessagesResponse
 import com.ssafy.bookglebookgle.network.api.ChatApi
+import retrofit2.Response
 import javax.inject.Inject
 
 private const val TAG = "싸피_ChatRepositoryImpl"
@@ -101,7 +102,7 @@ class ChatRepositoryImpl @Inject constructor(
                 response.body()?.let { messages ->
                     Log.d(TAG, "최신 채팅 메시지 - 총 ${messages.size}개 메시지 조회")
                     messages.forEach { message ->
-                        Log.d(TAG, "메시지 ID: ${message.id}, 유저ID: ${message.userId}, 닉네임: ${message.userNickname}, 내용: ${message.message}")
+                        Log.d(TAG, "메시지 ID: ${message.id}, 유저ID: ${message.userId}, 닉네임: ${message.userNickname}, 내용: ${message.message} 시간: ${message.createdAt}")
                     }
                     messages
                 } ?: run {
@@ -138,7 +139,7 @@ class ChatRepositoryImpl @Inject constructor(
                 response.body()?.let { messages ->
                     Log.d(TAG, "이전 채팅 메시지 - 총 ${messages.size}개 메시지 조회")
                     messages.forEach { message ->
-                        Log.d(TAG, "메시지 ID: ${message.id}, 유저ID: ${message.userId}, 닉네임: ${message.userNickname}, 내용: ${message.message}")
+                        Log.d(TAG, "메시지 ID: ${message.id}, 유저ID: ${message.userId}, 닉네임: ${message.userNickname}, 내용: ${message.message} 시간: ${message.createdAt}")
                     }
                     messages
                 } ?: run {
@@ -154,6 +155,30 @@ class ChatRepositoryImpl @Inject constructor(
         } catch (e: Exception) {
             Log.e(TAG, "이전 채팅 메시지 조회 실패 - 네트워크 오류: ${e.message}")
             emptyList()
+        }
+    }
+
+    /**
+     * 채팅방 읽음 처리
+     * */
+    override suspend fun markChatAsRead(roomId: Long): Response<Unit> {
+        return try {
+            Log.d(TAG, "채팅방 읽음 처리 요청 시작 - roomId: $roomId")
+
+            val response = chatApi.markChatAsRead(roomId)
+
+            if (response.isSuccessful) {
+                Log.d(TAG, "채팅방 읽음 처리 성공 - 응답코드: ${response.code()}")
+            } else {
+                val errorBody = response.errorBody()?.string()
+                Log.e(TAG, "채팅방 읽음 처리 실패 - 응답코드: ${response.code()}, 메시지: ${response.message()}")
+                Log.e(TAG, "서버 에러 메시지: $errorBody")
+            }
+
+            response
+        } catch (e: Exception) {
+            Log.e(TAG, "채팅방 읽음 처리 실패 - 네트워크 오류: ${e.message}")
+            throw e
         }
     }
 }

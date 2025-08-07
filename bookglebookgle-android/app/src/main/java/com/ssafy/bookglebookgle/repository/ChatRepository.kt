@@ -2,11 +2,12 @@ package com.ssafy.bookglebookgle.repository
 
 import com.ssafy.bookglebookgle.entity.ChatListResponse
 import com.ssafy.bookglebookgle.entity.ChatMessagesResponse
+import retrofit2.Response
 
 interface ChatRepository {
     suspend fun getChatList(): List<ChatListResponse>
 
-    suspend fun getChatMessages(roomId: Long, beforeId: Long, size: Int = 20): List<ChatMessagesResponse>
+    suspend fun getChatMessages(roomId: Long, beforeId: Long, size: Int = 15): List<ChatMessagesResponse>
 
     suspend fun getLatestChatMessages(
         roomId: Long,
@@ -18,4 +19,6 @@ interface ChatRepository {
         beforeMessageId: Long,
         size: Int
     ): List<ChatMessagesResponse>
+
+    suspend fun markChatAsRead(roomId: Long): Response<Unit>
 }
