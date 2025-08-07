@@ -19,6 +19,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import com.example.bookglebookgleserver.pdf.util.PdfUtils;
 
+import java.time.LocalDateTime;
+import java.util.Optional;
+
 @Service
 @RequiredArgsConstructor
 @Slf4j // ✅ 로깅을 위한 Lombok 어노테이션
@@ -75,6 +78,26 @@ public class PdfService {
 
         return new PdfProgressResponse(groupId, lastReadPage, totalPages, Math.round(progressRate * 100.0) / 100.0);
     }
+
+    public void updateOrInsertProgress(Long userId, Long groupId, int page) {
+        User user = userRepository.findById(userId).orElseThrow();
+        Group group = groupRepository.findById(groupId).orElseThrow();
+
+        Optional<PdfReadingProgress> existing = pdfReadingProgressRepository.findByUserAndGroup(user, group);
+
+        if (existing.isPresent()) {
+            pdfReadingProgressRepository.updateLastReadPage(userId, groupId, page);
+        } else {
+            PdfReadingProgress progress = PdfReadingProgress.builder()
+                    .user(user)
+                    .group(group)
+                    .lastReadPage(page)
+                    .build();
+            pdfReadingProgressRepository.save(progress);
+        }
+    }
+
+
 
 
 }
