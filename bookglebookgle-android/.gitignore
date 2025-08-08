@@ -1,25 +1,15 @@
-# Gradle
-.gradle/
-build/
-*/build/
-.externalNativeBuild/
-.cxx/
-
-# Android Studio
 *.iml
+.gradle
 /local.properties
-.idea/*
-!.idea/codeStyles
-!.idea/runConfigurations
-!.idea/inspectionProfiles
-!.idea/vcs.xml
-
-# OS files
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
 .DS_Store
-Thumbs.db
-
-# Captures
-captures/
-
-# JetBrains
-*.iws
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
