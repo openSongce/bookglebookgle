@@ -54,5 +54,10 @@ abstract class RepositoryModule {
         impl: PdfGrpcRepositoryImpl
     ): PdfGrpcRepository
 
+    @Binds
+    @Singleton
+    abstract fun bindFcmRepository(
+        impl: com.ssafy.bookglebookgle.repository.fcm.FcmRepositoryImpl
+    ): com.ssafy.bookglebookgle.repository.fcm.FcmRepository
 
 }

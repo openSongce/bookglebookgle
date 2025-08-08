@@ -16,13 +16,21 @@ import dagger.hilt.android.AndroidEntryPoint
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.ssafy.bookglebookgle.navigation.MainNavigation
 import androidx.activity.ComponentActivity
+import com.ssafy.bookglebookgle.notification.NotificationChannels
+import com.ssafy.bookglebookgle.notification.NotificationPermissionRequester
+import com.ssafy.bookglebookgle.repository.fcm.FcmRepository
+import javax.inject.Inject
 
 private const val TAG = "싸피_MainActivity"
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
+    @Inject
+    lateinit var fcmRepository: FcmRepository
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        NotificationChannels.createDefaultChannel(this)
 
         setTheme(R.style.Theme_BookgleBookgle)
 
@@ -32,10 +40,16 @@ class MainActivity : ComponentActivity() {
         // 즉시 스플래시 제거
         splashScreen.setKeepOnScreenCondition { false }
 
-
+        // 토큰 확인
+        com.google.firebase.messaging.FirebaseMessaging.getInstance().token.addOnSuccessListener { if (BuildConfig.DEBUG) android.util.Log.i("FCM", "현재 토큰: $it") }
 
         enableEdgeToEdge()
         setContent {
+            NotificationPermissionRequester(
+                autoRequest = true,
+                onGranted = { fcmRepository.registerTokenAsync()}
+            )
+
             BookgleBookgleTheme {
                 Surface(
                     modifier = Modifier

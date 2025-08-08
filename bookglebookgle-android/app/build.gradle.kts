@@ -17,6 +17,7 @@ plugins {
     alias(libs.plugins.hilt.android)
     id("kotlin-parcelize")
     id("com.google.protobuf") version "0.9.4"
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -162,6 +163,13 @@ dependencies {
     implementation("javax.annotation:javax.annotation-api:1.3.2")
     implementation("io.grpc:grpc-netty-shaded:1.64.0")
 
+    // ⬇️ Firebase (BOM으로 버전 정합)
+    implementation(platform("com.google.firebase:firebase-bom:33.3.0"))
+    implementation("com.google.firebase:firebase-messaging-ktx")
+    implementation("com.google.firebase:firebase-analytics-ktx")
+
+    // ⬇️ 토큰 async 사용
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
 }
 
 kapt {

@@ -122,4 +122,10 @@ object NetworkModule {
         return ChatGrpcRepository(channel, chatStub)
     }
 
+    @Provides
+    @Singleton
+    fun provideFcmApi(retrofit: Retrofit): com.ssafy.bookglebookgle.network.api.FcmApi =
+        retrofit.create(com.ssafy.bookglebookgle.network.api.FcmApi::class.java)
+
+
 }

@@ -2,6 +2,7 @@ package com.ssafy.bookglebookgle
 
 import android.app.Application
 import com.kakao.sdk.common.KakaoSdk
+import com.ssafy.bookglebookgle.notification.NotificationChannels
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 import dagger.hilt.android.HiltAndroidApp
 
@@ -13,5 +14,6 @@ class BookgleApplication : Application()  {
 
         val nativeKey = BuildConfig.KAKAO_NATIVE_KEY
         KakaoSdk.init(this, nativeKey)
+        NotificationChannels.createDefaultChannel(this)
     }
 }
