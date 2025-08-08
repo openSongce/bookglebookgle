@@ -1,0 +1,68 @@
+syntax = "proto3";
+
+package bgbg.pdf;
+
+// ❗ 이 부분을 실제 서버 패키지와 일치하게 수정
+option java_package = "com.example.bookglebookgleserver.pdf.grpc";
+option java_multiple_files = true;
+
+service PdfSyncService {
+  // 하나의 스트림으로 모든 Sync 이벤트 송수신
+  rpc Sync(stream SyncMessage) returns (stream SyncMessage);
+}
+
+message SyncMessage {
+  int64 groupId = 1;
+  string userId = 2;
+  ActionType actionType = 3;
+  AnnotationType annotationType = 4;
+  AnnotationPayload payload = 5;
+  string targetUserId = 6;
+  string currentHostId = 7;
+  ParticipantsSnapshot participants = 8;
+}
+
+message ParticipantsSnapshot {
+  repeated Participant participants = 1;
+  int32 currentPage = 2;
+}
+
+message Participant {
+  string userId         = 1;
+  string userName       = 2;
+  bool   isOriginalHost = 3;
+  bool   isCurrentHost  = 4;
+}
+
+enum ActionType {
+  PAGE_MOVE = 0;
+  ADD = 1;
+  UPDATE = 2;
+  DELETE = 3;
+  LEADERSHIP_TRANSFER = 4;
+  JOIN_ROOM = 5;
+  PARTICIPANTS = 6;
+}
+
+enum AnnotationType {
+  NONE = 0;
+  HIGHLIGHT = 1;
+  COMMENT = 2;
+  PAGE = 3;
+}
+
+message AnnotationPayload {
+  int32 page = 1;
+  string snippet = 2;
+  string color = 3;
+  string text = 4;
+  Coordinates coordinates = 5;
+  int64 id = 6; // 삭제, 수정시 사용
+}
+
+message Coordinates {
+  double startX = 1;
+  double startY = 2;
+  double endX = 3;
+  double endY = 4;
+}

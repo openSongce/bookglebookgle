@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <style name="Theme.BookgleBookgle" parent="android:Theme.Material.Light.NoActionBar">
+        <!-- Status bar -->
+        <item name="android:statusBarColor">@color/grayscale_white</item>
+        <item name="android:windowLightStatusBar">true</item>
+
+        <!-- Navigation bar -->
+        <item name="android:navigationBarColor">@color/grayscale_white</item>
+    </style>
+
+    <!-- 투명 스플래시 테마 - 시스템 스플래시를 거의 보이지 않게 -->
+    <style name="Theme.BookgleBookgle.Splash" parent="Theme.SplashScreen.IconBackground">
+        <item name="android:statusBarColor">@color/main_color</item>
+        <item name="windowSplashScreenBackground">@android:color/transparent</item>
+        <item name="windowSplashScreenAnimatedIcon">@android:color/transparent</item>
+        <item name="windowSplashScreenIconBackgroundColor">@android:color/transparent</item>
+        <item name="windowSplashScreenAnimationDuration">1</item>
+        <item name="postSplashScreenTheme">@style/Theme.BookgleBookgle</item>
+        <item name="android:windowIsTranslucent">false</item>
+        <item name="android:windowDisablePreview">true</item>
+        <item name="android:windowBackground">@color/main_color</item>
+    </style>
+</resources>
