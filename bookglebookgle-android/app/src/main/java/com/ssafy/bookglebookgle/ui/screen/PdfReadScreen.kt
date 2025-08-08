@@ -50,6 +50,8 @@ import com.ssafy.bookglebookgle.viewmodel.PdfViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import androidx.compose.ui.draw.clip
+import com.ssafy.bookglebookgle.entity.Participant
+import kotlinx.coroutines.delay
 
 
 @Composable
@@ -63,6 +65,7 @@ fun PdfReadScreen(
 
     // PDF 뷰어 참조 및 렌더링 스코프
     var pdfView by remember { mutableStateOf<PDFView?>(null) }
+
     var textSelectionData by remember { mutableStateOf<TextSelectionData?>(null) }
     val pdfRenderScope = remember { CoroutineScope(Dispatchers.IO) }
 
@@ -106,17 +109,50 @@ fun PdfReadScreen(
     val hasBookmark = annotations.bookmarks.any { it.page == currentPage }
     val currentBookmarkIcon = if (hasBookmark) bookmarkedIcon else bookmarkIcon
 
-    var offsetY by remember { mutableStateOf(0f) } // 박스의 Y 좌표
-
-    // 상단으로 스와이프 감지
-    var topSwipe by remember { mutableStateOf(false) }
-
-    // 하단으로 스와이프 감지
-    var bottomSwipe by remember { mutableStateOf(false) }
-
-    var totalDrag by remember { mutableStateOf(0f) }
     val syncConnected by viewModel.syncConnected.collectAsState()
     val syncError by viewModel.syncError.collectAsState()
+
+
+
+    //grpc
+
+    // 1) 네비에서 넘어온 isHost 플래그
+    val isHostFromNav = navController.previousBackStackEntry
+        ?.savedStateHandle
+        ?.get<Boolean>("isHost") ?: false
+
+    // 2) 첫 진입 시 사용자·그룹 정보 세팅
+    LaunchedEffect(groupId, userId, isHostFromNav) {
+        groupId?.let { gid ->
+            // 0) 기존 PDF 상태 초기화 & 로드
+            Log.d("PdfReadScreen", "==== LaunchedEffect 시작 ====")
+            viewModel.resetPdfState()
+            viewModel.setGroupId(gid)
+            viewModel.loadGroupPdf(gid, context)
+
+            // 1) 사용자·그룹·방장 정보 세팅
+            viewModel.setUserInfo(
+                userId        = userId,
+                groupId       = gid,
+                isHostFromNav = isHostFromNav
+            )
+            // 3) gRPC 동기화 연결
+            Log.d("PdfReadScreen", "gRPC 동기화 연결: groupId=$gid, userId=$userId")
+            viewModel.connectToSync(gid, userId)
+        }
+    }
+
+
+    // 3) 화면 떠날 때(퇴장) 자동 위임 + gRPC 연결 해제
+    DisposableEffect(Unit) {
+        onDispose {
+            viewModel.leaveSyncRoom()
+        }
+    }
+
+    // 4) ViewModel state 가져오기
+    val isCurrentLeader by viewModel.isCurrentLeader.collectAsState()
+    val participants    by viewModel.participants.collectAsState()
 
     //thumbnail
     val thumbnails by viewModel.thumbnails.collectAsState()
@@ -170,38 +206,6 @@ fun PdfReadScreen(
         )
     }
 
-    // ViewModel 초기 설정
-    LaunchedEffect(groupId) {
-        Log.d("PdfReadScreen", "==== LaunchedEffect 시작 ====")
-        Log.d("PdfReadScreen", "그룹 ID: $groupId")
-        viewModel.resetPdfState()
-
-        groupId?.let {
-            Log.d("PdfReadScreen", "그룹 ID 설정 및 PDF 로드 시작")
-            viewModel.setGroupId(it)
-            viewModel.loadGroupPdf(it, context)
-        }
-    }
-
-    //gRPC
-
-    // 기존 gRPC LaunchedEffect를 이것으로 교체
-
-    // gRPC 동기화 연결
-    LaunchedEffect(groupId, userId) {
-        groupId?.let { gid ->
-            Log.d("PdfReadScreen", "gRPC 동기화 연결: groupId=$gid, userId=$userId")
-            viewModel.connectToSync(gid, userId)
-        }
-    }
-
-    // 화면 종료 시 정리
-    DisposableEffect(Unit) {
-        onDispose {
-            Log.d("PdfReadScreen", "화면 종료 - gRPC 연결 해제")
-            viewModel.leaveSyncRoom()
-        }
-    }
 
 
     // 댓글 추가 결과 처리
@@ -265,6 +269,14 @@ fun PdfReadScreen(
             pdfView?.centerCurrentPage(withAnimation = false)
         }
     }
+
+// Compose
+    LaunchedEffect(isCurrentLeader) {
+        pdfView?.isSwipeEnabled = isCurrentLeader
+        pdfView?.setPageFling(isCurrentLeader)
+    }
+
+
 
 //    LaunchedEffect(currentPage) {
 //        if (pdfView != null && isPdfRenderingComplete) {
@@ -424,6 +436,7 @@ fun PdfReadScreen(
 
                                             // 기존 주석들 로드
                                             viewModel.loadAllAnnotations()
+                                            viewModel.getPage()
                                         }
 
                                         override fun onPreparationFailed(
@@ -544,14 +557,14 @@ fun PdfReadScreen(
                                     try {
                                         fromFile(pdfFile!!)
                                             .defaultPage(0)
-                                            .enableSwipe(true)              // 스와이프 비활성화
+                                            .enableSwipe(isCurrentLeader)              // 스와이프 비활성화
                                             .swipeHorizontal(false)         // 수평 스와이프 비활성화
                                             .pageSnap(true)                 // 페이지 스냅 활성화
                                             .pageFitPolicy(FitPolicy.WIDTH) // 페이지를 화면 너비에 맞춤
                                             .fitEachPage(true)              // 각 페이지를 개별적으로 맞춤
                                             .enableDoubleTap(true)          // 더블탭 줌 활성화
                                             .autoSpacing(true)
-                                            .pageFling(true)
+                                            .pageFling(isCurrentLeader)
                                             .load()
                                         Log.d("PdfReadScreen", "PDF 파일 로드 호출 완료")
                                     } catch (e: Exception) {
@@ -784,7 +797,7 @@ fun PdfReadScreen(
                     thumbnails = thumbnails,
                     currentPage = currentPage,
                     onThumbnailClick = { page ->
-                        viewModel.goToPage(page + 1) },
+                        if(isCurrentLeader){viewModel.goToPage(page + 1) }},
                     modifier = Modifier.align(Alignment.BottomCenter)
                 )
             }

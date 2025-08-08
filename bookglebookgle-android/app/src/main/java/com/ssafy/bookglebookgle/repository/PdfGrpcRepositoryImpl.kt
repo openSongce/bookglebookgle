@@ -8,10 +8,13 @@ import androidx.lifecycle.MutableLiveData
 import com.example.bookglebookgleserver.pdf.grpc.AnnotationPayload
 import com.example.bookglebookgleserver.pdf.grpc.AnnotationType
 import com.example.bookglebookgleserver.pdf.grpc.ActionType
+import com.example.bookglebookgleserver.pdf.grpc.Participant as ProtoParticipant
+import com.example.bookglebookgleserver.pdf.grpc.ParticipantsSnapshot
 import com.example.bookglebookgleserver.pdf.grpc.PdfSyncServiceGrpc
 import com.example.bookglebookgleserver.pdf.grpc.SyncMessage
 import com.ssafy.bookglebookgle.entity.CommentSync
 import com.ssafy.bookglebookgle.entity.HighlightSync
+import com.ssafy.bookglebookgle.entity.Participant as GParticipant
 import com.ssafy.bookglebookgle.entity.PdfPageSync
 import io.grpc.ManagedChannel
 import io.grpc.ManagedChannelBuilder
@@ -65,6 +68,16 @@ class PdfGrpcRepositoryImpl @Inject constructor(): PdfGrpcRepository {
     private val _connectionStatus = MutableLiveData<PdfSyncConnectionStatus>(PdfSyncConnectionStatus.DISCONNECTED)
     override val connectionStatus: LiveData<PdfSyncConnectionStatus> = _connectionStatus
 
+    private val _leadershipTransfers = MutableLiveData<String>()
+    override val leadershipTransfers: LiveData<String> = _leadershipTransfers
+
+    private val _joinRequests = MutableLiveData<String>()
+    override val joinRequests: LiveData<String> = _joinRequests
+
+    private val _participantsSnapshot = MutableLiveData<ParticipantsSnapshot>()
+    override val participantsSnapshot: LiveData<ParticipantsSnapshot>
+        get() = _participantsSnapshot
+
     private var channel: ManagedChannel? = null
     private var stub: PdfSyncServiceGrpc.PdfSyncServiceStub? = null
     private var requestObserver: StreamObserver<SyncMessage>? = null
@@ -97,6 +110,17 @@ class PdfGrpcRepositoryImpl @Inject constructor(): PdfGrpcRepository {
                 override fun onNext(msg: SyncMessage) {
                     if (!isActive) return
                     when (msg.actionType) {
+                        ActionType.PARTICIPANTS -> {
+                            Handler(Looper.getMainLooper()).post {
+                                // ParticipantsSnapshot 메시지 전체 전달
+                                _participantsSnapshot.value = msg.participants
+                            }
+                        }
+                        ActionType.JOIN_ROOM -> {
+                            Handler(Looper.getMainLooper()).post {
+                                _joinRequests.value = msg.userId
+                            }
+                        }
                         ActionType.PAGE_MOVE -> {
                             Handler(Looper.getMainLooper()).post {
                                 _newPageUpdates.value = PdfPageSync(msg.payload.page, msg.userId)
@@ -157,6 +181,13 @@ class PdfGrpcRepositoryImpl @Inject constructor(): PdfGrpcRepository {
                                 else -> {}
                             }
                         }
+                        ActionType.LEADERSHIP_TRANSFER -> {
+                            // targetUserId 또는 currentHostId 필드 사용
+                            val newHostId = msg.targetUserId.ifEmpty { msg.currentHostId }
+                            Handler(Looper.getMainLooper()).post {
+                                _leadershipTransfers.value = newHostId
+                            }
+                        }
                         else -> {}
                     }
                 }
@@ -197,6 +228,29 @@ class PdfGrpcRepositoryImpl @Inject constructor(): PdfGrpcRepository {
             .setPayload(AnnotationPayload.newBuilder().setPage(page).build())
             .build()
         obs.onNext(msg)
+    }
+
+    override fun transferLeadership(groupId: Long, fromUserId: String, toUserId: String) {
+        val msg = SyncMessage.newBuilder()
+            .setGroupId(groupId)
+            .setUserId(fromUserId)
+            .setActionType(ActionType.LEADERSHIP_TRANSFER)
+            .setAnnotationType(AnnotationType.NONE)
+            .setTargetUserId(toUserId)
+            .setCurrentHostId(toUserId)
+            .build()
+        requestObserver?.onNext(msg)
+    }
+
+    // JOIN_ROOM 요청 헬퍼
+    override fun sendJoinRequest() {
+        requestObserver?.onNext(
+            SyncMessage.newBuilder()
+                .setGroupId(groupId!!)
+                .setUserId(userId!!)
+                .setActionType(ActionType.JOIN_ROOM)
+                .build()
+        )
     }
 
     override fun sendAnnotation(

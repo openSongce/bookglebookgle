@@ -287,6 +287,7 @@ private fun GroupDetailContent(
                     if (isMyGroup) {
                         // 가입된 모임인 경우 PDF 화면으로 이동
                         navController.currentBackStackEntry?.savedStateHandle?.set("groupId", groupId)
+                        navController.currentBackStackEntry?.savedStateHandle?.set("isHost", groupDetail.isHost)
                         navController.navigate(Screen.PdfReadScreen.route)
                     } else {
                         // 미가입 모임인 경우 토스트 메시지 표시
