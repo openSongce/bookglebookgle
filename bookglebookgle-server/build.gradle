@@ -97,6 +97,8 @@ dependencies {
     //pdf
     implementation 'org.apache.pdfbox:pdfbox:2.0.27'
 
+    //FCM
+    implementation("com.google.firebase:firebase-admin:9.3.0")
 }
 
 tasks.named('test') {
