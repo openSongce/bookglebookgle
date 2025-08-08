@@ -21,6 +21,7 @@ data class CommentModel(
     val page: Int, // 주석이 달린 실제 페이지 번호 (1부터 시작)
 //    var updatedAt: Long, //	마지막 수정 시각 (timestamp)
     val coordinates: Coordinates?, // 주석이 위치한 좌표 정보
+    val userId: String? = null
 ) : PdfAnnotationModel(Type.Note, page - 1), Parcelable {
     @IgnoredOnParcel
     var isSelected = false
@@ -41,6 +42,7 @@ data class HighlightModel(
     val page: Int, // 실제 페이지 번호
 //    val updatedAt: Long, // 마지막 수정 시각
     val coordinates: Coordinates?, // 하이라이트 위치
+    val userId: String? = null
 ) : PdfAnnotationModel(Type.Highlight, page - 1), Parcelable {
     @IgnoredOnParcel
     var isSelected = false
