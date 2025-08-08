@@ -1,5 +1,6 @@
 package com.example.bookglebookgleserver.fcm.controller;
 
+import com.example.bookglebookgleserver.auth.security.CustomUserDetails;
 import com.example.bookglebookgleserver.fcm.dto.FcmSendRequest;
 import com.example.bookglebookgleserver.fcm.dto.FcmTokenRegisterRequest;
 import com.example.bookglebookgleserver.fcm.service.FcmGroupService;
@@ -32,11 +33,15 @@ public class FcmController {
     @PutMapping("/token")
     @Transactional
     public ResponseEntity<Void> registerToken(
-            @AuthenticationPrincipal(expression = "id") Long userId,
+            @AuthenticationPrincipal CustomUserDetails userDetails, // ← 통째로 받기
             @RequestBody FcmTokenRegisterRequest req,
-            @RequestParam(required = false) Long uidFallback
+            @RequestParam(required = false) Long uidFallback // Postman 무인증 테스트용(옵션)
     ) {
-        Long uid = (userId != null) ? userId : uidFallback;
+        // 인증 있으면 JWT의 사용자, 없으면 uidFallback 사용
+        Long uid = (userDetails != null && userDetails.getUser() != null)
+                ? userDetails.getUser().getId()
+                : uidFallback;
+
         if (uid == null || req.token() == null || req.token().isBlank()) {
             return ResponseEntity.badRequest().build();
         }
@@ -52,7 +57,7 @@ public class FcmController {
             userDeviceRepository.save(d);
         } else {
             var d = UserDevice.builder()
-                    .user(user) // 영속 엔티티 참조
+                    .user(user)
                     .token(req.token())
                     .enabled(true)
                     .lastSeenAt(LocalDateTime.now())
@@ -61,6 +66,7 @@ public class FcmController {
         }
         return ResponseEntity.ok().build();
     }
+
 
     // (2) 단건/유저 전체 발송 테스트
     @PostMapping("/send")
