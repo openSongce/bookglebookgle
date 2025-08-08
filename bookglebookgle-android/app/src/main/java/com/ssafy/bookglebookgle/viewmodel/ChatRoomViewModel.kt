@@ -37,6 +37,7 @@ data class ChatRoomUiState(
     val isDiscussionConnecting: Boolean = false,
     // 카테고리 관련 상태 추가
     val isReadingCategory: Boolean = false,
+    val isAiTyping: Boolean = false,
 )
 
 @HiltViewModel
@@ -251,6 +252,9 @@ class ChatRoomViewModel @Inject constructor(
 
     // AI 응답 처리
     private fun handleAiResponse(aiMessage: ChatMessage) {
+        // AI 응답이 도착하면 타이핑 상태 해제
+        setAiTyping(false)
+
         // AI 응답도 채팅 메시지로 추가
         addNewMessage(aiMessage)
 
@@ -280,7 +284,10 @@ class ChatRoomViewModel @Inject constructor(
             // 토론 종료 시 AI 관련 상태 초기화
             showAiSuggestions = if (!isActive) false else _uiState.value.showAiSuggestions,
             currentAiResponse = if (!isActive) null else _uiState.value.currentAiResponse,
-            suggestedTopics = if (!isActive) emptyList() else _uiState.value.suggestedTopics
+            suggestedTopics = if (!isActive) emptyList() else _uiState.value.suggestedTopics,
+
+            // 토론 종료 시 AI 타이핑 상태도 초기화
+            isAiTyping = if (!isActive) false else _uiState.value.isAiTyping
         )
     }
 
@@ -324,6 +331,11 @@ class ChatRoomViewModel @Inject constructor(
         }
 
         chatGrpcRepository.sendMessage(messageText)
+
+        // 토론이 활성화된 상태라면 AI 타이핑 시작
+        if (_uiState.value.isReadingCategory && _uiState.value.isDiscussionActive) {
+            setAiTyping(true)
+        }
     }
 
     // 토론 시작
@@ -354,6 +366,9 @@ class ChatRoomViewModel @Inject constructor(
                 // 토론 시작 요청
                 chatGrpcRepository.startDiscussion("AI 토론을 시작합니다. 자유롭게 의견을 나누어 보세요!")
 
+                // 토론 시작 시 AI 타이핑 시작
+                setAiTyping(true)
+
                 // 실제로는 gRPC 응답을 받으면 handleDiscussionStatus에서 로딩이 해제됩니다
                 // 만약 타임아웃이 필요하다면 여기서 설정할 수 있습니다
 
@@ -381,6 +396,10 @@ class ChatRoomViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 chatGrpcRepository.endDiscussion("AI 토론을 종료합니다. 수고하셨습니다!")
+
+                // 토론 종료 시 AI 타이핑 상태도 해제
+                setAiTyping(false)
+
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     error = "토론 종료 실패: ${e.message}"
@@ -403,6 +422,26 @@ class ChatRoomViewModel @Inject constructor(
     // AI 추천 주제 패널 닫기
     fun dismissAiSuggestions() {
         _uiState.value = _uiState.value.copy(showAiSuggestions = false)
+    }
+
+    // AI 타이핑 상태 설정
+    fun setAiTyping(isTyping: Boolean) {
+        // READING 카테고리이고 토론이 활성화된 상태에서만 AI 타이핑 표시
+        val shouldShowTyping = _uiState.value.isReadingCategory &&
+                _uiState.value.isDiscussionActive &&
+                isTyping
+
+        _uiState.value = _uiState.value.copy(isAiTyping = shouldShowTyping)
+    }
+
+    // AI가 응답을 시작할 때 호출 (gRPC에서 AI 응답 시작 신호를 받았을 때)
+    fun onAiResponseStarted() {
+        setAiTyping(true)
+    }
+
+    // AI가 응답을 완료했을 때 호출 (gRPC에서 AI 응답 완료 신호를 받았을 때)
+    fun onAiResponseCompleted() {
+        setAiTyping(false)
     }
 
     // 채팅방 나가기

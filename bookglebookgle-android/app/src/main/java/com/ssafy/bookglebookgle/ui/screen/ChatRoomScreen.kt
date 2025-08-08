@@ -4,6 +4,11 @@ import android.annotation.SuppressLint
 import android.os.Build
 import android.util.Log
 import androidx.annotation.RequiresApi
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -19,7 +24,6 @@ import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Send
@@ -30,8 +34,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -40,10 +46,12 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
+import com.ssafy.bookglebookgle.R
 import com.ssafy.bookglebookgle.entity.ChatMessage
 import com.ssafy.bookglebookgle.entity.MessageType
 import com.ssafy.bookglebookgle.ui.component.CustomTopAppBar
 import com.ssafy.bookglebookgle.ui.theme.BaseColor
+import com.ssafy.bookglebookgle.ui.theme.DeepMainColor
 import com.ssafy.bookglebookgle.ui.theme.MainColor
 import com.ssafy.bookglebookgle.viewmodel.ChatRoomViewModel
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -243,6 +251,24 @@ fun ChatRoomScreen(
         }
     }
 
+    // AI 타이핑 인디케이터가 표시될 때 자동 스크롤
+    LaunchedEffect(uiState.isAiTyping) {
+        if (uiState.isAiTyping && uiState.chatMessages.isNotEmpty()) {
+            scope.launch {
+                val lastVisibleItem = listState.layoutInfo.visibleItemsInfo.lastOrNull()
+                val totalItems = listState.layoutInfo.totalItemsCount
+                val isNearBottom = lastVisibleItem?.index != null &&
+                        (totalItems - lastVisibleItem.index) <= 3
+
+                if (isNearBottom) {
+                    kotlinx.coroutines.delay(100)
+                    // AI 타이핑 인디케이터를 포함한 총 아이템 수로 스크롤
+                    listState.animateScrollToItem(totalItems)
+                }
+            }
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize())
     {
         Column(
@@ -285,7 +311,7 @@ fun ChatRoomScreen(
                                 Text(
                                     text = "AI 토론 진행 중",
                                     fontSize = 12.sp,
-                                    color = MainColor,
+                                    color = DeepMainColor,
                                     fontWeight = FontWeight.Medium
                                 )
                             } else {
@@ -318,11 +344,7 @@ fun ChatRoomScreen(
                             },
                             modifier = Modifier.height(32.dp),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = if (uiState.isDiscussionActive) Color.Red.copy(
-                                    alpha = 0.5f
-                                ) else Color.Green.copy(
-                                    alpha = 0.5f
-                                )
+                                containerColor = if (uiState.isDiscussionActive) Color(0xFFE74C3C) else Color(0xFF2ECC71)
                             ),
                             contentPadding = PaddingValues(horizontal = 12.dp),
                             enabled = !uiState.isDiscussionConnecting // 연결 중일 때 버튼 비활성화
@@ -473,6 +495,13 @@ fun ChatRoomScreen(
                             isMyMessage = viewModel.isMyMessage(message, userId)
                         )
                     }
+
+                    // AI 타이핑 인디케이터
+                    if (uiState.isAiTyping) {
+                        item {
+                            AiTypingIndicator()
+                        }
+                    }
                 }
 
                 // AI 추천 주제 오버레이
@@ -603,16 +632,16 @@ fun ChatRoomScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Call,
+                                    painterResource(id = R.drawable.ic_ai),
                                     contentDescription = null,
-                                    tint = BaseColor,
+                                    tint = DeepMainColor,
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
                                     text = "AI 토론이 진행 중입니다. AI가 대화를 분석하고 피드백을 제공합니다.",
                                     fontSize = 12.sp,
-                                    color = BaseColor
+                                    color = DeepMainColor
                                 )
                             }
                         }
@@ -752,6 +781,109 @@ fun ChatRoomScreen(
 
 }
 
+// AI 타이핑 인디케이터 컴포넌트
+@Composable
+fun AiTypingIndicator() {
+    val infiniteTransition = rememberInfiniteTransition(label = "typing")
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.Start
+    ) {
+        // AI 프로필 이미지
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(BaseColor.copy(alpha = 0.3f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                painterResource(id = R.drawable.ic_ai),
+                contentDescription = "AI",
+                tint = BaseColor,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.width(8.dp))
+
+        Column(
+            horizontalAlignment = Alignment.Start,
+            modifier = Modifier.widthIn(max = 280.dp)
+        ) {
+            Text(
+                text = "AI",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color.Gray,
+                modifier = Modifier.padding(bottom = 4.dp)
+            )
+
+            Surface(
+                shape = RoundedCornerShape(
+                    topStart = 4.dp,
+                    topEnd = 16.dp,
+                    bottomStart = 16.dp,
+                    bottomEnd = 16.dp
+                ),
+                color = Color.Gray.copy(alpha = 0.1f),
+                modifier = Modifier.widthIn(min = 60.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // 세 개의 점이 순차적으로 애니메이션
+                    repeat(3) { index ->
+                        val animatedAlpha by infiniteTransition.animateFloat(
+                            initialValue = 0.3f,
+                            targetValue = 1f,
+                            animationSpec = infiniteRepeatable(
+                                animation = tween(
+                                    durationMillis = 600,
+                                    delayMillis = index * 200
+                                ),
+                                repeatMode = RepeatMode.Reverse
+                            ),
+                            label = "dot_${index}_alpha"
+                        )
+
+                        val animatedScale by infiniteTransition.animateFloat(
+                            initialValue = 0.8f,
+                            targetValue = 1.2f,
+                            animationSpec = infiniteRepeatable(
+                                animation = tween(
+                                    durationMillis = 600,
+                                    delayMillis = index * 200
+                                ),
+                                repeatMode = RepeatMode.Reverse
+                            ),
+                            label = "dot_${index}_scale"
+                        )
+
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .background(
+                                    color = BaseColor.copy(alpha = animatedAlpha),
+                                    shape = CircleShape
+                                )
+                                .graphicsLayer {
+                                    scaleX = animatedScale
+                                    scaleY = animatedScale
+                                }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun ChatMessageItem(
@@ -791,7 +923,7 @@ fun AiResponseMessageItem(message: ChatMessage) {
                 modifier = Modifier.padding(12.dp)
             ) {
                 Icon(
-                    imageVector = Icons.Default.Face,
+                    painterResource(id = R.drawable.ic_ai),
                     contentDescription = "AI",
                     tint = BaseColor,
                     modifier = Modifier.size(24.dp)
@@ -850,8 +982,8 @@ fun SystemMessageItem(message: ChatMessage) {
         Card(
             colors = CardDefaults.cardColors(
                 containerColor = when (message.type) {
-                    MessageType.DISCUSSION_START -> Color.Green.copy(alpha = 0.06f)
-                    MessageType.DISCUSSION_END -> Color.Red.copy(alpha = 0.06f)
+                    MessageType.DISCUSSION_START -> Color(0xFF2ECC71).copy(alpha = 0.06f)
+                    MessageType.DISCUSSION_END -> Color(0xFFE74C3C).copy(alpha = 0.06f)
                     else -> Color.Gray.copy(alpha = 0.1f)
                 }
             )
@@ -868,7 +1000,7 @@ fun SystemMessageItem(message: ChatMessage) {
                     },
                     contentDescription = null,
                     tint = when (message.type) {
-                        MessageType.DISCUSSION_START -> Color.Green
+                        MessageType.DISCUSSION_START -> Color(0xFF2ECC71)
                         MessageType.DISCUSSION_END -> Color.Red
                         else -> Color.Gray
                     },
