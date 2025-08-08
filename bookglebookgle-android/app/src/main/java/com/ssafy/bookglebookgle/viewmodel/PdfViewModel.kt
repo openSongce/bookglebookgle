@@ -138,34 +138,49 @@ class PdfViewModel @Inject constructor(
     private val commentUpdateObserver = Observer<CommentSync> { sync -> handleRemoteCommentUpdate(sync) }
     private val commentDeleteObserver = Observer<Long> { id -> handleRemoteCommentDelete(id) }
 
-    // PdfViewModel.kt 상단 필드 근처
-    private val highlightOwners = mutableMapOf<Long, String>()
-    private val commentOwners   = mutableMapOf<Long, String>()
+    private val _highlightFilterUserIds = MutableStateFlow<Set<String>>(emptySet())
+    val highlightFilterUserIds: StateFlow<Set<String>> = _highlightFilterUserIds.asStateFlow()
 
-    private val _highlightFilterUserId = MutableStateFlow<String?>(null) // null = 전체
-    val highlightFilterUserId: StateFlow<String?> = _highlightFilterUserId.asStateFlow()
+    // ↑ 클래스 필드에 추가
+    private data class PendingHighlightKey(val page: Int, val snippet: String, val color: String,
+                                           val x1: Double, val y1: Double, val x2: Double, val y2: Double)
+    private data class PendingCommentKey(val page: Int, val snippet: String, val text: String,
+                                         val x1: Double, val y1: Double, val x2: Double, val y2: Double)
+
+    private val pendingHighlights = mutableMapOf<PendingHighlightKey, Long>() // key -> tempId
+    private val pendingComments   = mutableMapOf<PendingCommentKey, Long>()
 
 
-    fun setHighlightFilterUser(userId: String?) {
-        _highlightFilterUserId.value = userId
+    fun toggleHighlightFilterUser(userId: String) {
+        _highlightFilterUserIds.update { cur ->
+            if (userId in cur) cur - userId else cur + userId
+        }
+        applyAnnotationFilter()
+    }
+    fun clearHighlightFilter() {
+        _highlightFilterUserIds.value = emptySet()
         applyAnnotationFilter()
     }
 
 
+    // 필터 적용 로직 수정
     private fun applyAnnotationFilter() {
-        val filter = _highlightFilterUserId.value
+        val selected = _highlightFilterUserIds.value
         val ann = _annotations.value
 
-        val filteredHighlights = if (filter == null) ann.highlights
-        else ann.highlights.filter { h -> highlightOwners[h.id] == filter }
+        val filteredHighlights =
+            if (selected.isEmpty()) ann.highlights
+            else ann.highlights.filter { h -> h.userId != null && h.userId in selected }
 
-        val filteredComments = if (filter == null) ann.comments
-        else ann.comments.filter { c -> commentOwners[c.id] == filter }
+        val filteredComments =
+            if (selected.isEmpty()) ann.comments
+            else ann.comments.filter { c -> c.userId != null && c.userId in selected }
 
         val models = buildList {
             addAll(filteredComments.map { it.updateAnnotationData() })
             addAll(filteredHighlights.map { it.updateAnnotationData() })
         }
+        currentPdfView?.loadAnnotations(emptyList())
         currentPdfView?.loadAnnotations(models)
     }
 
@@ -359,13 +374,19 @@ class PdfViewModel @Inject constructor(
             page = page,
             snippet = snippet,
             text = text,
-            coordinates = coordinates
+            coordinates = coordinates,
+            userId = myUserId
         )
 
-        if (_highlightFilterUserId.value == null || _highlightFilterUserId.value == myUserId) {
-            currentPdfView?.addComment(model)
+        val filter = _highlightFilterUserIds.value
+        if (filter.isEmpty() || myUserId in filter) {
+            currentPdfView?.addComment(model) // 또는 addComment
         }
         _annotations.update { it.copy(comments = ArrayList(it.comments + model)) }
+
+        val key = PendingCommentKey(page, snippet, text,
+            coordinates.startX, coordinates.startY, coordinates.endX, coordinates.endY)
+        pendingComments[key] = tempId
 
         // 2) gRPC 메시지 전송
         // 2) gRPC 좌표 메시지 변환
@@ -489,16 +510,21 @@ class PdfViewModel @Inject constructor(
             page = page,
             snippet = snippet,
             color = color,
-            coordinates = coordinates
+            coordinates = coordinates,
+            userId = myUserId
         )
 
-        highlightOwners[tempId] = myUserId
 
-        if (_highlightFilterUserId.value == null || _highlightFilterUserId.value == myUserId) {
-            currentPdfView?.addHighlight(model)
+        val filter = _highlightFilterUserIds.value
+        if (filter.isEmpty() || myUserId in filter) {
+            currentPdfView?.addHighlight(model) // 또는 addComment
         }
         _annotations.update { it.copy(highlights = ArrayList(it.highlights + model)) }
 
+
+        val key = PendingHighlightKey(page, snippet, color,
+            coordinates.startX, coordinates.startY, coordinates.endX, coordinates.endY)
+        pendingHighlights[key] = tempId
 
         // 2) gRPC 메시지 전송
         // 2) gRPC 좌표 메시지 변환
@@ -580,10 +606,12 @@ class PdfViewModel @Inject constructor(
                 Log.d(TAG, "Repository에서 전체 주석 조회 요청 시작")
                 val result = pdfRepository.getAllAnnotations(groupId)
 
+
                 if (result != null) {
                     Log.d(TAG, "주석 로드 성공")
                     Log.d(TAG, "댓글 수: ${result.comments.size}")
                     Log.d(TAG, "하이라이트 수: ${result.highlights.size}")
+
 
                     // 각 주석 상세 로그
                     result.comments.forEachIndexed { index, comment ->
@@ -593,7 +621,6 @@ class PdfViewModel @Inject constructor(
                         Log.d(TAG, "하이라이트 $index: ID=${highlight.id}, 페이지=${highlight.page}, 색상=${highlight.color}")
                     }
 
-                    currentPdfView?.loadAnnotations(result.toAnnotationList())
 
                     _annotations.value = result
                     Log.d(TAG, "로컬 상태 업데이트 완료")
@@ -881,49 +908,55 @@ class PdfViewModel @Inject constructor(
 
     // 1) 하이라이트 추가
     private fun handleRemoteHighlightAdd(sync: HighlightSync) {
-        val model = com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.HighlightModel(
-            id         = sync.id,
-            page       = sync.page,
-            snippet    = sync.snippet,
-            color      = sync.color,
-            coordinates = com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.Coordinates(
-                sync.startX, sync.startY, sync.endX, sync.endY
-            )
+        //  내 요청 에코인지 먼저 확인
+        val key = PendingHighlightKey(sync.page, sync.snippet, sync.color, sync.startX, sync.startY, sync.endX, sync.endY)
+        val tempId = if (sync.userId == myUserId) pendingHighlights.remove(key) else null
+
+        if (tempId != null) {
+            // 1) 뷰/상태에서 tempId 지우기
+            currentPdfView?.removeHighlightAnnotations(listOf(tempId))
+            _annotations.update { st ->
+                st.copy(highlights = ArrayList(st.highlights.filterNot { it.id == tempId }))
+            }
+        }
+
+        // 2) 서버 id로 추가
+        val model = HighlightModel(
+            id = sync.id, page = sync.page, snippet = sync.snippet, color = sync.color,
+            coordinates = UiCoordinates(sync.startX, sync.startY, sync.endX, sync.endY),
+            userId = sync.userId
         )
 
-        highlightOwners[sync.id] = sync.userId
-
-        if (_highlightFilterUserId.value == null || _highlightFilterUserId.value == sync.userId) {
-            currentPdfView?.addHighlight(model)
+        val filter = _highlightFilterUserIds.value
+        if (filter.isEmpty() || sync.userId in filter) {
+            currentPdfView?.addHighlight(model) // 또는 addComment
         }
         _annotations.update { it.copy(highlights = ArrayList(it.highlights + model)) }
     }
+
 
     // 3) 하이라이트 삭제 (ID 리스트로 호출)
     private fun handleRemoteHighlightDelete(id: Long) {
         currentPdfView?.removeHighlightAnnotations(listOf(id))
         _annotations.update { st -> st.copy(highlights = ArrayList(st.highlights.filterNot { it.id == id })) }
-        highlightOwners.remove(id)
     }
 
     // 4) 댓글 추가
     private fun handleRemoteCommentAdd(sync: CommentSync) {
-        val model = CommentModel(
-            id          = sync.id,
-            page        = sync.page,
-            snippet     = sync.snippet,
-            text        = sync.text,
-            coordinates = com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.Coordinates(
-                sync.startX,
-                sync.startY,
-                sync.endX,
-                sync.endY
-            )
-        )
-        commentOwners[sync.id] = sync.userId
+        val key = PendingCommentKey(sync.page, sync.snippet, sync.text, sync.startX, sync.startY, sync.endX, sync.endY)
+        val tempId = if (sync.userId == myUserId) pendingComments.remove(key) else null
 
-        if (_highlightFilterUserId.value == null || _highlightFilterUserId.value == sync.userId) {
-            currentPdfView?.addComment(model)
+        if (tempId != null) {
+            currentPdfView?.removeCommentAnnotations(listOf(tempId))
+            _annotations.update { st -> st.copy(comments = ArrayList(st.comments.filterNot { it.id == tempId })) }
+        }
+
+        val model = CommentModel(sync.id, sync.snippet, sync.text, sync.page,
+            UiCoordinates(sync.startX, sync.startY, sync.endX, sync.endY), userId = sync.userId)
+
+        val filter = _highlightFilterUserIds.value
+        if (filter.isEmpty() || sync.userId in filter) {
+            currentPdfView?.addComment(model) // 또는 addComment
         }
         _annotations.update { it.copy(comments = ArrayList(it.comments + model)) }
     }
@@ -946,7 +979,6 @@ class PdfViewModel @Inject constructor(
     private fun handleRemoteCommentDelete(id: Long) {
         currentPdfView?.removeCommentAnnotations(listOf(id))
         _annotations.update { st -> st.copy(comments = ArrayList(st.comments.filterNot { it.id == id })) }
-        commentOwners.remove(id)
     }
 
 

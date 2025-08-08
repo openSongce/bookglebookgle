@@ -509,7 +509,8 @@ class PdfRepositoryImpl @Inject constructor(
                             startY = dto.startY,
                             endX   = dto.endX,
                             endY   = dto.endY
-                        )
+                        ),
+                        userId = dto.userId.toString()
                     )
                 }
                 Log.d(TAG, "댓글 변환 완료: ${convertedComments.size}개")
@@ -525,7 +526,8 @@ class PdfRepositoryImpl @Inject constructor(
                             startY = dto.startY,
                             endX   = dto.endX,
                             endY   = dto.endY
-                        )
+                        ),
+                        userId = dto.userId.toString()
                     )
                 }
                 Log.d(TAG, "하이라이트 변환 완료: ${convertedHighlights.size}개")

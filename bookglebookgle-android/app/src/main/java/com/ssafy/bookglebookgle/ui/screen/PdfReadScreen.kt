@@ -117,7 +117,7 @@ fun PdfReadScreen(
     var showParticipantsSheet by remember { mutableStateOf(false) }
     var pendingTransferUserId by remember { mutableStateOf<String?>(null) } // 확인 다이얼로그용
 
-    val selectedFilter by viewModel.highlightFilterUserId.collectAsState()
+    val selectedFilters by viewModel.highlightFilterUserIds.collectAsState()
 
     //grpc
 
@@ -815,7 +815,7 @@ fun PdfReadScreen(
                     currentUserId = userId,
                     isCurrentLeader = isCurrentLeader,
                     participants = participants,
-                    selectedFilterUserId = selectedFilter,
+                    selectedFilterUserIds = selectedFilters,           // <- Set 전달
                     onDismiss = { showParticipantsSheet = false },
                     onTransferClick = { targetId ->
                         if (targetId != userId && isCurrentLeader) {
@@ -825,9 +825,9 @@ fun PdfReadScreen(
                             android.widget.Toast
                                 .makeText(context, "리더만 권한을 이양할 수 있어요.", android.widget.Toast.LENGTH_SHORT)
                                 .show()
-                        }
-                    },
-                    onFilterChange = { targetOrNull -> viewModel.setHighlightFilterUser(targetOrNull) }
+                        } },
+                    onToggleFilter = { id -> viewModel.toggleHighlightFilterUser(id) }, // <- 토글
+                    onClearFilter = { viewModel.clearHighlightFilter() }                // <- 전체
                 )
             }
 
@@ -921,10 +921,11 @@ private fun ParticipantsBottomSheet(
     currentUserId: String,
     isCurrentLeader: Boolean,
     participants: List<Participant>,
-    selectedFilterUserId: String?,
+    selectedFilterUserIds: Set<String>,                 // <- Set
     onDismiss: () -> Unit,
     onTransferClick: (String) -> Unit,
-    onFilterChange: (String?) -> Unit
+    onToggleFilter: (String) -> Unit,                   // <- 여러명 토글
+    onClearFilter: () -> Unit                           // <- 전체 해제
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -954,16 +955,16 @@ private fun ParticipantsBottomSheet(
                 item {
                     SimpleFilterChip(
                         label = "전체",
-                        selected = selectedFilterUserId == null,
-                        onClick = { onFilterChange(null) }
+                        selected = selectedFilterUserIds.isEmpty(),
+                        onClick = onClearFilter
                     )
                 }
                 items(participants.size) { i ->
                     val p = participants[i]
                     SimpleFilterChip(
                         label = p.userName.ifBlank { p.userId },
-                        selected = selectedFilterUserId == p.userId,
-                        onClick = { onFilterChange(p.userId) }
+                        selected = p.userId in selectedFilterUserIds,
+                        onClick = { onToggleFilter(p.userId) }
                     )
                 }
             }
