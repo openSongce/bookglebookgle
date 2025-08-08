@@ -12,6 +12,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -25,6 +26,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.*
@@ -82,6 +84,10 @@ fun ChatRoomScreen(
     var isScrollingUp by remember { mutableStateOf(false) }
     var lastFirstVisibleIndex by remember { mutableStateOf(-1) }
 
+    // 새 메시지 알림 버튼 상태 추가
+    var showNewMessageButton by remember { mutableStateOf(false) }
+    var newMessageCount by remember { mutableStateOf(0) }
+
     // 키보드 상태 감지
     val density = LocalDensity.current
     val imeInsets = WindowInsets.ime
@@ -113,6 +119,9 @@ fun ChatRoomScreen(
                 kotlinx.coroutines.delay(500)
                 viewModel.resetScrollFlag()
                 viewModel.markChatAsRead()
+                // 초기 로드 시 버튼 숨기기
+                showNewMessageButton = false
+                newMessageCount = 0
             }
         }
     }
@@ -137,11 +146,20 @@ fun ChatRoomScreen(
                 item.index == totalItemsCount - 1
             } ?: false
 
-            Triple(firstVisibleIndex, totalItemsCount, isFirstItemFullyVisible) to isLastItemVisible
+            // 맨 아래 근처에 있는지 확인 (새 메시지 버튼 표시용)
+            val isNearBottom = lastVisibleItem?.let { item ->
+                (totalItemsCount - item.index) <= 5
+            } ?: false
+
+            Triple(firstVisibleIndex, totalItemsCount, isFirstItemFullyVisible) to Pair(
+                isLastItemVisible,
+                isNearBottom
+            )
         }
             .distinctUntilChanged()
-            .collect { (triple, isLastItemVisible) ->
+            .collect { (triple, bottomInfo) ->
                 val (firstVisibleIndex, totalItemsCount, isFirstItemFullyVisible) = triple
+                val (isLastItemVisible, isNearBottom) = bottomInfo
 
                 // 스크롤 방향 감지
                 if (firstVisibleIndex != lastFirstVisibleIndex) {
@@ -167,9 +185,20 @@ fun ChatRoomScreen(
                     viewModel.loadMoreMessages()
                 }
 
-                // 맨 아래 스크롤 시 읽음 처리
+                // 맨 아래 스크롤 시 읽음 처리 및 새 메시지 버튼 숨기기
                 if (isLastItemVisible && !uiState.isLoadingMore && !uiState.isLoading) {
                     viewModel.markChatAsRead()
+                    // 맨 아래에 도달하면 새 메시지 버튼 숨기기
+                    if (showNewMessageButton) {
+                        showNewMessageButton = false
+                        newMessageCount = 0
+                    }
+                }
+
+                // 맨 아래 근처에 있으면 새 메시지 버튼 숨기기
+                if (isNearBottom && showNewMessageButton) {
+                    showNewMessageButton = false
+                    newMessageCount = 0
                 }
             }
     }
@@ -177,7 +206,7 @@ fun ChatRoomScreen(
     // 이전 메시지 로드 완료 시 스크롤 위치 조정
     LaunchedEffect(uiState.isLoadingMore) {
         if (uiState.isLoadingMore && scrollPositionBeforeLoad == null) {
-            previousMessageCount = uiState.chatMessages.size
+//            previousMessageCount = uiState.chatMessages.size
             scrollPositionBeforeLoad = Pair(0, 0)
         }
 
@@ -202,6 +231,9 @@ fun ChatRoomScreen(
                         listState.scrollToItem(0)
                     }
                 }
+
+                // 이전 메시지 로드 완료 후에만 메시지 카운트 업데이트
+                previousMessageCount = currentMessageCount
             }
 
             scrollPositionBeforeLoad = null
@@ -212,20 +244,34 @@ fun ChatRoomScreen(
 
     // 새 메시지 도착 시 스크롤 처리
     LaunchedEffect(uiState.chatMessages.size) {
-        if (uiState.chatMessages.isNotEmpty() && !uiState.shouldScrollToBottom && !uiState.isLoadingMore) {
+        if (uiState.chatMessages.isNotEmpty() && !uiState.shouldScrollToBottom && !uiState.isLoadingMore && !uiState.isLoading) {
             val currentMessageCount = uiState.chatMessages.size
 
             if (currentMessageCount > previousMessageCount) {
+                val newMessagesAdded = currentMessageCount - previousMessageCount
+
+                // 새로 추가된 메시지 중 본인이 보낸 메시지가 있는지 확인
+                val newMessages = uiState.chatMessages.takeLast(newMessagesAdded)
+                val hasMyMessage = newMessages.any { viewModel.isMyMessage(it, userId) }
+
                 // 새 메시지 도착 시 맨 아래 근처에 있으면 스크롤
                 scope.launch {
                     val lastVisibleItem = listState.layoutInfo.visibleItemsInfo.lastOrNull()
                     val totalItems = listState.layoutInfo.totalItemsCount
                     val isNearBottom = lastVisibleItem?.index != null &&
-                            (totalItems - lastVisibleItem.index) <= 5
+                            (totalItems - lastVisibleItem.index) <= 3
 
-                    if (isNearBottom) {
+                    if (isNearBottom || hasMyMessage) {
+                        // 맨 아래 근처에 있으면 자동 스크롤
                         listState.animateScrollToItem(currentMessageCount - 1)
                         viewModel.markChatAsRead()
+                        // 새 메시지 버튼 숨기기
+                        showNewMessageButton = false
+                        newMessageCount = 0
+                    } else {
+                        // 위에 있으면 새 메시지 버튼 표시
+                        newMessageCount += newMessagesAdded
+                        showNewMessageButton = true
                     }
                 }
                 previousMessageCount = currentMessageCount
@@ -246,6 +292,11 @@ fun ChatRoomScreen(
                     kotlinx.coroutines.delay(100)
                     listState.animateScrollToItem(uiState.chatMessages.size - 1)
                     viewModel.markChatAsRead()
+                    // 키보드로 인한 스크롤 시에만 새 메시지 버튼 숨기기 (새 메시지가 있을 때만)
+                    if (showNewMessageButton) {
+                        showNewMessageButton = false
+                        newMessageCount = 0
+                    }
                 }
             }
         }
@@ -297,7 +348,7 @@ fun ChatRoomScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // 왼쪽: 토론 상태 표시
+                        // 토론 상태 표시 (모든 사용자가 볼 수 있음)
                         Row(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -330,41 +381,128 @@ fun ChatRoomScreen(
                             }
                         }
 
-                        // 오른쪽: 토론 시작/종료 버튼
-                        Button(
-                            onClick = {
-                                Log.d(TAG, "토론 버튼 클릭됨! 현재 상태: ${uiState.isDiscussionActive}")
-                                if (uiState.isDiscussionActive) {
-                                    Log.d(TAG, "토론 종료 호출")
-                                    viewModel.endDiscussion()
-                                } else {
-                                    Log.d(TAG, "토론 시작 호출")
-                                    viewModel.startDiscussion()
-                                }
-                            },
-                            modifier = Modifier.height(32.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (uiState.isDiscussionActive) Color(0xFFE74C3C) else Color(0xFF2ECC71)
-                            ),
-                            contentPadding = PaddingValues(horizontal = 12.dp),
-                            enabled = !uiState.isDiscussionConnecting // 연결 중일 때 버튼 비활성화
-                        ) {
-                            Icon(
-                                imageVector = if (uiState.isDiscussionActive) Icons.Default.Close else Icons.Default.PlayArrow,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp),
-                                tint = Color.White
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = if (uiState.isDiscussionActive) "토론 종료" else "토론 시작",
-                                fontSize = 12.sp,
-                                color = Color.White
-                            )
+                        // 토론 시작/종료 버튼 (모임장만 볼 수 있음)
+                        if (uiState.isHost) {
+                            Button(
+                                onClick = {
+                                    Log.d(TAG, "토론 버튼 클릭됨! 현재 상태: ${uiState.isDiscussionActive}")
+                                    if (uiState.isDiscussionActive) {
+                                        Log.d(TAG, "토론 종료 호출")
+                                        viewModel.endDiscussion()
+                                    } else {
+                                        Log.d(TAG, "토론 시작 호출")
+                                        viewModel.startDiscussion()
+                                    }
+                                },
+                                modifier = Modifier.height(32.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (uiState.isDiscussionActive) Color(0xFFE74C3C) else Color(0xFF2ECC71)
+                                ),
+                                contentPadding = PaddingValues(horizontal = 12.dp),
+                                enabled = !uiState.isDiscussionConnecting
+                            ) {
+                                Icon(
+                                    imageVector = if (uiState.isDiscussionActive) Icons.Default.Close else Icons.Default.PlayArrow,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                    tint = Color.White
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = if (uiState.isDiscussionActive) "토론 종료" else "토론 시작",
+                                    fontSize = 12.sp,
+                                    color = Color.White
+                                )
+                            }
                         }
                     }
                 }
             }
+
+//            // 토론 컨트롤 패널 (READING 카테고리일 때만 표시)
+//            if (uiState.isReadingCategory) {
+//                Surface(
+//                    modifier = Modifier.fillMaxWidth(),
+//                    shadowElevation = 2.dp,
+//                    color = Color.White
+//                ) {
+//                    Row(
+//                        modifier = Modifier
+//                            .fillMaxWidth()
+//                            .padding(horizontal = 16.dp, vertical = 8.dp),
+//                        horizontalArrangement = Arrangement.SpaceBetween,
+//                        verticalAlignment = Alignment.CenterVertically
+//                    ) {
+//                        // 왼쪽: 토론 상태 표시
+//                        Row(
+//                            verticalAlignment = Alignment.CenterVertically
+//                        ) {
+//                            if (uiState.isDiscussionActive) {
+//                                Box(
+//                                    modifier = Modifier
+//                                        .size(8.dp)
+//                                        .background(MainColor, CircleShape)
+//                                )
+//                                Spacer(modifier = Modifier.width(6.dp))
+//                                Text(
+//                                    text = "AI 토론 진행 중",
+//                                    fontSize = 12.sp,
+//                                    color = DeepMainColor,
+//                                    fontWeight = FontWeight.Medium
+//                                )
+//                            } else {
+//                                Box(
+//                                    modifier = Modifier
+//                                        .size(8.dp)
+//                                        .background(Color.Gray, CircleShape)
+//                                )
+//                                Spacer(modifier = Modifier.width(6.dp))
+//                                Text(
+//                                    text = "일반 채팅",
+//                                    fontSize = 12.sp,
+//                                    color = Color.Gray,
+//                                    fontWeight = FontWeight.Medium
+//                                )
+//                            }
+//                        }
+//
+//                        // 오른쪽: 토론 시작/종료 버튼
+//                        Button(
+//                            onClick = {
+//                                Log.d(TAG, "토론 버튼 클릭됨! 현재 상태: ${uiState.isDiscussionActive}")
+//                                if (uiState.isDiscussionActive) {
+//                                    Log.d(TAG, "토론 종료 호출")
+//                                    viewModel.endDiscussion()
+//                                } else {
+//                                    Log.d(TAG, "토론 시작 호출")
+//                                    viewModel.startDiscussion()
+//                                }
+//                            },
+//                            modifier = Modifier.height(32.dp),
+//                            colors = ButtonDefaults.buttonColors(
+//                                containerColor = if (uiState.isDiscussionActive) Color(0xFFE74C3C) else Color(
+//                                    0xFF2ECC71
+//                                )
+//                            ),
+//                            contentPadding = PaddingValues(horizontal = 12.dp),
+//                            enabled = !uiState.isDiscussionConnecting // 연결 중일 때 버튼 비활성화
+//                        ) {
+//                            Icon(
+//                                imageVector = if (uiState.isDiscussionActive) Icons.Default.Close else Icons.Default.PlayArrow,
+//                                contentDescription = null,
+//                                modifier = Modifier.size(16.dp),
+//                                tint = Color.White
+//                            )
+//                            Spacer(modifier = Modifier.width(4.dp))
+//                            Text(
+//                                text = if (uiState.isDiscussionActive) "토론 종료" else "토론 시작",
+//                                fontSize = 12.sp,
+//                                color = Color.White
+//                            )
+//                        }
+//                    }
+//                }
+//            }
 
             Box(
                 modifier = Modifier
@@ -502,6 +640,48 @@ fun ChatRoomScreen(
                             AiTypingIndicator()
                         }
                     }
+
+
+                }
+                // 새 메시지 알림 버튼 추가
+                if (showNewMessageButton) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(bottom = 30.dp), // 입력창 위로 여유 공간
+                        contentAlignment = Alignment.BottomCenter
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .background(
+                                    color = Color(0xFF757575).copy(alpha = 0.85f),
+                                    shape = CircleShape
+                                )
+                                .clickable(
+                                    indication = null, // 눌림 효과 제거
+                                    interactionSource = remember { MutableInteractionSource() }
+                                ) {
+                                    scope.launch {
+                                        // 맨 아래로 스크롤
+                                        listState.animateScrollToItem(uiState.chatMessages.size - 1)
+                                        // 버튼 숨기기
+                                        showNewMessageButton = false
+                                        newMessageCount = 0
+                                        // 읽음 처리
+                                        viewModel.markChatAsRead()
+                                    }
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.KeyboardArrowDown,
+                                contentDescription = "새 메시지로 이동",
+                                modifier = Modifier.size(20.dp),
+                                tint = Color.White
+                            )
+                        }
+                    }
                 }
 
                 // AI 추천 주제 오버레이
@@ -622,7 +802,7 @@ fun ChatRoomScreen(
             ) {
                 Column {
                     // 토론 중일 때 상태 표시바
-                    if (uiState.isReadingCategory && uiState.isDiscussionActive) {
+                    if (uiState.isReadingCategory && uiState.isDiscussionActive && uiState.isDiscussionAutoDetected) {
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
                             color = BaseColor.copy(alpha = 0.1f)
