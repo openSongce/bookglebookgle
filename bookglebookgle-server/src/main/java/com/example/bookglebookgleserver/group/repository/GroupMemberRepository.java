@@ -25,10 +25,10 @@ public interface GroupMemberRepository extends JpaRepository<GroupMember, Long> 
 
     // 완료한 모임 수
     @Query("SELECT COUNT(gm) FROM GroupMember gm WHERE gm.user.id = :userId AND gm.progressPercent >= 100")
-    int countCompletedGroupsByProgress(@Param("userId") Long userId);
+    int countCompletedGroupsByUserId(@Param("userId") Long userId);
 
     // 미완료한 모임 수
     @Query("SELECT COUNT(gm) FROM GroupMember gm WHERE gm.user.id = :userId AND gm.progressPercent < 100")
-    int countIncompleteGroupsByProgress(@Param("userId") Long userId);
+    int countIncompleteGroupsByUserId(@Param("userId") Long userId);
 
 }

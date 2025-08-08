@@ -24,7 +24,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
 
-    @Qualifier("customUserDetailsService")
+
     private final UserDetailsService userDetailsService;
 
     @Override
@@ -62,6 +62,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                 UsernamePasswordAuthenticationToken authenticationToken =
                         new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
+
+
+                log.info("[JWT] auth set: principalType={}, username={}, authorities={}",
+                        userDetails.getClass().getName(), userDetails.getUsername(), userDetails.getAuthorities());
 
                 SecurityContextHolder.getContext().setAuthentication(authenticationToken);
             } else {
