@@ -9,6 +9,8 @@ import com.example.bookglebookgleserver.highlight.entity.Highlight;
 import com.example.bookglebookgleserver.highlight.repository.HighlightRepository;
 import com.example.bookglebookgleserver.pdf.repository.PdfReadingProgressRepository;
 import com.example.bookglebookgleserver.pdf.service.PdfService;
+import com.example.bookglebookgleserver.user.entity.User;
+import com.example.bookglebookgleserver.user.repository.UserRepository;
 import com.example.bookglebookgleserver.user.service.ViewingSessionService;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
@@ -20,6 +22,7 @@ import java.time.LocalDateTime;
 import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
 @GrpcService
 @RequiredArgsConstructor
@@ -32,6 +35,7 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
     private final GroupRepository groupRepository;
     private final PdfService pdfService;
     private final ViewingSessionService viewingSessionService;
+    private final UserRepository userRepository;
 
     @Override
     public StreamObserver<SyncMessage> sync(StreamObserver<SyncMessage> out) {
@@ -340,15 +344,41 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
             // ---------- helpers ----------
 
             private ParticipantsSnapshot buildSnapshot(GroupState state) {
-                List<Participant> list = new ArrayList<>();
-                for (GroupState.ParticipantMeta pm : state.participants.values()) {
-                    list.add(pm.toProto(Objects.equals(pm.userId, state.currentLeaderId)));
-                }
+                var idSet = state.participants.values().stream()
+                        .map(pm -> Long.valueOf(pm.userId))
+                        .collect(Collectors.toSet());
+
+                // 빈 집합 방어
+                Map<Long, String> names = idSet.isEmpty()
+                        ? Collections.emptyMap()
+                        : userRepository.findAllById(idSet).stream()
+                              .collect(Collectors.toMap(User::getId, u ->
+                                  Optional.ofNullable(u.getNickname()).filter(s -> !s.isBlank()).orElse(u.getId().toString())
+                              ));
+
+                List<Participant> list = state.participants.values().stream()
+                        .map(pm -> Participant.newBuilder()
+                                .setUserId(pm.userId)
+                                .setUserName(
+                                    Optional.ofNullable(pm.userName).filter(s -> !s.isBlank())
+                                        .orElse(names.getOrDefault(Long.valueOf(pm.userId), pm.userId))
+                                )
+                                .setIsOriginalHost(pm.isOriginalHost)
+                                .setIsCurrentHost(Objects.equals(pm.userId, state.currentLeaderId))
+                                .build()
+                        )
+                        .sorted(Comparator
+                                .comparing(Participant::getIsCurrentHost).reversed()
+                                .thenComparing(Participant::getIsOriginalHost).reversed()
+                                .thenComparing(Participant::getUserName))
+                        .collect(Collectors.toList());
+
                 return ParticipantsSnapshot.newBuilder()
                         .addAllParticipants(list)
-                        .setCurrentPage(state.currentPage) // ✅ proto에 추가한 필드
+                        .setCurrentPage(state.currentPage)
                         .build();
             }
+
 
             private void sendSnapshotTo(GroupState state, String targetUserId) {
                 StreamObserver<SyncMessage> o = state.observers.get(targetUserId);
