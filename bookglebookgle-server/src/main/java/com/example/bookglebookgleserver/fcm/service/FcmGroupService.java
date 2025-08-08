@@ -23,7 +23,7 @@ public class FcmGroupService {
             return;
         }
         log.info("👥 그룹 발송 시작: groupId={}, 대상토큰수={}", groupId, tokens.size());
-        FcmSendRequest req = new FcmSendRequest(null, null, title, body, channelId, data);
+        FcmSendRequest req = new FcmSendRequest(null, null, title, body, channelId, data, true);
         fcmService.sendToTokens(tokens, req);
     }
 }
