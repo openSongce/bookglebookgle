@@ -38,6 +38,10 @@ data class ChatRoomUiState(
     // 카테고리 관련 상태 추가
     val isReadingCategory: Boolean = false,
     val isAiTyping: Boolean = false,
+    // 모임장 여부 추가
+    val isHost: Boolean = false,
+    // 토론 상태 자동 감지 관련
+    val isDiscussionAutoDetected: Boolean = false,
 )
 
 @HiltViewModel
@@ -64,6 +68,7 @@ class ChatRoomViewModel @Inject constructor(
     private var currentGroupId: Long = 0
     private var currentUserId: Long = 0
     private var isInitialLoad = true
+    private var userName: String = ""
 
     init {
         // 각 타입별 Observer 등록
@@ -104,13 +109,22 @@ class ChatRoomViewModel @Inject constructor(
                 val groupDetail = groupRepositoryImpl.getGroupDetail(groupId)
                 val groupTitle = groupDetail.body()?.roomTitle
                 val groupCategory = groupDetail.body()?.category
+                val isHost = groupDetail.body()?.isHost ?: false
 
                 // 카테고리가 READING인지 확인
                 val isReadingCategory = groupCategory?.equals("READING", ignoreCase = true) == true
 
                 val latestMessages = chatRepositoryImpl.getLatestChatMessages(groupId, 15)
 
+                // 실제 사용자 닉네임 저장
+                var actualUserName = "사용자"
+
                 val chatMessages = latestMessages.map { response ->
+                    // 현재 사용자의 메시지에서 실제 닉네임 추출
+                    if (response.userId == userId) {
+                        actualUserName = response.userNickname
+                    }
+
                     ChatMessage(
                         messageId = response.id,
                         userId = response.userId,
@@ -122,19 +136,35 @@ class ChatRoomViewModel @Inject constructor(
                     )
                 }.sortedBy { it.messageId }
 
+                // userName에 실제 닉네임 저장
+                userName = actualUserName
+
+                // AI 응답 메시지 감지를 통한 토론 상태 자동 감지
+                val hasRecentAiResponse = chatMessages.any { message ->
+                    message.type == MessageType.AI_RESPONSE
+                }
+
+                // READING 카테고리이고 최근 AI 응답이 있으면 토론 중으로 간주
+                val autoDetectedDiscussion = isReadingCategory && hasRecentAiResponse
+
                 _uiState.value = _uiState.value.copy(
                     chatMessages = chatMessages,
                     groupTitle = groupTitle ?: "채팅방",
                     isLoading = false,
                     hasMoreData = latestMessages.size >= 15,
                     shouldScrollToBottom = true,
-                    isReadingCategory = isReadingCategory // 카테고리 상태 설정
+                    isReadingCategory = isReadingCategory, // 카테고리 상태 설정
+                    isHost = isHost,
+                    // AI 응답이 있으면 토론 중으로 자동 설정
+                    isDiscussionActive = autoDetectedDiscussion,
+                    // 자동 감지되었는지 플래그 설정
+                    isDiscussionAutoDetected = autoDetectedDiscussion
                 )
 
                 isInitialLoad = false
 
                 //gRPC 연결
-                connectToGrpcChat(groupId, userId)
+                connectToGrpcChat(groupId, userId, actualUserName)
 
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
@@ -191,10 +221,21 @@ class ChatRoomViewModel @Inject constructor(
                     // 메시지 순서 보장 - 이전 메시지를 앞에, 기존 메시지를 뒤에
                     val updatedMessages = newChatMessages + currentMessages
 
+                    // 더 불러온 메시지들을 포함해서 AI 응답 재검사
+                    val hasAiResponseInAllMessages = updatedMessages.any { message ->
+                        message.type == MessageType.AI_RESPONSE
+                    }
+
+                    // READING 카테고리이고 AI 응답이 있으면 토론 중으로 자동 설정
+                    val autoDetectedDiscussion = _uiState.value.isReadingCategory && hasAiResponseInAllMessages
+
                     _uiState.value = _uiState.value.copy(
                         chatMessages = updatedMessages,
                         isLoadingMore = false,
-                        hasMoreData = olderMessages.size >= 15
+                        hasMoreData = olderMessages.size >= 15,
+                        // 이전 메시지에서도 AI 응답 감지 시 토론 상태 업데이트
+                        isDiscussionActive = autoDetectedDiscussion || _uiState.value.isDiscussionActive
+
                     )
                 } else {
                     _uiState.value = _uiState.value.copy(
@@ -213,17 +254,15 @@ class ChatRoomViewModel @Inject constructor(
     }
 
     // gRPC 실시간 채팅 연결
-    private fun connectToGrpcChat(groupId: Long, userId: Long) {
+    private fun connectToGrpcChat(groupId: Long, userId: Long, actualUserName: String) {
         viewModelScope.launch {
             try {
-                // 사용자 정보 가져오기
-                val userName = "사용자 $userId"
 
                 // gRPC 서버 연결
                 chatGrpcRepository.connect()
 
                 // 채팅방 참여
-                chatGrpcRepository.joinChatRoom(groupId, userId, userName)
+                chatGrpcRepository.joinChatRoom(groupId, userId, actualUserName)
 
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
@@ -241,7 +280,22 @@ class ChatRoomViewModel @Inject constructor(
         if (currentMessages.none { it.messageId == message.messageId }) {
             currentMessages.add(message)
             val sortedMessages = currentMessages.sortedBy { it.messageId }
-            _uiState.value = _uiState.value.copy(chatMessages = sortedMessages)
+            // AI 응답 메시지가 추가되면 토론 상태 자동 활성화
+            val shouldActivateDiscussion = _uiState.value.isReadingCategory &&
+                    message.type == MessageType.AI_RESPONSE
+
+            _uiState.value = _uiState.value.copy(
+                chatMessages = sortedMessages,
+                // AI 응답이 추가되면 토론 중으로 자동 설정
+                isDiscussionActive = shouldActivateDiscussion || _uiState.value.isDiscussionActive
+            )
+
+            // 토론 중이고 일반 메시지(사용자 메시지)가 추가된 경우 AI 타이핑 시작
+            if (_uiState.value.isReadingCategory &&
+                _uiState.value.isDiscussionActive &&
+                message.type == MessageType.NORMAL) {
+                setAiTyping(true)
+            }
 
             // 새 메시지 도착 시 읽음 처리 (본인 메시지가 아닌 경우)
             if (message.userId != currentUserId) {
@@ -262,7 +316,9 @@ class ChatRoomViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(
             currentAiResponse = aiMessage.aiResponse,
             suggestedTopics = aiMessage.suggestedTopics,
-            showAiSuggestions = aiMessage.suggestedTopics.isNotEmpty()
+            showAiSuggestions = aiMessage.suggestedTopics.isNotEmpty(),
+            // AI 응답이 오면 토론 중으로 자동 설정 (READING 카테고리인 경우)
+            isDiscussionActive = if (_uiState.value.isReadingCategory) true else _uiState.value.isDiscussionActive
         )
     }
 
@@ -340,6 +396,14 @@ class ChatRoomViewModel @Inject constructor(
 
     // 토론 시작
     fun startDiscussion() {
+        // 모임장 권한 검사 추가
+        if (!_uiState.value.isHost) {
+            _uiState.value = _uiState.value.copy(
+                error = "토론 시작은 모임장만 가능합니다."
+            )
+            return
+        }
+
         // READING 카테고리가 아닌 경우 토론 시작 불가
         if (!_uiState.value.isReadingCategory) {
             _uiState.value = _uiState.value.copy(
@@ -384,6 +448,14 @@ class ChatRoomViewModel @Inject constructor(
 
     // 토론 종료
     fun endDiscussion() {
+        // 모임장 권한 검사 추가
+        if (!_uiState.value.isHost) {
+            _uiState.value = _uiState.value.copy(
+                error = "토론 종료는 모임장만 가능합니다."
+            )
+            return
+        }
+
         // READING 카테고리가 아닌 경우 토론 종료 불가
         if (!_uiState.value.isReadingCategory) {
             return
