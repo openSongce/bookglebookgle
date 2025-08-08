@@ -67,54 +67,75 @@ public class FcmService {
         }
     }
 
-    // ---- Android 전용 메시지 구성 ----
     private Message buildMessage(String token, FcmSendRequest req) {
-        AndroidNotification.Builder nb = AndroidNotification.builder()
-                .setTitle(req.title())
-                .setBody(req.body());
-        if (req.channelId() != null) nb.setChannelId(req.channelId());
+        boolean dataOnly = Boolean.TRUE.equals(req.dataOnly());
 
-        AndroidConfig android = AndroidConfig.builder()
+        AndroidConfig.Builder ab = AndroidConfig.builder()
                 .setPriority(AndroidConfig.Priority.HIGH)
-                .setTtl(Duration.ofMinutes(10).toMillis())
-                .setNotification(nb.build())
-                .build();
+                .setTtl(Duration.ofMinutes(10).toMillis());
+
+        if (!dataOnly && req.channelId() != null) {
+            ab.setNotification(AndroidNotification.builder()
+                    .setTitle(req.title())
+                    .setBody(req.body())
+                    .setChannelId(req.channelId())
+                    .build());
+        }
 
         Message.Builder mb = Message.builder()
-                .setAndroidConfig(android)
-                .setToken(token)
-                .setNotification(Notification.builder()
-                        .setTitle(req.title())
-                        .setBody(req.body())
-                        .build());
+                .setAndroidConfig(ab.build())
+                .setToken(token);
 
-        if (req.data() != null && !req.data().isEmpty()) mb.putAllData(req.data());
+        if (dataOnly) {
+            // 🔹 제목/본문도 data로 내려보내기(클라이언트에서 통일 처리)
+            mb.putData("title", Optional.ofNullable(req.title()).orElse(""))
+                    .putData("body", Optional.ofNullable(req.body()).orElse(""));
+            if (req.data() != null) mb.putAllData(req.data());
+        } else {
+            // 🔹 혼합(기존): 시스템 표시 + data 부가
+            mb.setNotification(Notification.builder()
+                    .setTitle(req.title())
+                    .setBody(req.body())
+                    .build());
+            if (req.data() != null) mb.putAllData(req.data());
+        }
         return mb.build();
     }
 
     private MulticastMessage buildMulticastMessage(List<String> tokens, FcmSendRequest req) {
-        AndroidNotification.Builder nb = AndroidNotification.builder()
-                .setTitle(req.title())
-                .setBody(req.body());
-        if (req.channelId() != null) nb.setChannelId(req.channelId());
+        boolean dataOnly = Boolean.TRUE.equals(req.dataOnly());
 
-        AndroidConfig android = AndroidConfig.builder()
+        AndroidConfig.Builder ab = AndroidConfig.builder()
                 .setPriority(AndroidConfig.Priority.HIGH)
-                .setTtl(Duration.ofMinutes(10).toMillis())
-                .setNotification(nb.build())
-                .build();
+                .setTtl(Duration.ofMinutes(10).toMillis());
+
+        if (!dataOnly && req.channelId() != null) {
+            ab.setNotification(AndroidNotification.builder()
+                    .setTitle(req.title())
+                    .setBody(req.body())
+                    .setChannelId(req.channelId())
+                    .build());
+        }
 
         MulticastMessage.Builder mb = MulticastMessage.builder()
-                .setAndroidConfig(android)
-                .addAllTokens(tokens)
-                .setNotification(Notification.builder()
-                        .setTitle(req.title())
-                        .setBody(req.body())
-                        .build());
+                .setAndroidConfig(ab.build())
+                .addAllTokens(tokens);
 
-        if (req.data() != null && !req.data().isEmpty()) mb.putAllData(req.data());
+        if (dataOnly) {
+            mb.putData("title", Optional.ofNullable(req.title()).orElse(""))
+                    .putData("body",  Optional.ofNullable(req.body()).orElse(""));
+            if (req.data() != null && !req.data().isEmpty()) mb.putAllData(req.data());
+        } else {
+            mb.setNotification(Notification.builder()
+                    .setTitle(req.title())
+                    .setBody(req.body())
+                    .build());
+            if (req.data() != null && !req.data().isEmpty()) mb.putAllData(req.data());
+        }
+
         return mb.build();
     }
+
 
     /** 실패 토큰 비활성화(UNREGISTERED) */
     private void cleanupInvalidTokens(List<String> tokens, BatchResponse resp) {
