@@ -10,8 +10,8 @@ import lombok.*;
 public class OcrTextBlockDto {
     private int pageNumber;
     private String text;
-    private int rectX;
-    private int rectY;
-    private int rectW;
-    private int rectH;
+    private double rectX;
+    private double rectY;
+    private double rectW;
+    private double rectH;
 }
