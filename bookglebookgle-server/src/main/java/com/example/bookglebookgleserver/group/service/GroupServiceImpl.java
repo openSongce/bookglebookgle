@@ -5,6 +5,8 @@ import com.example.bookglebookgleserver.chat.entity.ChatRoom;
 import com.example.bookglebookgleserver.chat.entity.ChatRoomMember;
 import com.example.bookglebookgleserver.chat.repository.ChatRoomMemberRepository;
 import com.example.bookglebookgleserver.chat.repository.ChatRoomRepository;
+import com.example.bookglebookgleserver.fcm.service.GroupNotificationScheduler;
+import com.example.bookglebookgleserver.fcm.util.KoreanScheduleParser;
 import com.example.bookglebookgleserver.global.exception.BadRequestException;
 import com.example.bookglebookgleserver.global.exception.ForbiddenException;
 import com.example.bookglebookgleserver.global.exception.NotFoundException;
@@ -28,6 +30,7 @@ import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.scheduling.support.CronTrigger;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -35,6 +38,7 @@ import java.io.File;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.TimeZone;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -51,6 +55,9 @@ public class GroupServiceImpl implements GroupService {
     private final UserRepository userRepository;
     private final ChatRoomRepository chatRoomRepository;
     private final ChatRoomMemberRepository chatRoomMemberRepository;
+    private final GroupNotificationScheduler groupNotificationScheduler;
+
+    private static final TimeZone TZ = TimeZone.getTimeZone("Asia/Seoul");
 
     @Override
     @Transactional
@@ -84,12 +91,24 @@ public class GroupServiceImpl implements GroupService {
         pdfFileRepository.save(pdf);
         log.info("📄 PDF 페이지 수 추출 완료: {} 페이지", pageCount);
 
+        // ✅ 스케줄 자연어 → CRON 변환 (CRON이면 그대로)
+        String scheduleInput = dto.getSchedule();
+        String cron = null;
+        if (scheduleInput != null && !scheduleInput.isBlank()) {
+            try {
+                try { new CronTrigger(scheduleInput, TZ); cron = scheduleInput; }
+                catch (Exception ignore) { cron = KoreanScheduleParser.toCron(scheduleInput); }
+            } catch (Exception e) {
+                log.warn("⚠️ 그룹 스케줄 파싱 실패: 입력='{}', reason={}. 스케줄 없이 생성합니다.", scheduleInput, e.getMessage());
+            }
+        }
+
         Group group = Group.builder()
                 .roomTitle(dto.getRoomTitle())
                 .description(dto.getDescription())
                 .category(Group.Category.valueOf(dto.getCategory().toUpperCase()))
                 .minRequiredRating(dto.getMinRequiredRating())
-                .schedule(dto.getSchedule())
+                .schedule(cron) // 변환된 CRON 저장(없으면 null)
                 .groupMaxNum(dto.getGroupMaxNum())
                 .readingMode(Group.ReadingMode.valueOf(dto.getReadingMode().toUpperCase()))
                 .hostUser(user)
@@ -100,6 +119,15 @@ public class GroupServiceImpl implements GroupService {
                 .isDeleted(false)
                 .build();
         groupRepository.save(group);
+
+        // 그룹 생성 직후 스케줄 등록
+        if (cron != null) {
+            try {
+                groupNotificationScheduler.register(group.getId(), cron);
+            } catch (Exception e) {
+                log.warn("⚠️ 스케줄 등록 실패(그룹 생성 직후): groupId={}, cron='{}', reason={}", group.getId(), cron, e.getMessage());
+            }
+        }
 
         pdf.setGroup(group);
 
@@ -161,31 +189,21 @@ public class GroupServiceImpl implements GroupService {
                 .build();
     }
 
-//    @Override
-//    public void createGroupWithoutOcr(GroupCreateRequestDto dto, MultipartFile pdfFile, User user) {
-//        dto.setImageBased(false);
-//        createGroup(dto, pdfFile, user);
-//    }
-
     @Override
     public List<GroupListResponseDto> getNotJoinedGroupList(Long userId) {
         log.info("📌 [GroupService] (미가입자용) 그룹 목록 조회 시작");
 
-        // 1. 전체 그룹 조회
         List<Group> groups = groupRepository.findAll();
         log.info("📌 [GroupService] 전체 그룹 수: {}", groups.size());
 
-        // 2. 사용자가 가입한 그룹 ID 목록 조회
         List<Long> joinedGroupIds = groupMemberRepository.findGroupIdsByUserId(userId);
         log.info("📌 [GroupService] 사용자가 가입한 그룹 수: {}", joinedGroupIds.size());
 
-        // 3. 가입하지 않은 그룹만 필터링
         return groups.stream()
                 .filter(group -> !joinedGroupIds.contains(group.getId()))
                 .map(group -> {
                     try {
                         log.info("📌 그룹 ID: {}, 제목: {}", group.getId(), group.getRoomTitle());
-
                         int currentNum = groupMemberRepository.countByGroup(group);
                         log.info("📌 currentNum 조회 완료: {}", currentNum);
 
@@ -205,7 +223,6 @@ public class GroupServiceImpl implements GroupService {
                 })
                 .collect(java.util.stream.Collectors.toList());
     }
-
 
     @Override
     public GroupDetailResponse getGroupDetail(Long groupId, User user) {
@@ -276,12 +293,10 @@ public class GroupServiceImpl implements GroupService {
         Group group = groupRepository.findById(groupId)
                 .orElseThrow(() -> new NotFoundException("해당 그룹이 존재하지 않습니다."));
 
-        // 이미 참가 여부 확인
         if (groupMemberRepository.existsByGroupAndUser(group, user)) {
             throw new BadRequestException("이미 참가한 그룹입니다.");
         }
 
-        // 정원 초과 여부
         int currentNum = groupMemberRepository.countByGroup(group);
         if (currentNum >= group.getGroupMaxNum()) {
             throw new BadRequestException("그룹 정원이 초과되었습니다.");
@@ -291,7 +306,6 @@ public class GroupServiceImpl implements GroupService {
             throw new BadRequestException("평점이 낮아 그룹에 참가할 수 없습니다.");
         }
 
-        // 참가자 추가
         GroupMember member = GroupMember.builder()
                 .group(group)
                 .user(user)
@@ -311,7 +325,6 @@ public class GroupServiceImpl implements GroupService {
                 .build();
         chatRoomMemberRepository.save(chatMember);
 
-        // memberCount 1 증가 후 저장
         chatRoom.setMemberCount(chatRoom.getMemberCount() + 1);
         chatRoomRepository.save(chatRoom);
 
@@ -332,10 +345,30 @@ public class GroupServiceImpl implements GroupService {
         if (dto.getRoomTitle() != null) group.setRoomTitle(dto.getRoomTitle());
         if (dto.getDescription() != null) group.setDescription(dto.getDescription());
         if (dto.getCategory() != null) group.setCategory(Group.Category.valueOf(dto.getCategory().toUpperCase()));
-        if (dto.getSchedule() != null) group.setSchedule(dto.getSchedule());
         if (dto.getGroupMaxNum() > 0) group.setGroupMaxNum(dto.getGroupMaxNum());
         if (dto.getMinRequiredRating() > 0) group.setMinRequiredRating(dto.getMinRequiredRating());
         if (dto.getReadingMode() != null) group.setReadingMode(Group.ReadingMode.valueOf(dto.getReadingMode().toUpperCase()));
+
+        // ✅ 스케줄 업데이트 처리
+        if (dto.getSchedule() != null) {
+            String input = dto.getSchedule();
+            if (input.isBlank()) {
+                // 스케줄 해제
+                group.setSchedule(null);
+                groupNotificationScheduler.unregister(groupId);
+                log.info("🗑️ 그룹 스케줄 해제: groupId={}", groupId);
+            } else {
+                try {
+                    String cron;
+                    try { new CronTrigger(input, TZ); cron = input; }
+                    catch (Exception ignore) { cron = KoreanScheduleParser.toCron(input); }
+                    group.setSchedule(cron);
+                    groupNotificationScheduler.register(groupId, cron);
+                } catch (Exception e) {
+                    throw new BadRequestException("스케줄 형식이 올바르지 않습니다: " + e.getMessage());
+                }
+            }
+        }
 
         int memberCount = groupMemberRepository.countByGroup(group);
         boolean isHost = group.getHostUser().getId().equals(user.getId());
@@ -361,15 +394,17 @@ public class GroupServiceImpl implements GroupService {
         if (!group.getHostUser().getId().equals(user.getId())) {
             throw new ForbiddenException("그룹 삭제 권한이 없습니다.");
         }
+        // ✅ 스케줄 해제 후 삭제
+        groupNotificationScheduler.unregister(groupId);
         groupRepository.delete(group);
+        log.info("🗑️ 그룹 삭제 완료 및 스케줄 해제: groupId={}", groupId);
     }
 
-// GroupServiceImpl.java
     @Override
     public List<GroupListResponseDto> searchGroups(String roomTitle, String category) {
         Group.Category categoryEnum = null;
         if (category != null && !category.isBlank()) {
-            categoryEnum = Group.Category.valueOf(category.toUpperCase()); // Enum 파싱
+            categoryEnum = Group.Category.valueOf(category.toUpperCase());
         }
         List<Group> groups = groupRepository.searchGroups(roomTitle, categoryEnum);
 
@@ -401,8 +436,6 @@ public class GroupServiceImpl implements GroupService {
 
         if (chatRoomMember != null) {
             chatRoomMemberRepository.delete(chatRoomMember);
-
-            // memberCount 1 감소 후 저장
             chatRoom.setMemberCount(Math.max(0, chatRoom.getMemberCount() - 1));
             chatRoomRepository.save(chatRoom);
 
@@ -411,13 +444,11 @@ public class GroupServiceImpl implements GroupService {
         }
     }
 
-
     @Override
     public boolean isMember(Long groupId, Long userId) {
         return groupMemberRepository.existsByGroup_IdAndUser_Id(groupId, userId);
     }
 
-    // 리더(그룹장) 여부 체크
     @Override
     public boolean isLeader(Long groupId, Long userId) {
         Group group = groupRepository.findById(groupId)
@@ -437,5 +468,4 @@ public class GroupServiceImpl implements GroupService {
 
         return member.getLastPageRead();
     }
-
 }

@@ -1,16 +1,18 @@
 package com.example.bookglebookgleserver.fcm.service;
 
+import com.example.bookglebookgleserver.fcm.util.KoreanScheduleParser;
 import com.example.bookglebookgleserver.group.repository.GroupRepository;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.scheduling.support.CronTrigger;
 import org.springframework.stereotype.Service;
 
-import jakarta.annotation.PostConstruct;
 import java.util.Map;
 import java.util.TimeZone;
-import java.util.concurrent.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ScheduledFuture;
 
 @Slf4j
 @Service
@@ -28,34 +30,50 @@ public class GroupNotificationScheduler {
     public void init() {
         log.info("⏰ 서버 기동: 그룹 푸시 스케줄 재등록 시작");
         groupRepository.findAll().forEach(g -> {
-            if (g.getSchedule() != null && !g.getSchedule().isBlank()) {
-                register(g.getId(), g.getSchedule());
+            String raw = g.getSchedule();
+            if (raw == null || raw.isBlank()) return;
+            try {
+                String cron = tryAsCron(raw);   // 자연어면 CRON으로 변환
+                register(g.getId(), cron);
+            } catch (Exception e) {
+                log.warn("⚠️ 스케줄 등록 실패: groupId={}, value='{}', reason={}", g.getId(), raw, e.getMessage());
             }
         });
         log.info("⏰ 서버 기동: 스케줄 재등록 완료 (총 {}건)", jobs.size());
     }
 
+    private String tryAsCron(String value) {
+        // 1) 이미 CRON인지 검증
+        try { new CronTrigger(value, TZ); return value; } catch (Exception ignore) {}
+        // 2) 아니면 자연어 파싱
+        return KoreanScheduleParser.toCron(value);
+    }
+
     public void register(Long groupId, String cron) {
         unregister(groupId);
-        ScheduledFuture<?> f = scheduler.schedule(
-                () -> {
-                    try {
-                        log.info("⏰ 스케줄 실행: groupId={}", groupId);
-                        fcmGroupService.sendGroupNow(
-                                groupId,
-                                "북글북글 리마인드",
-                                "함께 읽을 시간이에요 📚",
-                                "default",
-                                Map.of("groupId", String.valueOf(groupId))
-                        );
-                    } catch (Exception e) {
-                        log.error("❌ 스케줄 실행 실패: groupId={}, error={}", groupId, e.getMessage(), e);
-                    }
-                },
-                new CronTrigger(cron, TZ)
-        );
-        jobs.put(groupId, f);
-        log.info("✅ 스케줄 등록 완료: groupId={}, cron={}", groupId, cron);
+        try {
+            ScheduledFuture<?> f = scheduler.schedule(
+                    () -> {
+                        try {
+                            log.info("⏰ 스케줄 실행: groupId={}", groupId);
+                            fcmGroupService.sendGroupNow(
+                                    groupId,
+                                    "북글북글 리마인드",
+                                    "함께 읽을 시간이에요 📚",
+                                    "default",
+                                    java.util.Map.of("groupId", String.valueOf(groupId))
+                            );
+                        } catch (Exception e) {
+                            log.error("❌ 스케줄 실행 실패: groupId={}, error={}", groupId, e.getMessage(), e);
+                        }
+                    },
+                    new CronTrigger(cron, TZ)
+            );
+            jobs.put(groupId, f);
+            log.info("✅ 스케줄 등록 완료: groupId={}, cron={}", groupId, cron);
+        } catch (IllegalArgumentException e) {
+            log.warn("⚠️ 잘못된 CRON 표현식: groupId={}, value='{}' (예: 월요일 9시 0분 → 0 0 9 * * MON)", groupId, cron);
+        }
     }
 
     public void unregister(Long groupId) {
