@@ -99,21 +99,20 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
 
                     // 액션 처리
                     switch (req.getActionType()) {
-                        case JOIN_ROOM -> handleJoinRoom(req);             // 재-JOIN 처리(중복 방지)
-                        case LEADERSHIP_TRANSFER -> handleLeadershipTransfer(req);
-                        case PAGE_MOVE -> handlePageMove(req);
-                        case ADD:
-                        case UPDATE:
-                        case DELETE:
-                            handleAnnotation(req);
-                            // 주석/하이라이트는 그대로 브로드캐스트
-                            broadcastToAll(GroupStore.get(groupId), req);
-                            break;
-                        case PARTICIPANTS -> {
-                            // 클라발 스냅샷은 무시 (SSOT는 서버)
-                        }
-                        default -> {}
-                    }
+	                    case JOIN_ROOM -> handleJoinRoom(req);
+	                    case LEADERSHIP_TRANSFER -> handleLeadershipTransfer(req);
+	                    case PAGE_MOVE -> handlePageMove(req);
+	                    case ADD, UPDATE, DELETE -> {
+	                        handleAnnotation(req);
+	                        broadcastToAll(GroupStore.get(groupId), req);
+	                    }
+	                    case PARTICIPANTS -> {
+	                        // ignore client-side snapshots
+	                    }
+	                    default -> {}
+	                }
+
+
 
                 } catch (Exception e) {
                     logger.log(Level.SEVERE, "[PDF-SYNC] onNext error", e);
@@ -396,7 +395,7 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
                 return groupRepository.findById(groupId)
                         .map(g -> {
                             // TODO: 너희 Group 엔티티에 맞게 수정 ↓↓↓
-                            Long ownerId = g.getHostUser(); // 예: 생성자/방장 유저 ID
+                            Long ownerId = (g.getHostUser() != null) ? g.getHostUser().getId() : null; // 예: 생성자/방장 유저 ID
                             return ownerId != null ? String.valueOf(ownerId) : null;
                         })
                         .orElse(null);
