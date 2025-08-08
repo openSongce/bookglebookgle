@@ -13,6 +13,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.LocalTextSelectionColors
 import androidx.compose.foundation.text.selection.TextSelectionColors
@@ -113,6 +114,10 @@ fun PdfReadScreen(
     val syncError by viewModel.syncError.collectAsState()
 
 
+    var showParticipantsSheet by remember { mutableStateOf(false) }
+    var pendingTransferUserId by remember { mutableStateOf<String?>(null) } // 확인 다이얼로그용
+
+    val selectedFilter by viewModel.highlightFilterUserId.collectAsState()
 
     //grpc
 
@@ -274,6 +279,7 @@ fun PdfReadScreen(
     LaunchedEffect(isCurrentLeader) {
         pdfView?.isSwipeEnabled = isCurrentLeader
         pdfView?.setPageFling(isCurrentLeader)
+        pdfView?.centerCurrentPage(withAnimation = false)
     }
 
 
@@ -345,6 +351,7 @@ fun PdfReadScreen(
                 title = pdfTitle,
                 navController = navController,
                 isPdfView = true,
+                onParticipantsClick = { showParticipantsSheet = true }
             )
         }
     ) { paddingValues ->
@@ -802,6 +809,48 @@ fun PdfReadScreen(
                 )
             }
 
+            // 참가자 목록 바텀시트
+            if (showParticipantsSheet) {
+                ParticipantsBottomSheet(
+                    currentUserId = userId,
+                    isCurrentLeader = isCurrentLeader,
+                    participants = participants,
+                    selectedFilterUserId = selectedFilter,
+                    onDismiss = { showParticipantsSheet = false },
+                    onTransferClick = { targetId ->
+                        if (targetId != userId && isCurrentLeader) {
+                            pendingTransferUserId = targetId
+                        } else if (!isCurrentLeader) {
+                            // 리더만 가능
+                            android.widget.Toast
+                                .makeText(context, "리더만 권한을 이양할 수 있어요.", android.widget.Toast.LENGTH_SHORT)
+                                .show()
+                        }
+                    },
+                    onFilterChange = { targetOrNull -> viewModel.setHighlightFilterUser(targetOrNull) }
+                )
+            }
+
+// 권한 이양 확인 다이얼로그
+            if (pendingTransferUserId != null) {
+                AlertDialog(
+                    onDismissRequest = { pendingTransferUserId = null },
+                    title = { Text("리더 이양") },
+                    text = { Text("정말 이 참가자에게 리더를 넘길까요?") },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            viewModel.transferLeadershipToUser(pendingTransferUserId!!) // 서버에 이양 요청
+                            pendingTransferUserId = null
+                            showParticipantsSheet = false
+                        }) { Text("이양") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { pendingTransferUserId = null }) { Text("취소") }
+                    }
+                )
+            }
+
+
 
         }
     }
@@ -862,5 +911,179 @@ fun ThumbnailBottomSheet(
                 )
             }
         }
+    }
+}
+
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ParticipantsBottomSheet(
+    currentUserId: String,
+    isCurrentLeader: Boolean,
+    participants: List<Participant>,
+    selectedFilterUserId: String?,
+    onDismiss: () -> Unit,
+    onTransferClick: (String) -> Unit,
+    onFilterChange: (String?) -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    // 정렬: 나 → 리더(내가 아니면) → 이름/아이디 순
+    val sorted = remember(participants, currentUserId) {
+        participants.sortedWith(
+            compareByDescending<Participant> { it.userId == currentUserId }
+                .thenByDescending { it.isCurrentHost }
+                .thenBy { p -> p.userName.ifBlank { "사용자${p.userId}" } } //
+        )
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+        ) {
+            // ==== 필터 칩 (시트 안으로 이동) ====
+            LazyRow(
+                contentPadding = PaddingValues(end = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                item {
+                    SimpleFilterChip(
+                        label = "전체",
+                        selected = selectedFilterUserId == null,
+                        onClick = { onFilterChange(null) }
+                    )
+                }
+                items(participants.size) { i ->
+                    val p = participants[i]
+                    SimpleFilterChip(
+                        label = p.userName.ifBlank { p.userId },
+                        selected = selectedFilterUserId == p.userId,
+                        onClick = { onFilterChange(p.userId) }
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            Text(
+                text = "참여자 (${participants.size})",
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+
+            Spacer(Modifier.height(4.dp))
+
+            sorted.forEach { p ->
+                ParticipantRow(
+                    me = (p.userId == currentUserId),
+                    isLeader = p.isCurrentHost,
+                    userName = p.userName.ifBlank { p.userId },
+                    onClick = {
+                        if (p.userId != currentUserId) onTransferClick(p.userId)
+                    },
+                    enabled = isCurrentLeader && p.userId != currentUserId
+                )
+                Spacer(Modifier.height(8.dp))
+            }
+
+            Spacer(Modifier.height(12.dp))
+        }
+    }
+}
+
+@Composable
+private fun SimpleFilterChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    val bg = if (selected) Color(0xFFE0ECFF) else Color(0xFFEFF3F7)
+    val fg = if (selected) BaseColor else Color(0xFF334155)
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(999.dp))
+            .background(bg)
+            .clickable { onClick() }
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+    ) {
+        Text(label, fontSize = 12.sp, color = fg, fontWeight = FontWeight.Medium)
+    }
+}
+
+
+@Composable
+private fun ParticipantRow(
+    me: Boolean,
+    isLeader: Boolean,
+    userName: String,
+    enabled: Boolean,
+    onClick: () -> Unit
+) {
+    val borderWidth = if (isLeader) 2.dp else 0.dp
+    val borderColor = if (isLeader) BaseColor else Color.Transparent
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // 아바타(이니셜) + 리더 테두리
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .border(borderWidth, borderColor, CircleShape)
+                .background(Color(0xFFEFEFEF)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = userName.firstOrNull()?.uppercase() ?: "🙂",
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        Spacer(Modifier.width(12.dp))
+
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = userName,
+                    fontWeight = if (me) FontWeight.Bold else FontWeight.Normal,
+                    fontSize = 15.sp
+                )
+                if (me) {
+                    Spacer(Modifier.width(6.dp))
+                    AssistChip(text = "나")
+                }
+                if (isLeader) {
+                    Spacer(Modifier.width(6.dp))
+                    AssistChip(text = "리더")
+                }
+            }
+            if (!enabled && !me && !isLeader) {
+                Text("리더만 이양할 수 있어요", color = Color.Gray, fontSize = 12.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun AssistChip(text: String) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(999.dp))
+            .background(Color(0xFFF1F5F9))
+            .padding(horizontal = 8.dp, vertical = 2.dp)
+    ) {
+        Text(text, fontSize = 11.sp, color = Color(0xFF334155), fontWeight = FontWeight.Medium)
     }
 }

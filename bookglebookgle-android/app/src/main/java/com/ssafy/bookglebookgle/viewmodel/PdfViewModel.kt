@@ -138,6 +138,36 @@ class PdfViewModel @Inject constructor(
     private val commentUpdateObserver = Observer<CommentSync> { sync -> handleRemoteCommentUpdate(sync) }
     private val commentDeleteObserver = Observer<Long> { id -> handleRemoteCommentDelete(id) }
 
+    // PdfViewModel.kt 상단 필드 근처
+    private val highlightOwners = mutableMapOf<Long, String>()
+    private val commentOwners   = mutableMapOf<Long, String>()
+
+    private val _highlightFilterUserId = MutableStateFlow<String?>(null) // null = 전체
+    val highlightFilterUserId: StateFlow<String?> = _highlightFilterUserId.asStateFlow()
+
+
+    fun setHighlightFilterUser(userId: String?) {
+        _highlightFilterUserId.value = userId
+        applyAnnotationFilter()
+    }
+
+
+    private fun applyAnnotationFilter() {
+        val filter = _highlightFilterUserId.value
+        val ann = _annotations.value
+
+        val filteredHighlights = if (filter == null) ann.highlights
+        else ann.highlights.filter { h -> highlightOwners[h.id] == filter }
+
+        val filteredComments = if (filter == null) ann.comments
+        else ann.comments.filter { c -> commentOwners[c.id] == filter }
+
+        val models = buildList {
+            addAll(filteredComments.map { it.updateAnnotationData() })
+            addAll(filteredHighlights.map { it.updateAnnotationData() })
+        }
+        currentPdfView?.loadAnnotations(models)
+    }
 
 
 
@@ -331,10 +361,11 @@ class PdfViewModel @Inject constructor(
             text = text,
             coordinates = coordinates
         )
-        Log.d(TAG, "[addComment] 로컬 반영 전 annotations.size=${_annotations.value.comments.size}")
-        currentPdfView?.addComment(model)
+
+        if (_highlightFilterUserId.value == null || _highlightFilterUserId.value == myUserId) {
+            currentPdfView?.addComment(model)
+        }
         _annotations.update { it.copy(comments = ArrayList(it.comments + model)) }
-        Log.d(TAG, "[addComment] 로컬 반영 후 annotations.size=${_annotations.value.comments.size}")
 
         // 2) gRPC 메시지 전송
         // 2) gRPC 좌표 메시지 변환
@@ -460,10 +491,14 @@ class PdfViewModel @Inject constructor(
             color = color,
             coordinates = coordinates
         )
-        Log.d(TAG, "[addHighlight] 로컬 반영 전 highlights.size=${_annotations.value.highlights.size}")
-        currentPdfView?.addHighlight(model)
+
+        highlightOwners[tempId] = myUserId
+
+        if (_highlightFilterUserId.value == null || _highlightFilterUserId.value == myUserId) {
+            currentPdfView?.addHighlight(model)
+        }
         _annotations.update { it.copy(highlights = ArrayList(it.highlights + model)) }
-        Log.d(TAG, "[addHighlight] 로컬 반영 후 highlights.size=${_annotations.value.highlights.size}")
+
 
         // 2) gRPC 메시지 전송
         // 2) gRPC 좌표 메시지 변환
@@ -562,6 +597,8 @@ class PdfViewModel @Inject constructor(
 
                     _annotations.value = result
                     Log.d(TAG, "로컬 상태 업데이트 완료")
+
+                    applyAnnotationFilter()
 
                     ResponseState.Success(result)
                 } else {
@@ -853,20 +890,20 @@ class PdfViewModel @Inject constructor(
                 sync.startX, sync.startY, sync.endX, sync.endY
             )
         )
-        currentPdfView?.addHighlight(model)
-        _annotations.update {
-            it.copy(highlights = ArrayList(it.highlights + model))
+
+        highlightOwners[sync.id] = sync.userId
+
+        if (_highlightFilterUserId.value == null || _highlightFilterUserId.value == sync.userId) {
+            currentPdfView?.addHighlight(model)
         }
+        _annotations.update { it.copy(highlights = ArrayList(it.highlights + model)) }
     }
 
     // 3) 하이라이트 삭제 (ID 리스트로 호출)
     private fun handleRemoteHighlightDelete(id: Long) {
         currentPdfView?.removeHighlightAnnotations(listOf(id))
-        _annotations.update { state ->
-            state.copy(
-                highlights = ArrayList(state.highlights.filterNot { it.id == id })
-            )
-        }
+        _annotations.update { st -> st.copy(highlights = ArrayList(st.highlights.filterNot { it.id == id })) }
+        highlightOwners.remove(id)
     }
 
     // 4) 댓글 추가
@@ -883,10 +920,12 @@ class PdfViewModel @Inject constructor(
                 sync.endY
             )
         )
-        currentPdfView?.addComment(model)
-        _annotations.update {
-            it.copy(comments = ArrayList(it.comments + model))
+        commentOwners[sync.id] = sync.userId
+
+        if (_highlightFilterUserId.value == null || _highlightFilterUserId.value == sync.userId) {
+            currentPdfView?.addComment(model)
         }
+        _annotations.update { it.copy(comments = ArrayList(it.comments + model)) }
     }
 
     // 5) 댓글 수정
@@ -906,11 +945,8 @@ class PdfViewModel @Inject constructor(
     // 6) 댓글 삭제 (ID 리스트로 호출)
     private fun handleRemoteCommentDelete(id: Long) {
         currentPdfView?.removeCommentAnnotations(listOf(id))
-        _annotations.update { state ->
-            state.copy(
-                comments = ArrayList(state.comments.filterNot { it.id == id })
-            )
-        }
+        _annotations.update { st -> st.copy(comments = ArrayList(st.comments.filterNot { it.id == id })) }
+        commentOwners.remove(id)
     }
 
 

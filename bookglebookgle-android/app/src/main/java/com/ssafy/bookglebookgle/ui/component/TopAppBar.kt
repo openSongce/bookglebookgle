@@ -64,7 +64,8 @@ fun CustomTopAppBar(
     onSearchPerformed: ((String) -> Unit)? = null, // 검색 실행 콜백
     onSearchCancelled: (() -> Unit)? = null, // 검색 취소 콜백 추가
     onChatSettingsClick: (() -> Unit)? = null, // 채팅 설정 콜백 추가
-    onMyGroupFilterClick: (() -> Unit)? = null // 내 모임 필터 콜백 추가
+    onMyGroupFilterClick: (() -> Unit)? = null, // 내 모임 필터 콜백 추가
+    onParticipantsClick: (() -> Unit)? = null
 ) {
     var isSearchMode by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
@@ -352,7 +353,7 @@ fun CustomTopAppBar(
                         .padding(end = 16.dp)
                         .size(32.dp)
                         .clip(CircleShape)
-
+                        .clickable { onParticipantsClick?.invoke() }
                 )
             } else if (ismygroup && isHost) {
                 Icon(
