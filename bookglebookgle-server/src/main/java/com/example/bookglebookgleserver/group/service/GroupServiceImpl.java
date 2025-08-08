@@ -144,10 +144,10 @@ public class GroupServiceImpl implements GroupService {
                     .map(block -> OcrTextBlockDto.builder()
                             .pageNumber(block.getPageNumber())
                             .text(block.getText())
-                            .rectX((int) block.getX0())
-                            .rectY((int) block.getY0())
-                            .rectW((int) (block.getX1() - block.getX0()))
-                            .rectH((int) (block.getY1() - block.getY0()))
+                            .rectX(block.getX0())
+                            .rectY(block.getY0())
+                            .rectW((block.getX1() - block.getX0()))
+                            .rectH((block.getY1() - block.getY0()))
                             .build())
                     .collect(Collectors.toList());
         } else {
