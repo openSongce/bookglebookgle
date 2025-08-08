@@ -12,7 +12,7 @@ from typing import Dict, List, Optional, Any
 
 from loguru import logger
 
-from src.services.llm_client import LLMClient, QuizLLMClient
+from src.services.llm_client import LLMClient, QuizLLMClient, LLMProvider
 from src.services.vector_db import VectorDBManager
 from src.config.settings import get_settings
 
@@ -88,8 +88,22 @@ class QuizService:
                     )
                     
                     if content_chunks:
-                        combined_content = "\n\n".join(content_chunks)
-                        logger.info(f"Retrieved {len(content_chunks)} chunks from VectorDB")
+                        # progress 퍼센트에 따라 청크 단위로 내용 조정
+                        progress_percentage = quiz_data["progress_percentage"]
+                        if progress_percentage == 50:
+                            # 50%일 때: 청크의 절반만 사용
+                            chunks_to_use = max(1, len(content_chunks) // 2)
+                            selected_chunks = content_chunks[:chunks_to_use]
+                            combined_content = "\n\n".join(selected_chunks)
+                            logger.info(f"Retrieved {len(content_chunks)} chunks from VectorDB, using first {chunks_to_use} chunks for 50% progress")
+                        elif progress_percentage == 100:
+                            # 100%일 때: 모든 청크 사용
+                            combined_content = "\n\n".join(content_chunks)
+                            logger.info(f"Retrieved {len(content_chunks)} chunks from VectorDB, using all chunks for 100% progress")
+                        else:
+                            # 기본값: 모든 청크 사용
+                            combined_content = "\n\n".join(content_chunks)
+                            logger.info(f"Retrieved {len(content_chunks)} chunks from VectorDB for {progress_percentage}% progress")
                     else:
                         logger.warning(f"No content found in VectorDB for document {quiz_data['document_id']} at {quiz_data['progress_percentage']}% progress")
                 except Exception as e:
@@ -670,3 +684,48 @@ CRITICAL: 반드시 유효한 JSON 배열 형식으로만 응답하세요. 다�
             
         except Exception as e:
             logger.error(f"Quiz cleanup failed: {e}")
+
+    async def cleanup_meeting_quizzes(self, meeting_id: str) -> Dict[str, Any]:
+        """
+        특정 미팅과 관련된 모든 퀴즈 삭제
+        
+        Args:
+            meeting_id: 삭제할 미팅 ID
+            
+        Returns:
+            Dict with cleanup result
+        """
+        try:
+            logger.info(f"Starting quiz cleanup for meeting: {meeting_id}")
+            
+            quiz_ids_to_remove = []
+            
+            # 해당 미팅의 퀴즈들 찾기
+            for quiz_id, quiz in self.active_quizzes.items():
+                if quiz.get("meeting_id") == meeting_id:
+                    quiz_ids_to_remove.append(quiz_id)
+            
+            # 퀴즈 삭제
+            cleaned_count = 0
+            for quiz_id in quiz_ids_to_remove:
+                del self.active_quizzes[quiz_id]
+                cleaned_count += 1
+                logger.debug(f"Removed quiz: {quiz_id}")
+            
+            logger.info(f"✅ Cleaned up {cleaned_count} quizzes for meeting: {meeting_id}")
+            
+            return {
+                "success": True,
+                "meeting_id": meeting_id,
+                "cleaned_count": cleaned_count,
+                "message": f"Successfully cleaned up {cleaned_count} quizzes"
+            }
+            
+        except Exception as e:
+            logger.error(f"Quiz cleanup failed for meeting {meeting_id}: {e}")
+            return {
+                "success": False,
+                "meeting_id": meeting_id,
+                "error": str(e),
+                "message": f"Quiz cleanup failed: {str(e)}"
+            }

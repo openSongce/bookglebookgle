@@ -21,18 +21,24 @@ class MeetingService:
         self.settings = get_settings()
         self.cleanup_service: Optional[VectorDBCleanupService] = None
         self.discussion_service: Optional[DiscussionService] = None
+        self.quiz_service = None
+        self.proofreading_service = None
         
-    async def initialize(self, vector_db: VectorDBManager, discussion_service: DiscussionService):
+    async def initialize(self, vector_db: VectorDBManager, discussion_service: DiscussionService, quiz_service=None, proofreading_service=None):
         """
         서비스 초기화
         
         Args:
             vector_db: VectorDBManager 인스턴스
             discussion_service: DiscussionService 인스턴스
+            quiz_service: QuizService 인스턴스 (옵션)
+            proofreading_service: ProofreadingService 인스턴스 (옵션)
         """
         try:
             self.cleanup_service = VectorDBCleanupService(vector_db, self.settings)
             self.discussion_service = discussion_service
+            self.quiz_service = quiz_service
+            self.proofreading_service = proofreading_service
             
             logger.info("MeetingService initialized successfully")
             
@@ -110,6 +116,13 @@ class MeetingService:
             Dict with core end result
         """
         try:
+            cleanup_results = {
+                "discussion_cleanup": {"success": False, "cleaned_count": 0},
+                "quiz_cleanup": {"success": False, "cleaned_count": 0}, 
+                "proofreading_cleanup": {"success": False, "cleaned_count": 0}
+            }
+            
+            # 1. 모임 타입별 특별 처리
             if meeting_type == "discussion":
                 # 토론 모임 종료
                 session_id = kwargs.get("session_id")
@@ -125,34 +138,68 @@ class MeetingService:
                         "message": "DiscussionService not initialized"
                     }
                 
+                # 기존 토론 종료 로직 (세션별)
                 result = await self.discussion_service.end_discussion(meeting_id, session_id)
+                if not result["success"]:
+                    return result
+                
                 logger.info(f"✅ Discussion meeting ended: {meeting_id}, session: {session_id}")
-                return result
+            
+            # 2. 모든 모임 타입에 대해 메모리 정리 수행
+            logger.info(f"🧹 Starting memory cleanup for {meeting_type} meeting: {meeting_id}")
+            
+            # Discussion Service 메모리 정리 (모든 모임 타입)
+            if self.discussion_service:
+                try:
+                    disc_result = await self.discussion_service.cleanup_meeting_discussions(meeting_id)
+                    cleanup_results["discussion_cleanup"] = {
+                        "success": disc_result["success"],
+                        "cleaned_count": disc_result.get("total_cleaned", 0)
+                    }
+                    logger.info(f"✅ Discussion memory cleaned: {disc_result.get('total_cleaned', 0)} items")
+                except Exception as e:
+                    logger.warning(f"Discussion cleanup failed: {e}")
+            
+            # Quiz Service 메모리 정리 (모든 모임 타입)
+            if self.quiz_service:
+                try:
+                    quiz_result = await self.quiz_service.cleanup_meeting_quizzes(meeting_id)
+                    cleanup_results["quiz_cleanup"] = {
+                        "success": quiz_result["success"],
+                        "cleaned_count": quiz_result.get("cleaned_count", 0)
+                    }
+                    logger.info(f"✅ Quiz memory cleaned: {quiz_result.get('cleaned_count', 0)} items")
+                except Exception as e:
+                    logger.warning(f"Quiz cleanup failed: {e}")
+            
+            # Proofreading Service 메모리 정리 (향후 확장 가능)
+            if self.proofreading_service and hasattr(self.proofreading_service, 'cleanup_meeting_proofreading'):
+                try:
+                    proof_result = await self.proofreading_service.cleanup_meeting_proofreading(meeting_id)
+                    cleanup_results["proofreading_cleanup"] = {
+                        "success": proof_result["success"],
+                        "cleaned_count": proof_result.get("cleaned_count", 0)
+                    }
+                    logger.info(f"✅ Proofreading memory cleaned: {proof_result.get('cleaned_count', 0)} items")
+                except Exception as e:
+                    logger.warning(f"Proofreading cleanup failed: {e}")
+            
+            # 정리 결과 요약
+            total_cleaned = sum([
+                cleanup_results["discussion_cleanup"]["cleaned_count"],
+                cleanup_results["quiz_cleanup"]["cleaned_count"],
+                cleanup_results["proofreading_cleanup"]["cleaned_count"]
+            ])
+            
+            logger.info(f"🧹 Memory cleanup completed for {meeting_type} meeting {meeting_id}: "
+                       f"total {total_cleaned} items cleaned")
                 
-            elif meeting_type == "quiz":
-                # 퀴즈 모임 종료 (현재는 로그만)
-                logger.info(f"✅ Quiz meeting ended: {meeting_id}")
-                return {
-                    "success": True,
-                    "message": "Quiz meeting ended successfully"
-                }
-                
-            elif meeting_type == "proofreading":
-                # 첨삭 모임 종료 (현재는 로그만)
-                logger.info(f"✅ Proofreading meeting ended: {meeting_id}")
-                return {
-                    "success": True,
-                    "message": "Proofreading meeting ended successfully"
-                }
-                
-            else:
-                # 지원하지 않는 모임 타입
-                error_msg = f"Unsupported meeting type: {meeting_type}"
-                logger.error(error_msg)
-                return {
-                    "success": False,
-                    "message": error_msg
-                }
+            return {
+                "success": True,
+                "message": f"{meeting_type.title()} meeting ended and memory cleaned successfully",
+                "cleanup_results": cleanup_results,
+                "total_items_cleaned": total_cleaned
+            }
                 
         except Exception as e:
             logger.error(f"Core meeting end failed for {meeting_type} meeting {meeting_id}: {e}")

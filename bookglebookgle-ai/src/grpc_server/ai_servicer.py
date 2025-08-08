@@ -47,8 +47,13 @@ class AIServicer(ai_service_pb2_grpc.AIServiceServicer):
             # Initialize discussion service with vector DB
             await self.discussion_service.initialize_manager(self.vector_db_manager)
             
-            # Initialize meeting service with vector DB and discussion service
-            await self.meeting_service.initialize(self.vector_db_manager, self.discussion_service)
+            # Initialize meeting service with vector DB, discussion service, and other services
+            await self.meeting_service.initialize(
+                self.vector_db_manager, 
+                self.discussion_service,
+                quiz_service=self.quiz_service,
+                proofreading_service=self.proofreading_service
+            )
             
             # Initialize Tailscale OCR service (critical for EC2)
             ocr_success = await self.initialize_ocr_service()
@@ -151,83 +156,87 @@ class AIServicer(ai_service_pb2_grpc.AIServiceServicer):
     
     async def ProcessChatMessage(self, request_iterator, context):
         """모바일 앱 채팅 메시지 처리 - 채팅 기록 컨텍스트 지원"""
+        session_id = None
         try:
-            logger.debug("📱 Starting mobile chat stream processing with chat history support")
+            first_request = await anext(request_iterator)
+            session_id = first_request.discussion_session_id
+            
+            logger.info(f"🗨️ Starting chat stream for session: {session_id}")
+            await self.discussion_service.register_stream(session_id, context)
 
-            if not self.settings.ai.ENABLE_DISCUSSION_AI:
-                await context.abort(grpc.StatusCode.UNAVAILABLE, "Discussion AI is disabled")
-                return
+            async def message_generator():
+                yield first_request
+                async for req in request_iterator:
+                    yield req
 
-            # 채팅 기록 컨텍스트를 지원하는 스트림 처리
-            async for request in request_iterator:
+            async for request in message_generator():
                 try:
-                    logger.debug(f"💬 Processing message from: {request.sender.nickname}")
-
-                    # 채팅 기록 컨텍스트 옵션 처리
-                    use_chat_context = getattr(request, 'use_chat_context', True)
-                    context_window_size = getattr(request, 'context_window_size', 5)
-                    store_in_history = getattr(request, 'store_in_history', True)
-
+                    # ChatMessageRequest 필드 사용
+                    message_text = request.message
+                    sender = request.sender  # User 객체
+                    current_session_id = request.discussion_session_id
+                    
+                    # meeting_id 추출 (session_id에서 파싱하거나 기본값 사용)
+                    meeting_id = current_session_id.split('_')[0] if '_' in current_session_id else 'default_meeting'
+                    
+                    # 메시지 데이터 구성
                     message_data = {
-                        "session_id": request.discussion_session_id,
+                        "message": message_text,
                         "sender": {
-                            "nickname": request.sender.nickname, 
-                            "user_id": request.sender.user_id
+                            "user_id": sender.user_id,
+                            "nickname": sender.nickname
                         },
-                        "message": request.message,
-                        "timestamp": request.timestamp,
-                        "use_chat_context": use_chat_context,
-                        "context_window_size": context_window_size,
-                        "store_in_history": store_in_history
+                        "sender_nickname": sender.nickname  # 백워드 호환성
                     }
-
-                    # 채팅 기록 컨텍스트를 활용한 채팅 처리
-                    result = await self.discussion_service.process_chat_message(
-                        session_id=request.discussion_session_id,
+                    
+                    logger.debug(f"Processing message from {sender.nickname}: {message_text[:50]}...")
+                    
+                    # Discussion Service를 통한 스트리밍 응답
+                    async for response_chunk in self.discussion_service.process_bookclub_chat_message_stream(
+                        meeting_id=meeting_id,
+                        session_id=current_session_id,
                         message_data=message_data
-                    )
-
-                    # 채팅 기록 정보를 포함한 응답 생성
-                    response = ai_service_pb2.ChatMessageResponse(
-                        success=result.get("success", True),
-                        message=result.get("message", "Message processed"),
-                        ai_response=result.get("ai_response", ""),
-                        requires_moderation=result.get("requires_moderation", False),
-                        context_messages_used=result.get("chat_context_used", 0),
-                        chat_history_enabled=True
-                    )
-                    
-                    # 최근 컨텍스트 메시지 추가 (선택적)
-                    if use_chat_context and result.get("recent_context"):
-                        for ctx_msg in result.get("recent_context", []):
-                            history_msg = ai_service_pb2.ChatHistoryMessage(
-                                message_id=ctx_msg.get("message_id", ""),
-                                session_id=ctx_msg.get("session_id", ""),
-                                content=ctx_msg.get("content", ""),
-                                timestamp=ctx_msg.get("timestamp", 0),
-                                message_type=ctx_msg.get("message_type", "USER")
+                    ):
+                        if response_chunk:  # 빈 청크 필터링
+                            yield ai_service_pb2.ChatMessageResponse(
+                                success=True,
+                                ai_response=response_chunk,
+                                message="AI response chunk",
+                                suggested_topics=[],
+                                requires_moderation=False,
+                                context_messages_used=3,  # 기본값
+                                chat_history_enabled=True,
+                                recent_context=""
                             )
-                            # sender 정보 설정
-                            if "sender" in ctx_msg:
-                                history_msg.sender.user_id = ctx_msg["sender"].get("user_id", "")
-                                history_msg.sender.nickname = ctx_msg["sender"].get("nickname", "")
-                            
-                            response.recent_context.append(history_msg)
                     
-                    yield response
-
-                except Exception as e:
-                    logger.error(f"Error processing message: {e}")
-                    error_response = ai_service_pb2.ChatMessageResponse(
+                    logger.debug(f"✅ Message processed for session {current_session_id}")
+                    
+                except Exception as msg_error:
+                    logger.error(f"Failed to process individual message in session {session_id}: {msg_error}")
+                    # 개별 메시지 처리 실패 시에도 스트림 유지
+                    yield ai_service_pb2.ChatMessageResponse(
                         success=False,
-                        message=f"처리 중 오류가 발생했습니다: {str(e)}",
-                        chat_history_enabled=True
+                        message=f"메시지 처리 중 오류가 발생했습니다: {str(msg_error)}",
+                        ai_response="죄송합니다. 메시지 처리 중 오류가 발생했습니다.",
+                        suggested_topics=[],
+                        requires_moderation=False,
+                        context_messages_used=0,
+                        chat_history_enabled=True,
+                        recent_context=""
                     )
-                    yield error_response
 
+        except (grpc.aio.AioRpcError, asyncio.CancelledError) as e:
+            logger.info(f"Client disconnected from session {session_id}: {e})")
+        except StopAsyncIteration:
+            logger.info(f"Client stream finished for session {session_id}")
         except Exception as e:
-            logger.error(f"Chat stream failed: {e}")
-            await context.abort(grpc.StatusCode.INTERNAL, f"Chat error: {str(e)}")
+            logger.error(f"Chat stream failed for session {session_id}: {e}")
+            if not context.done():
+                await context.abort(grpc.StatusCode.INTERNAL, f"Chat error: {str(e)}")
+        finally:
+            if session_id:
+                await self.discussion_service.unregister_stream(session_id, context)
+                logger.info(f"Cleaned up stream for session {session_id}")
     
     async def EndDiscussion(self, request, context):
         """모바일 앱 토론 종료 - 간소화된 버전"""

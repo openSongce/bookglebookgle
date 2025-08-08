@@ -186,7 +186,6 @@ message ChatMessageRequest {
   User sender = 2;
   string message = 3;
   int64 timestamp = 4;
-  // Chat history context options
   optional bool use_chat_context = 5; // Whether to use chat history context
   optional int32 context_window_size = 6; // Number of recent messages to include
   optional bool store_in_history = 7; // Whether to store this message in history

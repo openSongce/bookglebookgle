@@ -24,87 +24,56 @@ class DiscussionService:
         self.mock_service = MockDiscussionService()
         self.llm_client = LLMClient()
         self.vector_db = None  # Will be initialized later
-        self.discussion_manager = None  # Will be initialized later
-        self.chat_history_manager = ChatHistoryManager()  # Chat history integration
-    
+        self.discussion_manager = None
+        self.chat_history_manager = ChatHistoryManager()
+        self.active_streams = {}  # 세션별 활성 스트림 관리
+
     async def initialize_manager(self, vector_db: VectorDBManager):
-        """Initialize discussion manager with vector DB and start chat history"""
         self.vector_db = vector_db
         self.discussion_manager = BookClubDiscussionManager(vector_db)
-        
-        # Start chat history manager
         await self.chat_history_manager.start()
-        
         logger.info("DiscussionService initialized with BookClubDiscussionManager and ChatHistoryManager")
-    
+
+    async def register_stream(self, session_id: str, context: Any):
+        if session_id not in self.active_streams:
+            self.active_streams[session_id] = []
+        self.active_streams[session_id].append(context)
+        logger.info(f"Stream registered for session {session_id}. Total streams: {len(self.active_streams[session_id])}")
+
+    async def unregister_stream(self, session_id: str, context: Any):
+        if session_id in self.active_streams and context in self.active_streams[session_id]:
+            self.active_streams[session_id].remove(context)
+            logger.info(f"Stream unregistered for session {session_id}. Remaining streams: {len(self.active_streams[session_id])}")
+            if not self.active_streams[session_id]:
+                del self.active_streams[session_id]
+
     async def start_discussion(
-        self, 
+        self,
         document_id: str,
         meeting_id: str,
-        session_id: str, 
+        session_id: str,
         participants: List[Dict[str, str]] = None
     ) -> Dict[str, Any]:
-        """
-        채팅방 기반 토론 시작 - LLM이 진행자가 되어 토론 주제 생성
-        
-        Args:
-            document_id: 토론할 문서 ID
-            meeting_id: 독서 모임 ID  
-            session_id: 토론 세션 ID
-            participants: 참가자 목록
-            
-        Returns:
-            Dict with success status and discussion topics
-        """
         try:
             logger.info(f"🎯 Starting discussion for document: {document_id}")
-            
-            # vector_db 초기화 확인
             if self.vector_db is None:
-                logger.error("VectorDB not initialized. Cannot start discussion.")
-                return {
-                    "success": False,
-                    "message": "Vector database not initialized. Please initialize the service first.",
-                    "discussion_topics": [],
-                    "recommended_topic": ""
-                }
-            
-            # 1. 벡터DB에서 독서 모임별 문서 내용 가져오기
+                logger.error("VectorDB not initialized.")
+                return {"success": False, "message": "Vector database not initialized."}
+
             document_content = await self.vector_db.get_bookclub_context_for_discussion(
-                meeting_id=meeting_id,
-                query="토론 주제 생성을 위한 문서 내용",
-                max_chunks=5
+                meeting_id=meeting_id, query="토론 주제 생성을 위한 문서 내용", max_chunks=5
             )
-            
-            # 검색 결과가 있으면 결합, 없으면 기본 검색 시도
-            if document_content:
-                document_content = " ".join(document_content)
-            else:
-                document_content = await self.vector_db.get_document_summary(document_id)
-            
             if not document_content:
-                return {
-                    "success": False,
-                    "message": "Document not found in vector database",
-                    "discussion_topics": [],
-                    "recommended_topic": ""
-                }
+                document_content = await self.vector_db.get_document_summary(document_id)
+            if not document_content:
+                return {"success": False, "message": "Document not found in vector database."}
 
-            # 2. LLM을 사용해 토론 주제 생성
-            topics_result = await self.generate_discussion_topics(document_content)
-            
+            topics_result = await self.generate_discussion_topics(" ".join(document_content) if document_content else "")
             if not topics_result["success"]:
-                return {
-                    "success": False,
-                    "message": "Failed to generate discussion topics",
-                    "discussion_topics": [],
-                    "recommended_topic": ""
-                }
+                return {"success": False, "message": "Failed to generate discussion topics."}
 
-            # 3. 토론 세션 활성화 (메모리에 저장)
             if not hasattr(self, 'active_discussions'):
                 self.active_discussions = {}
-                
             self.active_discussions[session_id] = {
                 "meeting_id": meeting_id,
                 "document_id": document_id,
@@ -112,62 +81,42 @@ class DiscussionService:
                 "participants": participants or [],
                 "chatbot_active": True
             }
-            
+            self.active_streams[session_id] = []  # 스트림 리스트 초기화
             logger.info(f"✅ Discussion started for session: {session_id}")
-            
             return {
                 "success": True,
                 "message": "Discussion started and topics generated.",
                 "discussion_topics": topics_result["topics"],
                 "recommended_topic": topics_result["topics"][0] if topics_result["topics"] else ""
             }
-            
         except Exception as e:
             logger.error(f"Failed to start discussion: {e}")
-            return {
-                "success": False,
-                "message": f"Discussion start failed: {str(e)}",
-                "discussion_topics": [],
-                "recommended_topic": ""
-            }
+            return {"success": False, "message": f"Discussion start failed: {str(e)}"}
 
     async def end_discussion(
-        self, 
-        meeting_id: str, 
+        self,
+        meeting_id: str,
         session_id: str
     ) -> Dict[str, Any]:
-        """
-        채팅방 토론 종료 - 챗봇 비활성화
-        
-        Args:
-            meeting_id: 독서 모임 ID
-            session_id: 토론 세션 ID
-            
-        Returns:
-            Dict with success status
-        """
         try:
+            # 활성 스트림 종료
+            if session_id in self.active_streams:
+                for context in self.active_streams[session_id]:
+                    if not context.done():
+                        context.cancel()
+                        logger.info(f"Cancelled stream for session {session_id}")
+                del self.active_streams[session_id]
+
             # 활성 토론에서 제거
             if hasattr(self, 'active_discussions') and session_id in self.active_discussions:
                 del self.active_discussions[session_id]
                 logger.info(f"✅ Discussion ended for session: {session_id}")
-                
-                return {
-                    "success": True,
-                    "message": "Discussion ended successfully"
-                }
+                return {"success": True, "message": "Discussion ended successfully"}
             else:
-                return {
-                    "success": False,
-                    "message": "Discussion session not found"
-                }
-            
+                return {"success": False, "message": "Discussion session not found"}
         except Exception as e:
             logger.error(f"Failed to end discussion: {e}")
-            return {
-                "success": False,
-                "message": f"Discussion end failed: {str(e)}"
-            }
+            return {"success": False, "message": f"Discussion end failed: {str(e)}"}
 
     
     async def process_chat_message(
@@ -223,11 +172,11 @@ class DiscussionService:
             # 채팅 기록에서 최근 대화 컨텍스트 가져오기
             try:
                 recent_messages = await self.chat_history_manager.get_recent_messages(
-                    session_id, limit=5
+                    session_id, limit=10
                 )
                 chat_context = "\n".join([
                     f"{msg.nickname}: {msg.content}" 
-                    for msg in recent_messages[-3:]  # 최근 3개 메시지만 사용
+                    for msg in recent_messages[-7:]  # 최근 3개 메시지만 사용
                 ])
             except Exception as e:
                 logger.warning(f"Failed to get chat history context: {e}")
@@ -331,13 +280,16 @@ class DiscussionService:
             except Exception as e:
                 logger.warning(f"Failed to store message in chat history: {e}")
             
-            # Check if discussion is active and chatbot is enabled
-            if not self.discussion_manager or not self.discussion_manager.is_chatbot_active(meeting_id, session_id):
-                yield "토론이 활성화되지 않았거나 AI 진행자가 비활성화되었습니다."
+            # Check if discussion is active
+            if not hasattr(self, 'active_discussions') or session_id not in self.active_discussions:
+                yield "토론이 활성화되지 않았습니다. 토론을 먼저 시작해주세요."
                 return
             
-            # Update activity
-            self.discussion_manager.update_activity(meeting_id, session_id)
+            # 토론 세션 정보 확인
+            discussion_info = self.active_discussions[session_id]
+            if not discussion_info.get("chatbot_active", True):
+                yield "AI 토론 진행자가 비활성화되었습니다."
+                return
             
             # 채팅 기록에서 최근 대화 컨텍스트 가져오기
             try:
@@ -352,12 +304,18 @@ class DiscussionService:
                 logger.warning(f"Failed to get chat history context for streaming: {e}")
                 chat_context_chunks = [f"{sender_nickname}: {message}"]
             
-            # Get book material context
-            context_chunks = await self.discussion_manager.get_book_material_context(
-                meeting_id=meeting_id,
-                query=message,
-                max_chunks=3
-            )
+            # Get book material context from VectorDB
+            context_chunks = []
+            if self.vector_db:
+                try:
+                    context_chunks = await self.vector_db.get_bookclub_context_for_discussion(
+                        meeting_id=meeting_id,
+                        query=message,
+                        max_chunks=3
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to get book context: {e}")
+                    context_chunks = []
             
             # Generate streaming response with book context and chat history
             if self.settings.ai.MOCK_AI_RESPONSES:
@@ -408,7 +366,7 @@ class DiscussionService:
                 logger.info("LLM Client initialized for topic generation")
 
             system_message = """당신은 독서 모임의 토론 진행자입니다.
-제공된 문서 내용을 바탕으로, 참여자들이 흥미롭게 토론할 수 있는 주제 3개를 제안해주세요.
+제공된 문서 내용을 바탕으로, 참여자들이 흥미롭게 토론할 수 있는 주제를 제안해주세요.
 각 주제는 다음 형식으로 작성해주세요:
 1. [첫 번째 토론 주제]
 2. [두 번째 토론 주제] 
@@ -421,7 +379,7 @@ class DiscussionService:
             response = await self.llm_client.generate_completion(
                 prompt=prompt,
                 system_message=system_message,
-                max_tokens=300,
+                max_tokens=500,
                 temperature=0.7,
                 provider=LLMProvider.GMS
             )
@@ -463,11 +421,17 @@ class DiscussionService:
 참여자의 의견에 공감하고, 토론을 활성화하는 응답을 해주세요.
 
 응답 지침:
-1. 참여자의 의견에 공감 표현
-2. 추가 질문이나 다른 관점 제시
-3. 다른 참여자들의 의견도 듣고 싶다는 표현 포함
-4. 150자 내외로 간결하게 작성
-5. 친근하고 격려하는 톤으로 작성"""
+1. 최근 대화 맥락을 고려하여 자연스럽게 응답
+2. 참여자의 의견에 구체적으로 공감하고 인정
+3. 독서 내용과 연결된 새로운 관점이나 질문 제시
+4. 다른 참여자들의 참여를 자연스럽게 유도
+5. 150자 내외로 간결하면서도 의미있게 작성
+6. 친근하고 격려하는 톤 유지
+7. 대화가 반복되지 않도록 새로운 각도에서 접근
+8. 토론의 대답을 너무 자주 하지 말고, 채팅 기록이 2~3개 이후에 토론 피드백
+9. 최근 대화가 2~3개 이하로 짧다면, 대화 시작을 돕는 배경/오픈 질문을 포함하고, 아직 참여하지 않은 분들을 부드럽게 초대
+10. 최근 10개 내 참여 빈도가 낮은 사람(메시지 1회 이하)이 있다면, 이름을 직접 거론하지 않고 모두에게 참여를 권유하는 일반 메시지를 덧붙이세요
+11. 위의 10개의 규칙을 절대로 위배하지 않기"""
 
             prompt = f"""문서 내용: {document_content[:500] if document_content else "문서 내용 없음"}
 
@@ -480,7 +444,7 @@ class DiscussionService:
             response = await self.llm_client.generate_completion(
                 prompt=prompt,
                 system_message=system_message,
-                max_tokens=200,
+                max_tokens=500,
                 temperature=0.8,
                 provider=LLMProvider.GMS
             )
@@ -512,9 +476,13 @@ class DiscussionService:
 2. 참여자의 의견에 구체적으로 공감하고 인정
 3. 독서 내용과 연결된 새로운 관점이나 질문 제시
 4. 다른 참여자들의 참여를 자연스럽게 유도
-5. 200자 내외로 간결하면서도 의미있게 작성
+5. 150자 내외로 간결하면서도 의미있게 작성
 6. 친근하고 격려하는 톤 유지
-7. 대화가 반복되지 않도록 새로운 각도에서 접근"""
+7. 대화가 반복되지 않도록 새로운 각도에서 접근
+8. 토론의 대답을 너무 자주 하지 말고, 채팅 기록이 2~3개 이후에 토론 피드백
+9. 최근 대화가 2~3개 이하로 짧다면, 대화 시작을 돕는 배경/오픈 질문을 포함하고, 아직 참여하지 않은 분들을 부드럽게 초대
+10. 최근 10개 내 참여 빈도가 낮은 사람(메시지 1회 이하)이 있다면, 이름을 직접 거론하지 않고 모두에게 참여를 권유하는 일반 메시지를 덧붙이세요
+11. 위의 10개의 규칙을 절대로 위배하지 않기"""
 
             prompt = f"""독서 자료 내용:
 {document_content[:500] if document_content else "독서 자료 내용 없음"}
@@ -532,7 +500,7 @@ class DiscussionService:
             response = await self.llm_client.generate_completion(
                 prompt=prompt,
                 system_message=system_message,
-                max_tokens=250,
+                max_tokens=500,
                 temperature=0.8,
                 provider=LLMProvider.GMS
             )
@@ -579,14 +547,17 @@ class DiscussionService:
 최근 대화 흐름과 독서 자료를 모두 고려하여 맞춤형 응답을 해주세요.
 
 역할 및 지침:
-1. 최근 대화 맥락을 파악하고 자연스럽게 이어가세요
-2. 독서 자료 내용과 연결하여 깊이 있는 토론을 유도하세요
-3. 참여자의 의견에 구체적으로 공감하고 인정해주세요
-4. 새로운 관점이나 질문으로 토론을 활성화하세요
-5. 다른 참여자들의 참여를 자연스럽게 유도하세요
-6. 한국어로 친근하고 자연스럽게 대화하세요
-7. 200자 내외로 간결하면서도 의미있게 작성하세요
-8. 대화가 반복되지 않도록 새로운 각도에서 접근하세요"""
+1. 최근 대화 맥락을 고려하여 자연스럽게 응답
+2. 참여자의 의견에 구체적으로 공감하고 인정
+3. 독서 내용과 연결된 새로운 관점이나 질문 제시
+4. 다른 참여자들의 참여를 자연스럽게 유도
+5. 150자 내외로 간결하면서도 의미있게 작성
+6. 친근하고 격려하는 톤 유지
+7. 대화가 반복되지 않도록 새로운 각도에서 접근
+8. 토론의 대답을 너무 자주 하지 말고, 채팅 기록이 2~3개 이후에 토론 피드백
+9. 최근 대화가 2~3개 이하로 짧다면, 대화 시작을 돕는 배경/오픈 질문을 포함하고, 아직 참여하지 않은 분들을 부드럽게 초대
+10. 최근 10개 내 참여 빈도가 낮은 사람(메시지 1회 이하)이 있다면, 이름을 직접 거론하지 않고 모두에게 참여를 권유하는 일반 메시지를 덧붙이세요
+11. 위의 10개의 규칙을 절대로 위배하지 않기"""
             
             # 프롬프트 구성
             book_context_text = "\n\n".join(context_chunks) if context_chunks else "독서 자료 내용 없음"
@@ -603,14 +574,14 @@ class DiscussionService:
 
 위 맥락을 모두 고려하여 토론 진행자로서 자연스럽고 의미있는 응답을 해주세요."""
             
-            # Gemini 스트리밍 호출
+            # GMS API 스트리밍 호출
             from src.services.llm_client import LLMProvider
             async for chunk in self.llm_client.generate_completion_stream(
                 prompt=prompt,
                 system_message=system_message,
-                max_tokens=350,
+                max_tokens=500,
                 temperature=0.8,
-                provider=LLMProvider.GEMINI
+                provider=LLMProvider.GMS
             ):
                 yield chunk
                 
@@ -648,3 +619,107 @@ class DiscussionService:
         except Exception as e:
             logger.error(f"Failed to get chat history stats: {e}")
             return {"session_id": session_id, "error": str(e)}
+
+    async def cleanup_meeting_discussions(self, meeting_id: str) -> Dict[str, Any]:
+        """
+        특정 미팅과 관련된 모든 토론 데이터 삭제
+        
+        Args:
+            meeting_id: 삭제할 미팅 ID
+            
+        Returns:
+            Dict with cleanup result
+        """
+        try:
+            logger.info(f"Starting discussion cleanup for meeting: {meeting_id}")
+            
+            cleanup_results = {
+                "active_discussions_cleaned": 0,
+                "active_streams_cleaned": 0,
+                "chat_history_sessions_cleaned": 0
+            }
+            
+            # 1. active_discussions에서 해당 미팅 삭제
+            if hasattr(self, 'active_discussions'):
+                sessions_to_remove = []
+                for session_id, discussion in self.active_discussions.items():
+                    if discussion.get("meeting_id") == meeting_id:
+                        sessions_to_remove.append(session_id)
+                
+                for session_id in sessions_to_remove:
+                    del self.active_discussions[session_id]
+                    cleanup_results["active_discussions_cleaned"] += 1
+                    logger.debug(f"Removed active discussion for session: {session_id}")
+            
+            # 2. active_streams에서 해당 미팅의 스트림들 정리
+            sessions_to_remove = []
+            for session_id, streams in self.active_streams.items():
+                # 세션 ID를 통해 미팅과 연관된 스트림인지 확인
+                # (세션별로 미팅 정보를 직접 확인할 수 없으므로, active_discussions 정보 활용)
+                if hasattr(self, 'active_discussions'):
+                    # 이미 삭제된 토론 세션의 스트림들 정리
+                    if session_id not in self.active_discussions:
+                        sessions_to_remove.append(session_id)
+                
+                # 활성 스트림들 취소
+                for context in streams:
+                    if not context.done():
+                        context.cancel()
+                        logger.debug(f"Cancelled stream for session {session_id}")
+            
+            for session_id in sessions_to_remove:
+                if session_id in self.active_streams:
+                    cleanup_results["active_streams_cleaned"] += len(self.active_streams[session_id])
+                    del self.active_streams[session_id]
+                    logger.debug(f"Removed active streams for session: {session_id}")
+            
+            # 3. 채팅 히스토리 정리 (미팅 ID로 연관된 세션들)
+            if self.chat_history_manager:
+                try:
+                    # 모든 세션에서 해당 미팅과 관련된 세션들 찾아서 정리
+                    # (실제 구현에서는 chat_history_manager에 미팅별 정리 메소드가 필요할 수 있음)
+                    
+                    # 현재는 active_discussions에서 찾은 세션들만 정리
+                    for session_id in sessions_to_remove:
+                        try:
+                            # 세션 데이터 정리 - ChatHistoryManager에 메소드가 있는지 확인
+                            if hasattr(self.chat_history_manager, 'clear_session_history'):
+                                result = await self.chat_history_manager.clear_session_history(session_id)
+                                if result:
+                                    cleanup_results["chat_history_sessions_cleaned"] += 1
+                                    logger.debug(f"Cleared chat history for session: {session_id}")
+                            elif hasattr(self.chat_history_manager, 'delete_session_messages'):
+                                # 대체 메소드 시도
+                                result = await self.chat_history_manager.delete_session_messages(session_id)
+                                if result:
+                                    cleanup_results["chat_history_sessions_cleaned"] += 1
+                                    logger.debug(f"Deleted session messages for session: {session_id}")
+                            else:
+                                logger.debug(f"No cleanup method available for chat history in session: {session_id}")
+                        except Exception as e:
+                            logger.warning(f"Failed to clear chat history for session {session_id}: {e}")
+                except Exception as e:
+                    logger.warning(f"Chat history cleanup failed: {e}")
+            
+            total_cleaned = sum(cleanup_results.values())
+            logger.info(f"✅ Discussion cleanup completed for meeting {meeting_id}: "
+                       f"{cleanup_results['active_discussions_cleaned']} discussions, "
+                       f"{cleanup_results['active_streams_cleaned']} streams, "
+                       f"{cleanup_results['chat_history_sessions_cleaned']} chat sessions")
+            
+            return {
+                "success": True,
+                "meeting_id": meeting_id,
+                "cleanup_results": cleanup_results,
+                "total_cleaned": total_cleaned,
+                "message": f"Successfully cleaned up {total_cleaned} discussion items"
+            }
+            
+        except Exception as e:
+            logger.error(f"Discussion cleanup failed for meeting {meeting_id}: {e}")
+            return {
+                "success": False,
+                "meeting_id": meeting_id,
+                "error": str(e),
+                "message": f"Discussion cleanup failed: {str(e)}"
+            }
