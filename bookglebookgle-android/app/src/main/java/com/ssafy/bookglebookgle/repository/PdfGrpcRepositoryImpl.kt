@@ -74,8 +74,8 @@ class PdfGrpcRepositoryImpl @Inject constructor(): PdfGrpcRepository {
     private val _joinRequests = MutableLiveData<String>()
     override val joinRequests: LiveData<String> = _joinRequests
 
-    private val _participantsSnapshot = MutableLiveData<List<ProtoParticipant>>()
-    override val participantsSnapshot: LiveData<List<ProtoParticipant>>
+    private val _participantsSnapshot = MutableLiveData<ParticipantsSnapshot>()
+    override val participantsSnapshot: LiveData<ParticipantsSnapshot>
         get() = _participantsSnapshot
 
     private var channel: ManagedChannel? = null
@@ -112,7 +112,8 @@ class PdfGrpcRepositoryImpl @Inject constructor(): PdfGrpcRepository {
                     when (msg.actionType) {
                         ActionType.PARTICIPANTS -> {
                             Handler(Looper.getMainLooper()).post {
-                                _participantsSnapshot.value = msg.participants.participantsList
+                                // ParticipantsSnapshot 메시지 전체 전달
+                                _participantsSnapshot.value = msg.participants
                             }
                         }
                         ActionType.JOIN_ROOM -> {
@@ -271,36 +272,6 @@ class PdfGrpcRepositoryImpl @Inject constructor(): PdfGrpcRepository {
             .setAnnotationType(type)
             .setPayload(payload)
             .build()
-        obs.onNext(msg)
-    }
-
-    override fun sendParticipantsSnapshot(participants: List<GParticipant>) {
-        val obs = requestObserver ?: return
-        if (!isActive) return
-
-        // 2) 앱 Participant → 프로토 Participant 변환
-        val protoParts = participants.map { gp ->
-            ProtoParticipant.newBuilder()
-                .setUserId(gp.userId)
-                .setUserName(gp.userName)
-                .setIsOriginalHost(gp.isOriginalHost)
-                .setIsCurrentHost(gp.isCurrentHost)
-                .build()
-        }
-
-        // 3) ParticipantsSnapshot 생성
-        val snapshot = ParticipantsSnapshot.newBuilder()
-            .addAllParticipants(protoParts)
-            .build()
-
-        // 4) SyncMessage 에 담아서 전송
-        val msg = SyncMessage.newBuilder()
-            .setGroupId(groupId!!)
-            .setUserId(userId!!)
-            .setActionType(ActionType.PARTICIPANTS)
-            .setParticipants(snapshot)          // <-- 여기, top-level ParticipantsSnapshot 사용
-            .build()
-
         obs.onNext(msg)
     }
 

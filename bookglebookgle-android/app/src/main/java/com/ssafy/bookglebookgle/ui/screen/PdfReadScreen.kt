@@ -136,18 +136,6 @@ fun PdfReadScreen(
                 groupId       = gid,
                 isHostFromNav = isHostFromNav
             )
-            // 2) 초기 참가자로 본인 추가
-            viewModel.onRoomEntered(
-
-                initialParticipants = listOf(
-                    Participant(
-                        userId          = userId,
-                        userName        = "",               // 아직 불러올 이름이 없으면 빈 문자열
-                        isOriginalHost  = isHostFromNav,
-                        isCurrentHost   = isHostFromNav,
-                    )
-                )
-            )
             // 3) gRPC 동기화 연결
             Log.d("PdfReadScreen", "gRPC 동기화 연결: groupId=$gid, userId=$userId")
             viewModel.connectToSync(gid, userId)
@@ -158,7 +146,6 @@ fun PdfReadScreen(
     // 3) 화면 떠날 때(퇴장) 자동 위임 + gRPC 연결 해제
     DisposableEffect(Unit) {
         onDispose {
-            viewModel.onParticipantLeft(userId)
             viewModel.leaveSyncRoom()
         }
     }
@@ -443,12 +430,13 @@ fun PdfReadScreen(
                                         override fun onPreparationSuccess() {
                                             Log.d("PdfReadScreen", "PDF 렌더링 성공 - Listener 호출됨")
                                             Log.d("PdfReadScreen", "총 페이지: ${getTotalPage()}")
-                                            viewModel.getPage()
+
                                             viewModel.updateTotalPages(getTotalPage())
                                             viewModel.onPdfRenderingSuccess()
 
                                             // 기존 주석들 로드
                                             viewModel.loadAllAnnotations()
+                                            viewModel.getPage()
                                         }
 
                                         override fun onPreparationFailed(

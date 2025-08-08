@@ -4,6 +4,7 @@ import androidx.lifecycle.LiveData
 import com.example.bookglebookgleserver.pdf.grpc.ActionType
 import com.example.bookglebookgleserver.pdf.grpc.AnnotationPayload
 import com.example.bookglebookgleserver.pdf.grpc.AnnotationType
+import com.example.bookglebookgleserver.pdf.grpc.ParticipantsSnapshot
 import com.ssafy.bookglebookgle.entity.CommentSync
 import com.ssafy.bookglebookgle.entity.HighlightSync
 import com.ssafy.bookglebookgle.entity.Participant
@@ -22,7 +23,7 @@ interface PdfGrpcRepository {
     val deletedComments: LiveData<Long>
     val leadershipTransfers: LiveData<String>
     val joinRequests: LiveData<String>
-    val participantsSnapshot: LiveData<List<ProtoParticipant>>
+    val participantsSnapshot: LiveData<ParticipantsSnapshot>
 
 
     /** 현재 gRPC 연결 상태 */
@@ -55,7 +56,5 @@ interface PdfGrpcRepository {
     fun transferLeadership(groupId: Long, fromUserId: String, toUserId: String)
 
     fun sendJoinRequest()
-
-    fun sendParticipantsSnapshot(participants: List<Participant>)
 
 }

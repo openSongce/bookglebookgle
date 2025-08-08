@@ -140,6 +140,7 @@ class PdfViewModel @Inject constructor(
 
 
 
+
     /**
      * PDF 렌더링 시작 알림
      */
@@ -666,84 +667,62 @@ class PdfViewModel @Inject constructor(
         this.myUserId = userId
         this.groupId = groupId
         _isHost.value = isHostFromNav
-
-        if (isHostFromNav) {
-            // 원조 방장은 무조건 진행자
-            _currentLeaderId.value = userId
-            _isCurrentLeader.value = true
-            sendLeadershipUpdate(userId)
-        }
-    }
-
-
-    // 2) 방 입장 처리 (participants API 또는 gRPC JOIN 메시지 후 호출)
-    fun onRoomEntered(initialParticipants: List<Participant>) {
-        // participants 는 내부에서 관리한다고 가정
-        when {
-            // 1) 호스트라면, 언제 들어와도 leader 강제할당
-            _isHost.value -> {
-                _currentLeaderId.value = myUserId
-                _isCurrentLeader.value = true
-                sendLeadershipUpdate(myUserId)
-            }
-            // 2) 호스트가 아니면서, leader 가 아직 없고 첫 입장자라면
-            _currentLeaderId.value == null && initialParticipants.isEmpty() -> {
-                _currentLeaderId.value = myUserId
-                _isCurrentLeader.value = true
-                sendLeadershipUpdate(myUserId)
-            }
-            // 그 외엔 아무것도 안 함
-        }
-    }
-
-    // 3) 퇴장 or 화면 꺼짐 처리: DisposableEffect 에서 호출
-    fun onParticipantLeft(userId: String) {
-        _participants.value = _participants.value.filter { it.userId != userId }
-        if (userId == _currentLeaderId.value) {
-            handleLeaderDisconnection()
-        }
-    }
-
-    private fun handleLeaderDisconnection() {
-        // 남은 참가자 중 방장 권한 이양
-        val remaining = _participants.value.filter { it.userId != myUserId }
-        when {
-            _isHost.value -> {
-                // 내가 방장(원조)면 바로 회수
-                _currentLeaderId.value = myUserId
-                sendLeadershipUpdate(myUserId)
-            }
-            remaining.isNotEmpty() -> {
-                // 첫 번째 남은 사람에게 이양
-                val next = remaining.first()
-                _currentLeaderId.value = next.userId
-                sendLeadershipUpdate(next.userId)
-            }
-            else -> {
-                // 나만 있으면 그대로
-                _currentLeaderId.value = myUserId
-                sendLeadershipUpdate(myUserId)
-            }
-        }
     }
 
     // 4) UI 클릭 시 권한 이양
     fun transferLeadershipToUser(targetUserId: String) {
-        if (isCurrentLeader.value && targetUserId != myUserId) {
-            _currentLeaderId.value = targetUserId
-            sendLeadershipUpdate(targetUserId)
+        if (_isCurrentLeader.value && targetUserId != myUserId) {
+            pdfGrpcRepository.transferLeadership(groupId, myUserId, targetUserId)
         }
-    }
-
-    // 6) gRPC 전송 헬퍼
-    private fun sendLeadershipUpdate(newHostId: String) {
-        pdfGrpcRepository.transferLeadership(groupId, myUserId, newHostId)
     }
 
     // Observer들 - Chat과 동일한 패턴
     private val pdfPageObserver = Observer<PdfPageSync> { pageSync ->
         handleRemotePageChange(pageSync.page)
     }
+
+    private val joinObserver = Observer<String> { joinerId ->
+        if (_participants.value.none { it.userId == joinerId }) {
+            _participants.value = _participants.value + Participant(
+                userId = joinerId, userName = "",
+                isOriginalHost = false, isCurrentHost = false
+            )
+        }
+    }
+
+    private val leadershipObserver = Observer<String> { newHostId ->
+        _currentLeaderId.value = newHostId
+        _isCurrentLeader.value = (newHostId == myUserId)
+        _participants.value = _participants.value.map { p ->
+            p.copy(isCurrentHost = (p.userId == newHostId))
+        }
+    }
+
+    // ParticipantsSnapshot 타입 주의!
+    private val participantsObserver =
+        Observer<com.example.bookglebookgleserver.pdf.grpc.ParticipantsSnapshot> { snapshot ->
+            val updated = snapshot.participantsList.map { p ->
+                Participant(
+                    userId = p.userId, userName = p.userName,
+                    isOriginalHost = p.isOriginalHost, isCurrentHost = p.isCurrentHost
+                )
+            }
+            _participants.value = updated
+
+            val newLeader = updated.find { it.isCurrentHost }?.userId
+            if (newLeader != null) {
+                _currentLeaderId.value = newLeader
+                _isCurrentLeader.value = (newLeader == myUserId)
+            }
+
+            // currentPage 동기화
+            val page = snapshot.currentPage
+            if (page > 0) {
+                currentPdfView?.jumpTo(page - 1, false, false, false)
+                _currentPage.value = page
+                _showPageInfo.value = true
+            }
+        }
 
     private var currentPdfView: com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.PDFView? = null
     private var isRemotePageChange = false
@@ -781,32 +760,10 @@ class PdfViewModel @Inject constructor(
         pdfGrpcRepository.newComments.observeForever(commentAddObserver)
         pdfGrpcRepository.updatedComments.observeForever(commentUpdateObserver)
         pdfGrpcRepository.deletedComments.observeForever(commentDeleteObserver)
-        pdfGrpcRepository.leadershipTransfers.observeForever { newHostId ->
-            _currentLeaderId.value = newHostId
-            // 내 userId와 비교해서 플래그 갱신
-            _isCurrentLeader.value = (newHostId == myUserId)
-            // (옵션) participants 리스트에도 반영
-            _participants.value = _participants.value.map { p ->
-                p.copy(isCurrentHost = (p.userId == newHostId))
-            }
-        }
-        pdfGrpcRepository.joinRequests.observeForever { joinerId ->
-            // ① 로컬 participants 에 새 참가자 추가
-            if (_participants.value.none { it.userId == joinerId }) {
-                _participants.value = _participants.value + Participant(
-                    userId = joinerId,
-                    userName = "",
-                    isOriginalHost = false,
-                    isCurrentHost = false
-                )
-            }
-            // ② 내가 리더라면 전체 리스트 스냅샷 전송
-            if (_isCurrentLeader.value) {
-                pdfGrpcRepository.sendParticipantsSnapshot(_participants.value)
-                // 그리고 페이지 동기화도
-                pdfGrpcRepository.sendPageUpdate(_currentPage.value)
-            }
-        }
+        pdfGrpcRepository.joinRequests.observeForever(joinObserver)
+        pdfGrpcRepository.leadershipTransfers.observeForever(leadershipObserver)
+        pdfGrpcRepository.participantsSnapshot.observeForever(participantsObserver)
+
 
     }
 
@@ -853,6 +810,7 @@ class PdfViewModel @Inject constructor(
                 resetZoom = false,
                 resetHorizontalScroll = false
             )
+            currentPdfView?.centerCurrentPage(withAnimation = false)
 
             // UI 상태도 업데이트
             _currentPage.value = page
@@ -966,32 +924,9 @@ class PdfViewModel @Inject constructor(
         pdfGrpcRepository.newComments.removeObserver(commentAddObserver)
         pdfGrpcRepository.updatedComments.removeObserver(commentUpdateObserver)
         pdfGrpcRepository.deletedComments.removeObserver(commentDeleteObserver)
-        pdfGrpcRepository.leadershipTransfers.removeObserver{ newHostId ->
-            _currentLeaderId.value = newHostId
-            // 내 userId와 비교해서 플래그 갱신
-            _isCurrentLeader.value = (newHostId == myUserId)
-            // (옵션) participants 리스트에도 반영
-            _participants.value = _participants.value.map { p ->
-                p.copy(isCurrentHost = (p.userId == newHostId))
-            }
-        }
-        pdfGrpcRepository.joinRequests.removeObserver { joinerId ->
-            // ① 로컬 participants 에 새 참가자 추가
-            if (_participants.value.none { it.userId == joinerId }) {
-                _participants.value = _participants.value + Participant(
-                    userId = joinerId,
-                    userName = "",
-                    isOriginalHost = false,
-                    isCurrentHost = false
-                )
-            }
-            // ② 내가 리더라면 전체 리스트 스냅샷 전송
-            if (_isCurrentLeader.value) {
-                pdfGrpcRepository.sendParticipantsSnapshot(_participants.value)
-                // 그리고 페이지 동기화도
-                pdfGrpcRepository.sendPageUpdate(_currentPage.value)
-            }
-        }
+        pdfGrpcRepository.joinRequests.removeObserver(joinObserver)
+        pdfGrpcRepository.leadershipTransfers.removeObserver(leadershipObserver)
+        pdfGrpcRepository.participantsSnapshot.removeObserver(participantsObserver)
 
         // 연결 종료
         pdfGrpcRepository.leaveRoom()

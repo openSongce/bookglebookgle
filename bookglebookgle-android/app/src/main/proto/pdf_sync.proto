@@ -24,6 +24,7 @@ message SyncMessage {
 
 message ParticipantsSnapshot {
   repeated Participant participants = 1;
+  int32 currentPage = 2;
 }
 
 message Participant {
