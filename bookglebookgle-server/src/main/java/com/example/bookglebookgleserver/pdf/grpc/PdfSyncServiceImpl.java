@@ -496,36 +496,47 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
                         .map(pm -> Long.valueOf(pm.userId))
                         .collect(Collectors.toSet());
 
-                // 빈 집합 방어
                 Map<Long, String> names = idSet.isEmpty()
                         ? Collections.emptyMap()
                         : userRepository.findAllById(idSet).stream()
-                              .collect(Collectors.toMap(User::getId, u ->
-                                  Optional.ofNullable(u.getNickname()).filter(s -> !s.isBlank()).orElse(u.getId().toString())
-                              ));
+                          .collect(Collectors.toMap(User::getId, u ->
+                              Optional.ofNullable(u.getNickname()).filter(s -> !s.isBlank()).orElse(u.getId().toString())
+                          ));
 
                 List<Participant> list = state.participants.values().stream()
-                        .map(pm -> Participant.newBuilder()
-                                .setUserId(pm.userId)
-                                .setUserName(
-                                    Optional.ofNullable(pm.userName).filter(s -> !s.isBlank())
-                                        .orElse(names.getOrDefault(Long.valueOf(pm.userId), pm.userId))
-                                )
-                                .setIsOriginalHost(pm.isOriginalHost)
-                                .setIsCurrentHost(Objects.equals(pm.userId, state.currentLeaderId))
-                                .build()
-                        )
+                        .map(pm -> {
+                            boolean isOnline = state.onlineByUser.getOrDefault(pm.userId, false);
+                            int maxRead = state.progressByUser.getOrDefault(pm.userId, 0);
+                            return Participant.newBuilder()
+                                    .setUserId(pm.userId)
+                                    .setUserName(
+                                        Optional.ofNullable(pm.userName).filter(s -> !s.isBlank())
+                                           .orElse(names.getOrDefault(Long.valueOf(pm.userId), pm.userId))
+                                    )
+                                    .setIsOriginalHost(pm.isOriginalHost)
+                                    .setIsCurrentHost(Objects.equals(pm.userId, state.currentLeaderId))
+                                    // 선택이지만 채워두면 좋음
+                                    .setIsOnline(isOnline)
+                                    .setMaxReadPage(maxRead)
+                                    .build();
+                        })
                         .sorted(Comparator
                                 .comparing(Participant::getIsCurrentHost).reversed()
                                 .thenComparing(Participant::getIsOriginalHost).reversed()
                                 .thenComparing(Participant::getUserName))
                         .collect(Collectors.toList());
 
-                return ParticipantsSnapshot.newBuilder()
+                ParticipantsSnapshot.Builder b = ParticipantsSnapshot.newBuilder()
                         .addAllParticipants(list)
-                        .setCurrentPage(state.currentPage)
-                        .build();
+                        .setCurrentPage(state.currentPage);
+
+                // ★ 맵 필수
+                state.progressByUser.forEach((k, v) -> b.putProgressByUser(k, v));
+                state.onlineByUser.forEach((k, v) -> b.putOnlineByUser(k, v));
+
+                return b.build();
             }
+
 
 
             private void sendSnapshotTo(GroupState state, String targetUserId) {
