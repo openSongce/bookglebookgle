@@ -48,7 +48,7 @@ interface GroupApi {
     /**
      * 모임 상세 조회
      * */
-    @GET("group/{groupId}")
+    @GET("group/groups/{groupId}")
     suspend fun getGroupDetail(
         @Path("groupId") groupId: Long
     ): Response<GroupDetailResponse>

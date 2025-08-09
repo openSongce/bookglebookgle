@@ -24,6 +24,7 @@ interface PdfGrpcRepository {
     val leadershipTransfers: LiveData<String>
     val joinRequests: LiveData<String>
     val participantsSnapshot: LiveData<ParticipantsSnapshot>
+    val progressUpdates: LiveData<Pair<String, Int>>
 
 
     /** 현재 gRPC 연결 상태 */
@@ -56,5 +57,7 @@ interface PdfGrpcRepository {
     fun transferLeadership(groupId: Long, fromUserId: String, toUserId: String)
 
     fun sendJoinRequest()
+
+    fun sendProgressUpdate(groupId: Long, userId: String, page: Int)
 
 }

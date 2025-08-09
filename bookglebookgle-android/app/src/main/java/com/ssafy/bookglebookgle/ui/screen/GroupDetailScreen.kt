@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
+import com.google.gson.Gson
 import com.ssafy.bookglebookgle.R
 import com.ssafy.bookglebookgle.entity.GroupDetailResponse
 import com.ssafy.bookglebookgle.navigation.Screen
@@ -186,6 +187,7 @@ fun GroupDetailScreen(
                     isJoining = joinGroupState is JoinGroupUiState.Loading,
                     navController = navController,
                     groupId = groupId,
+                    viewModel = viewModel,
                     onJoinClick = { viewModel.joinGroup(groupId) },
                     onDeleteClick = {
                         viewModel.deleteGroup(groupId)
@@ -226,6 +228,7 @@ private fun GroupDetailContent(
     isJoining: Boolean,
     navController: NavHostController,
     groupId: Long,
+    viewModel: GroupDetailViewModel,
     onJoinClick: () -> Unit,
     onDeleteClick: () -> Unit,
     onLeaveClick: () -> Unit
@@ -286,8 +289,28 @@ private fun GroupDetailContent(
                 modifier = Modifier.clickable {
                     if (isMyGroup) {
                         // 가입된 모임인 경우 PDF 화면으로 이동
-                        navController.currentBackStackEntry?.savedStateHandle?.set("groupId", groupId)
-                        navController.currentBackStackEntry?.savedStateHandle?.set("isHost", groupDetail.isHost)
+                        // 1) 현재 상세 데이터 꺼내기
+                        val success = (viewModel.uiState.value as? GroupDetailUiState.Success)
+                        val detail = success?.groupDetail
+
+                        // 2) 초기 멤버/진도 가공 (뷰모델의 헬퍼 사용)
+                        val initialMembers = detail?.let { viewModel.run { it.toInitialMembers() } } ?: emptyList()
+                        val initialProgress = detail?.let { viewModel.run { it.toInitialProgressMap() } } ?: emptyMap()
+
+                        // 3) (있으면) 페이지 수 — 필드명은 프로젝트에 맞게 바꿔줘요 (예: detail.totalPageCount)
+                        val pageCount = /* detail?.totalPageCount ?: */ 0
+
+                        // 4) 다음 화면에서 꺼내 쓸 값들 저장
+                        val gson = Gson()
+                        navController.currentBackStackEntry?.savedStateHandle?.apply {
+                            set("groupId", groupId)
+                            set("isHost", detail?.isHost == true)
+                            set("pageCount", pageCount) // 없으면 0으로 두고, PDF 렌더 후 갱신돼도 OK
+                            set("initialMembersJson", gson.toJson(initialMembers))
+                            set("initialProgressJson", gson.toJson(initialProgress))
+                        }
+
+                        // 5) 이동
                         navController.navigate(Screen.PdfReadScreen.route)
                     } else {
                         // 미가입 모임인 경우 토스트 메시지 표시

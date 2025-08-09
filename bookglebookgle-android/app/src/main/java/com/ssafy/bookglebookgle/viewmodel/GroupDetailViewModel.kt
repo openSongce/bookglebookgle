@@ -60,6 +60,30 @@ class GroupDetailViewModel @Inject constructor(
     private val _editGroupState = MutableStateFlow<EditGroupUiState>(EditGroupUiState.Idle)
     val editGroupState: StateFlow<EditGroupUiState> = _editGroupState.asStateFlow()
 
+    // 편의 변환: PDF 쪽에서 쓰기 쉽게 가공
+    data class InitialMember(
+        val userId: String,
+        val nickname: String,
+        val color: String?,
+        val isHost: Boolean,
+        val maxReadPage1Based: Int // 0-based -> 1-based 변환
+    )
+
+    fun GroupDetailResponse.toInitialMembers(): List<InitialMember> =
+        members.map {
+            InitialMember(
+                userId = it.userId.toString(),
+                nickname = it.userNickName,
+                color = it.profileColor,
+                isHost = it.isHost,
+                maxReadPage1Based = (it.lastPageRead + 1).coerceAtLeast(0)
+            )
+        }
+
+    fun GroupDetailResponse.toInitialProgressMap(): Map<String, Int> =
+        members.associate { it.userId.toString() to (it.lastPageRead + 1).coerceAtLeast(0) }
+
+
     /**
      * 초기 상태 설정
      */

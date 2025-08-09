@@ -1,5 +1,8 @@
 package com.ssafy.bookglebookgle.repository
 
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.Network
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -16,6 +19,7 @@ import com.ssafy.bookglebookgle.entity.CommentSync
 import com.ssafy.bookglebookgle.entity.HighlightSync
 import com.ssafy.bookglebookgle.entity.Participant as GParticipant
 import com.ssafy.bookglebookgle.entity.PdfPageSync
+import dagger.hilt.android.qualifiers.ApplicationContext
 import io.grpc.ManagedChannel
 import io.grpc.ManagedChannelBuilder
 import io.grpc.stub.StreamObserver
@@ -41,7 +45,9 @@ sealed class PdfSyncConnectionStatus {
  */
 // gRPC 구현체
 @Singleton
-class PdfGrpcRepositoryImpl @Inject constructor(): PdfGrpcRepository {
+class PdfGrpcRepositoryImpl @Inject constructor(
+    @ApplicationContext private val context: Context
+) : PdfGrpcRepository {
     private val TAG = "PdfSyncRepo"
 
     private val _newPageUpdates = MutableLiveData<PdfPageSync>()
@@ -78,6 +84,15 @@ class PdfGrpcRepositoryImpl @Inject constructor(): PdfGrpcRepository {
     override val participantsSnapshot: LiveData<ParticipantsSnapshot>
         get() = _participantsSnapshot
 
+    private val _progressUpdates = MutableLiveData<Pair<String, Int>>()
+    override val progressUpdates: LiveData<Pair<String, Int>> = _progressUpdates
+
+
+    private val cm: ConnectivityManager =
+        context.getSystemService(ConnectivityManager::class.java)
+
+    private var netCb: ConnectivityManager.NetworkCallback? = null
+
     private var channel: ManagedChannel? = null
     private var stub: PdfSyncServiceGrpc.PdfSyncServiceStub? = null
     private var requestObserver: StreamObserver<SyncMessage>? = null
@@ -86,6 +101,7 @@ class PdfGrpcRepositoryImpl @Inject constructor(): PdfGrpcRepository {
     private var userId: String? = null
     private var isActive = false
     private var shouldReconnect = false
+    private var backoffMs = 1_000L
 
     override fun connectAndJoinRoom(groupId: Long, userId: String) {
         if (isActive && channel?.isTerminated == false) return
@@ -94,6 +110,15 @@ class PdfGrpcRepositoryImpl @Inject constructor(): PdfGrpcRepository {
         isActive = true
         shouldReconnect = true
         _connectionStatus.value = PdfSyncConnectionStatus.CONNECTING
+
+        if (netCb == null) {
+            netCb = object : ConnectivityManager.NetworkCallback() {
+                override fun onAvailable(network: Network) {
+                    if (shouldReconnect) reconnect()
+                }
+            }
+            runCatching { cm.registerDefaultNetworkCallback(netCb!!) }
+        }
 
         try {
             channel = ManagedChannelBuilder
@@ -110,6 +135,11 @@ class PdfGrpcRepositoryImpl @Inject constructor(): PdfGrpcRepository {
                 override fun onNext(msg: SyncMessage) {
                     if (!isActive) return
                     when (msg.actionType) {
+                        ActionType.PROGRESS_UPDATE -> {
+                            Handler(Looper.getMainLooper()).post {
+                                _progressUpdates.value = msg.userId to msg.payload.page
+                            }
+                        }
                         ActionType.PARTICIPANTS -> {
                             Handler(Looper.getMainLooper()).post {
                                 // ParticipantsSnapshot 메시지 전체 전달
@@ -192,26 +222,43 @@ class PdfGrpcRepositoryImpl @Inject constructor(): PdfGrpcRepository {
                     }
                 }
 
+
+
                 override fun onError(t: Throwable) {
                     if (!shouldReconnect) return
                     isActive = false
                     _connectionStatus.postValue(PdfSyncConnectionStatus.ERROR("연결 오류: ${t.message}"))
-                    Handler(Looper.getMainLooper()).postDelayed({ if (shouldReconnect) reconnect() }, 2000)
+                    scheduleReconnect()
                 }
 
                 override fun onCompleted() {
                     isActive = false
                     _connectionStatus.postValue(PdfSyncConnectionStatus.DISCONNECTED)
-                    if (shouldReconnect) Handler(Looper.getMainLooper()).postDelayed({ reconnect() }, 1000)
+                    scheduleReconnect()
                 }
+
             })
 
+            backoffMs = 1_000L
+
             _connectionStatus.value = PdfSyncConnectionStatus.CONNECTED
+
+            sendJoinRequest()
 
         } catch (e: Exception) {
             Log.e(TAG, "gRPC 연결 예외", e)
             _connectionStatus.value = PdfSyncConnectionStatus.ERROR("연결 실패: ${e.message}")
         }
+    }
+
+    private fun scheduleReconnect() {
+        if (!shouldReconnect) return
+        Handler(Looper.getMainLooper()).postDelayed({
+            val gid = groupId; val uid = userId
+            if (gid != null && uid != null) connectAndJoinRoom(gid, uid)
+            // 다음 백오프 준비
+        }, backoffMs)
+        backoffMs = (backoffMs * 2).coerceAtMost(30_000L)
     }
 
     override fun sendPageUpdate(page: Int) {
@@ -275,15 +322,24 @@ class PdfGrpcRepositoryImpl @Inject constructor(): PdfGrpcRepository {
         obs.onNext(msg)
     }
 
+    override fun sendProgressUpdate(groupId: Long, userId: String, page: Int) {
+        val obs = requestObserver ?: return
+        if (!isActive) return
+        val msg = SyncMessage.newBuilder()
+            .setGroupId(groupId)
+            .setUserId(userId)
+            .setActionType(ActionType.PROGRESS_UPDATE)
+            .setAnnotationType(AnnotationType.NONE)
+            .setPayload(AnnotationPayload.newBuilder().setPage(page).build())
+            .build()
+        obs.onNext(msg)
+    }
+
+
     override fun reconnect() {
         if (!shouldReconnect) return
         disconnect()
-        val gid = groupId; val uid = userId
-        if (gid != null && uid != null) {
-            Handler(Looper.getMainLooper()).postDelayed({ connectAndJoinRoom(gid, uid) }, 1000)
-        } else {
-            _connectionStatus.value = PdfSyncConnectionStatus.ERROR("재연결 정보 부족")
-        }
+        scheduleReconnect()
     }
 
     override fun leaveRoom() {
@@ -292,6 +348,8 @@ class PdfGrpcRepositoryImpl @Inject constructor(): PdfGrpcRepository {
         requestObserver?.onCompleted()
         disconnect()
         _connectionStatus.value = PdfSyncConnectionStatus.DISCONNECTED
+        runCatching { netCb?.let { cm.unregisterNetworkCallback(it) } }
+        netCb = null
     }
 
     override fun isConnected(): Boolean =
