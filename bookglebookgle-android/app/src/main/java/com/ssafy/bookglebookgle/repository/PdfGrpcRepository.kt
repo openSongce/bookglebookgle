@@ -5,6 +5,7 @@ import com.example.bookglebookgleserver.pdf.grpc.ActionType
 import com.example.bookglebookgleserver.pdf.grpc.AnnotationPayload
 import com.example.bookglebookgleserver.pdf.grpc.AnnotationType
 import com.example.bookglebookgleserver.pdf.grpc.ParticipantsSnapshot
+import com.example.bookglebookgleserver.pdf.grpc.ReadingMode as RpcReadingMode
 import com.ssafy.bookglebookgle.entity.CommentSync
 import com.ssafy.bookglebookgle.entity.HighlightSync
 import com.ssafy.bookglebookgle.entity.Participant
@@ -60,4 +61,5 @@ interface PdfGrpcRepository {
 
     fun sendProgressUpdate(groupId: Long, userId: String, page: Int)
 
+    fun sendReadingMode(groupId: Long, userId: String, mode: RpcReadingMode)
 }

@@ -23,7 +23,7 @@ import androidx.lifecycle.Observer
 import com.example.bookglebookgleserver.pdf.grpc.ActionType
 import com.example.bookglebookgleserver.pdf.grpc.AnnotationPayload
 import com.example.bookglebookgleserver.pdf.grpc.AnnotationType
-import com.example.bookglebookgleserver.pdf.grpc.SyncMessage
+import com.example.bookglebookgleserver.pdf.grpc.ReadingMode as RpcReadingMode
 // UI 좌표
 import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.Coordinates as UiCoordinates
 // gRPC 좌표
@@ -210,12 +210,20 @@ class PdfViewModel @Inject constructor(
 
 
     fun setReadingMode(mode: ReadingMode) {
+        if (!_isCurrentLeader.value) return
+
+        val gid = currentGroupId ?: return
+        val uid = myUserId
+        if (syncConnected.value) {
+            pdfGrpcRepository.sendReadingMode(gid, uid, mode.toGrpc()) // 여기!
+        }
+        // 선택: 로컬 프리뷰
         _readingMode.value = mode
-        // FOLLOW 모드로 바뀌었고 내가 리더면 현재 페이지 한번 동기화
-        if (mode == ReadingMode.FOLLOW && _isCurrentLeader.value && _syncConnected.value) {
+        if (mode == ReadingMode.FOLLOW && _isCurrentLeader.value) {
             pdfGrpcRepository.sendPageUpdate(_currentPage.value)
         }
     }
+
 
     private fun scheduleProgressUpdate(newPage: Int) {
         // 페이지가 늘어난 경우만 반영
@@ -946,6 +954,8 @@ class PdfViewModel @Inject constructor(
             _currentLeaderId.value = hostId
             _isCurrentLeader.value = (hostId == myUserId)
 
+            _readingMode.value = snapshot.readingMode.toLocal()
+
             // 4) FOLLOW 모드에서만(내가 리더가 아닐 때만) 페이지 스냅 동기화
             val page = snapshot.currentPage
             if (_readingMode.value == ReadingMode.FOLLOW &&
@@ -1304,5 +1314,15 @@ class PdfViewModel @Inject constructor(
     }
 
 
+    private fun RpcReadingMode.toLocal(): ReadingMode = when (this) {
+        RpcReadingMode.FOLLOW -> ReadingMode.FOLLOW
+        RpcReadingMode.FREE   -> ReadingMode.FREE
+        else                  -> ReadingMode.FREE // 디폴트(원하는 값으로)
+    }
+
+    private fun ReadingMode.toGrpc(): RpcReadingMode = when (this) {
+        ReadingMode.FOLLOW -> RpcReadingMode.FOLLOW
+        ReadingMode.FREE   -> RpcReadingMode.FREE
+    }
 
 }

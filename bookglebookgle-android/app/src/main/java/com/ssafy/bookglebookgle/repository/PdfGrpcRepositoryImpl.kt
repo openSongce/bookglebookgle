@@ -14,6 +14,7 @@ import com.example.bookglebookgleserver.pdf.grpc.ActionType
 import com.example.bookglebookgleserver.pdf.grpc.Participant as ProtoParticipant
 import com.example.bookglebookgleserver.pdf.grpc.ParticipantsSnapshot
 import com.example.bookglebookgleserver.pdf.grpc.PdfSyncServiceGrpc
+import com.example.bookglebookgleserver.pdf.grpc.ReadingMode as RpcReadingMode
 import com.example.bookglebookgleserver.pdf.grpc.SyncMessage
 import com.ssafy.bookglebookgle.entity.CommentSync
 import com.ssafy.bookglebookgle.entity.HighlightSync
@@ -299,6 +300,19 @@ class PdfGrpcRepositoryImpl @Inject constructor(
                 .build()
         )
     }
+
+    override fun sendReadingMode(groupId: Long, userId: String, mode: RpcReadingMode) {
+        val obs = requestObserver ?: return
+        if (!isActive) return
+        val msg = SyncMessage.newBuilder()
+            .setGroupId(groupId)
+            .setUserId(userId)
+            .setActionType(ActionType.READING_MODE_CHANGE)
+            .setReadingMode(mode)
+            .build()
+        obs.onNext(msg)
+    }
+
 
     override fun sendAnnotation(
         groupId: Long,
