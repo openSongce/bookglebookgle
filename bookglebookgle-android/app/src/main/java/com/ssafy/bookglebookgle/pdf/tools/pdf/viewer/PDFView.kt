@@ -730,14 +730,28 @@ class PDFView(context: Context?, set: AttributeSet?) :
                                 val paginationPageIndex = pdfFile!!.getPaginationIndexFromPageIndex(pageIndex)
                                 val index = currentPagesPaginationIndexes.indexOf(paginationPageIndex)
                                 if (index != -1) {
-                                    val notesOnPoint = annotationHandler.findNoteStampOnPoint(
-                                        point,
-                                        paginationPageIndex
-                                    )
-                                    if (notesOnPoint.isNotEmpty()) {
-                                        showNoteAnnotationPopup(notesOnPoint)
+                                    val notes = findNotesOnPoint(point, paginationPageIndex, hitHalfPx = 18f)
+                                    if (notes.isNotEmpty()) {
+                                        // ★ 선택/옵션창 즉시 닫기
+                                        clearAllTextSelectionAndCoordinates()
+                                        listener?.hideTextSelectionOptionWindow()
+
+                                        calculateNotePosition(notes)
                                         touchConsumed = true
+                                    } else {
+                                        val highlightsOnPoint = findHighlightsOnPoint(point, paginationPageIndex, hitHalfPx = 18f)
+                                        if (highlightsOnPoint.isNotEmpty()) {
+                                            // ★ 선택/옵션창 즉시 닫기
+                                            clearAllTextSelectionAndCoordinates()
+                                            listener?.hideTextSelectionOptionWindow()
+
+                                            calculateHighlightPosition(highlightsOnPoint)
+                                            touchConsumed = true
+                                        }
                                     }
+
+
+
                                 }
                             }
                         }
@@ -745,13 +759,14 @@ class PDFView(context: Context?, set: AttributeSet?) :
 
                 }
 
-                // Passing selected text details through listener
-                if (textSelection.hasTextSelected() && dragPinchManager?.isScrolling() != true) {
-                    onTextSelected()
-                } else if (!textSelection.hasTextSelected()) {
-                    // if there is no text selected
-                    clearAllTextSelectionAndCoordinates()
+                if (!touchConsumed) {
+                    if (textSelection.hasTextSelected() && dragPinchManager?.isScrolling() != true) {
+                        onTextSelected()
+                    } else if (!textSelection.hasTextSelected()) {
+                        clearAllTextSelectionAndCoordinates()
+                    }
                 }
+
             }
         }
         return touchConsumed
@@ -773,26 +788,38 @@ class PDFView(context: Context?, set: AttributeSet?) :
         calculateNotePosition(notesOnPoint)
     }
 
-    // calculateNotePosition도 현재 줌 레벨을 사용하도록 수정
     private fun calculateNotePosition(notesOnPoint: List<CommentModel>) {
-        notesOnPoint.first().paginationPageIndex.log("noteOnPoint")
         if (pdfFile == null) return
-        val sortedNote = notesOnPoint.sortedByDescending { it.id }
-        val note = sortedNote.first()
+        val sorted = notesOnPoint
+            .distinctBy { it.id }
+            .sortedByDescending { it.id }
+        val note = sorted.firstOrNull() ?: return
         val page = pdfFile!!.getPageIndexFromPaginationIndex(note.paginationPageIndex)
-
-        // 현재 줌 레벨을 사용 (1f 대신 zoom 사용)
         val currentOffset = pdfFile!!.getPageCurrentOffset(page, zoom, currentYOffset)
-        val firstLineRect = note.charDrawSegments.firstOrNull()?.rect
 
-        if (firstLineRect != null) {
-            // 줌 레벨을 반영한 좌표 계산
-            val x = (firstLineRect.left + firstLineRect.right) / 2 * zoom
-            val y = currentOffset + firstLineRect.top * zoom
-            val point = PointF(x, y)
-            listener?.onNotesStampsClicked(sortedNote, point)
-        }
+        val bounds = unionRectOf(note.charDrawSegments) ?: return
+        val x = ((bounds.left + bounds.right) / 2f) * zoom
+        val y = currentOffset + bounds.top * zoom
+        listener?.onNotesStampsClicked(sorted, PointF(x, y))
     }
+
+    private fun calculateHighlightPosition(highlightsOnPoint: List<HighlightModel>) {
+        if (pdfFile == null) return
+        val sorted = highlightsOnPoint
+            .distinctBy { it.id }
+            .sortedByDescending { it.id }
+        val hi = sorted.firstOrNull() ?: return
+        val page = pdfFile!!.getPageIndexFromPaginationIndex(hi.paginationPageIndex)
+        val currentOffset = pdfFile!!.getPageCurrentOffset(page, zoom, currentYOffset)
+
+        val bounds = unionRectOf(hi.charDrawSegments) ?: return
+        val x = ((bounds.left + bounds.right) / 2f) * zoom
+        val y = currentOffset + bounds.top * zoom
+        listener?.onHighlightClicked(sorted, PointF(x, y))
+    }
+
+
+
 
     override fun onTap(e: MotionEvent) {
         clearAllTextSelection(true)
@@ -2313,6 +2340,66 @@ class PDFView(context: Context?, set: AttributeSet?) :
         centerCurrentPage(false)
     }
 
+    private fun unionRectOf(segments: List<CharDrawSegments>): RectF? {
+        if (segments.isEmpty()) return null
+        val r = RectF(segments[0].rect)
+        for (i in 1 until segments.size) r.union(segments[i].rect)
+        return r
+    }
+
+    // 화면 픽셀 hitHalfPx를 PDF 좌표계 여유로 변환(zoom 보정)
+    private fun inflated(rect: RectF, hitHalfPx: Float): RectF {
+        val tol = hitHalfPx / zoom
+        return RectF(rect).apply { inset(-tol, -tol) }
+    }
+
+    private fun findHighlightsOnPoint(
+        point: PointF,
+        paginationPageIndex: Int,
+        hitHalfPx: Float = 18f
+    ): List<HighlightModel> {
+        val out = mutableListOf<Pair<HighlightModel, Float>>()
+        annotationHandler.annotations.forEach { a ->
+            val hl = if (a.type == PdfAnnotationModel.Type.Highlight) a.asHighlight() else null
+            if (hl != null && hl.paginationPageIndex == paginationPageIndex) {
+                val bounds = unionRectOf(hl.charDrawSegments) ?: return@forEach
+                val r = inflated(bounds, hitHalfPx)
+                val dist = if (r.contains(point.x, point.y)) 0f else {
+                    val cx = point.x.coerceIn(r.left, r.right)
+                    val cy = point.y.coerceIn(r.top, r.bottom)
+                    Math.hypot((point.x - cx).toDouble(), (point.y - cy).toDouble()).toFloat()
+                }
+                // 너무 먼 건 제외(여유의 2배)
+                if (dist <= (hitHalfPx / zoom) * 2f) out += hl to dist
+            }
+        }
+        return out.sortedBy { it.second }.map { it.first }
+    }
+
+    private fun findNotesOnPoint(
+        point: PointF,
+        paginationPageIndex: Int,
+        hitHalfPx: Float = 18f
+    ): List<CommentModel> {
+        val out = mutableListOf<Pair<CommentModel, Float>>()
+        annotationHandler.annotations.forEach { a ->
+            val note = if (a.type == PdfAnnotationModel.Type.Note) a.asNote() else null
+            if (note != null && note.paginationPageIndex == paginationPageIndex) {
+                val bounds = unionRectOf(note.charDrawSegments) ?: return@forEach
+                val r = inflated(bounds, hitHalfPx)
+                val dist = if (r.contains(point.x, point.y)) 0f else {
+                    val cx = point.x.coerceIn(r.left, r.right)
+                    val cy = point.y.coerceIn(r.top, r.bottom)
+                    Math.hypot((point.x - cx).toDouble(), (point.y - cy).toDouble()).toFloat()
+                }
+                if (dist <= (hitHalfPx / zoom) * 2f) out += note to dist
+            }
+        }
+        return out.sortedBy { it.second }.map { it.first }
+    }
+
+
+
     interface Listener {
         fun onPreparationStarted()
         fun onPreparationSuccess()
@@ -2331,5 +2418,6 @@ class PDFView(context: Context?, set: AttributeSet?) :
         fun onMergeStart(mergeId: Int, mergeType: PdfFile.MergeType)
         fun onMergeEnd(mergeId: Int, mergeType: PdfFile.MergeType)
         fun onMergeFailed(mergeId: Int, mergeType: PdfFile.MergeType, message: String, exception: java.lang.Exception?)
+        fun onHighlightClicked(highlights: List<HighlightModel>, pointOfHighlight: PointF)
     }
 }

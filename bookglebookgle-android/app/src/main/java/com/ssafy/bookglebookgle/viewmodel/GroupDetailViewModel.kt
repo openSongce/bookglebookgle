@@ -109,6 +109,7 @@ class GroupDetailViewModel @Inject constructor(
                 if (response.isSuccessful) {
                     response.body()?.let { groupDetail ->
                         Log.d(TAG, "그룹 상세 조회 성공 - 제목: ${groupDetail.roomTitle}, 카테고리: ${groupDetail.category}")
+                        Log.d(TAG, "pageCount(from API) = ${groupDetail.pageCount}")
                         _uiState.value = GroupDetailUiState.Success(groupDetail)
                     } ?: run {
                         _uiState.value = GroupDetailUiState.Error("그룹 상세 정보를 가져올 수 없습니다.")
@@ -144,6 +145,7 @@ class GroupDetailViewModel @Inject constructor(
 
                 if (response.isSuccessful) {
                     Log.d(TAG, "그룹 참여 성공 - 코드: ${response.code()}")
+
                     _joinGroupState.value = JoinGroupUiState.Success
 
                     // 가입 성공 시 내 그룹 상태를 true로 변경

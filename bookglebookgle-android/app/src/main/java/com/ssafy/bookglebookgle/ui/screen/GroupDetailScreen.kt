@@ -5,6 +5,7 @@ import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -22,6 +23,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -30,6 +32,7 @@ import androidx.navigation.NavHostController
 import com.google.gson.Gson
 import com.ssafy.bookglebookgle.R
 import com.ssafy.bookglebookgle.entity.GroupDetailResponse
+import com.ssafy.bookglebookgle.entity.GroupMemberDetailDto
 import com.ssafy.bookglebookgle.navigation.Screen
 import com.ssafy.bookglebookgle.ui.component.CustomTopAppBar
 import com.ssafy.bookglebookgle.ui.component.GroupEditDialog
@@ -298,7 +301,8 @@ private fun GroupDetailContent(
                         val initialProgress = detail?.let { viewModel.run { it.toInitialProgressMap() } } ?: emptyMap()
 
                         // 3) (있으면) 페이지 수 — 필드명은 프로젝트에 맞게 바꿔줘요 (예: detail.totalPageCount)
-                        val pageCount = /* detail?.totalPageCount ?: */ 0
+                        val pageCount = detail?.pageCount ?: 0
+
 
                         // 4) 다음 화면에서 꺼내 쓸 값들 저장
                         val gson = Gson()
@@ -331,10 +335,11 @@ private fun GroupDetailContent(
                     )
                     Text("스크립트 문서", fontWeight = FontWeight.Medium)
                     Text(
-                        "12 페이지",
+                        "${groupDetail.pageCount} 페이지",
                         fontSize = ScreenSize.width.value.times(0.03f).sp,
                         color = Color.Gray
                     )
+
                 }
                 Spacer(modifier = Modifier.weight(1f))
 
@@ -362,17 +367,17 @@ private fun GroupDetailContent(
             )
 
             Spacer(modifier = Modifier.height(ScreenSize.height * 0.01f))
+            val membersSorted = remember(groupDetail.members) {
+                groupDetail.members.sortedByDescending { it.isHost } // 호스트가 앞
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(ScreenSize.width * 0.02f)) {
-                repeat(groupDetail.memberCount) {
-                    Image(
-                        painter = painterResource(id = R.drawable.profile_image),
-                        contentDescription = null,
-                        modifier = Modifier
-                            .size(ScreenSize.width * 0.12f)
-                            .clip(CircleShape)
-                    )
+                membersSorted.forEach { m ->
+                    MemberAvatar(m.userNickName, m.profileColor, m.isHost)
                 }
             }
+
+
+
 
             if(isMyGroup){
                 Spacer(modifier = Modifier.height(ScreenSize.height * 0.02f))
@@ -415,7 +420,11 @@ private fun GroupDetailContent(
                     fontWeight = FontWeight.Bold,
                     fontSize = ScreenSize.width.value.times(0.045f).sp
                 )
-                ProgressStatusCard(75, 10, dummyMembers)
+                ProgressStatusCard(
+                    pageCount = groupDetail.pageCount,
+                    members = groupDetail.members
+                )
+
 
                 Spacer(modifier = Modifier.height(ScreenSize.height * 0.05f))
 
@@ -468,14 +477,26 @@ fun InfoRow(label: String, value: String) {
 
 @Composable
 fun ProgressStatusCard(
-    overallProgress: Int,
-    overallDiff: Int,
-    members: List<Pair<String, Int>>,
+    pageCount: Int,
+    members: List<GroupMemberDetailDto>,
 ) {
     val barColor = Color(0xFFDDDDDD)
     val barWidth = ScreenSize.width * 0.15f
     val barHeight = ScreenSize.height * 0.2f
     val fontSize = ScreenSize.width.value * 0.038f
+
+    // 각 멤버 진도 % 계산: 서버 progressPercent 우선, 없으면 lastPageRead 기반 계산
+    fun percentOf(m: GroupMemberDetailDto): Int {
+        val server = m.progressPercent
+        if (server in 0..100) return server
+        if (pageCount <= 0) return 0
+        val oneBased = (m.lastPageRead + 1).coerceAtLeast(0)
+        return ((oneBased.toFloat() / pageCount.toFloat()) * 100f)
+            .toInt().coerceIn(0, 100)
+    }
+
+    val percents = members.map { percentOf(it) }
+    val avg = if (percents.isNotEmpty()) percents.sum() / percents.size else 0
 
     Column(
         modifier = Modifier
@@ -484,16 +505,8 @@ fun ProgressStatusCard(
             .background(Color.White, RoundedCornerShape(ScreenSize.width * 0.03f))
     ) {
         Text(text = "문서 읽기 진도", color = Color.Gray, fontSize = fontSize.sp)
-        Text(
-            text = "$overallProgress%",
-            fontSize = (fontSize + 8).sp,
-            fontWeight = FontWeight.Bold
-        )
-        Text(
-            text = "전체 ${if (overallDiff >= 0) "+" else ""}$overallDiff%",
-            fontSize = fontSize.sp,
-            color = if (overallDiff >= 0) Color(0xFF2E7D32) else Color.Red
-        )
+        Text(text = "$avg%", fontSize = (fontSize + 8).sp, fontWeight = FontWeight.Bold)
+        Text(text = "전체 평균", fontSize = fontSize.sp, color = Color(0xFF2E7D32))
 
         Spacer(modifier = Modifier.height(ScreenSize.height * 0.02f))
 
@@ -501,7 +514,9 @@ fun ProgressStatusCard(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            members.forEach { (name, percent) ->
+            members.forEach { m ->
+                val p = percentOf(m)
+
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Box(
                         modifier = Modifier
@@ -512,14 +527,81 @@ fun ProgressStatusCard(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .fillMaxHeight(percent / 100f)
+                                .fillMaxHeight(p / 100f)
                                 .align(Alignment.BottomCenter)
                                 .background(MainColor, RoundedCornerShape(4.dp))
                         )
                     }
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text(text = name, fontSize = fontSize.sp, color = Color.DarkGray)
+                    Text(
+                        text = m.userNickName,
+                        fontSize = fontSize.sp,
+                        color = Color.DarkGray,
+                        maxLines = 1
+                    )
+                    Text(
+                        text = "$p%",
+                        fontSize = (fontSize * 0.9f).sp,
+                        color = Color.Gray
+                    )
                 }
+            }
+        }
+    }
+}
+
+
+private fun hexToColor(hex: String?): Color {
+    if (hex.isNullOrBlank()) return Color(0xFFE5E7EB)
+    return try {
+        val s = if (hex.startsWith("#")) hex else "#$hex"
+        Color(android.graphics.Color.parseColor(s))
+    } catch (e: IllegalArgumentException) {
+        Color(0xFF9E9E9E) // fallback
+    }
+}
+
+@Composable
+private fun MemberAvatar(
+    nickname: String,
+    colorHex: String?,
+    isHost: Boolean,
+    size: Dp = ScreenSize.width * 0.12f
+) {
+    val bg = remember(colorHex) { hexToColor(colorHex) }
+
+    Box(
+        modifier = Modifier
+            .size(size)
+            .clip(CircleShape)
+            .background(bg)
+            .then(
+                if (isHost) Modifier.border(2.dp, Color(0xFFFFC107), CircleShape) // 금색 테두리
+                else Modifier
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        val initial = nickname.firstOrNull()?.uppercaseChar()?.toString() ?: "?"
+        Text(
+            text = initial,
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
+            fontSize = (size.value * 0.45f).sp
+        )
+
+        if (isHost) {
+            // 오른쪽 위 왕관 배지
+            Box(
+                modifier = Modifier
+                    .size(size * 0.38f)                 // 배지 크기
+                    .align(Alignment.TopEnd)
+                    .offset(x = size * 0.04f, y = -(size * 0.04f)) // 살짝 밖으로
+                    .clip(CircleShape)
+                    .background(Color(0xFFFFF8E1))      // 밝은 배경
+                    .border(1.dp, Color(0xFFFFC107), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("👑", fontSize = (size.value * 0.22f).sp)
             }
         }
     }

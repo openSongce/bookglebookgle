@@ -144,6 +144,16 @@ class PdfViewModel @Inject constructor(
     private val _highlightFilterUserIds = MutableStateFlow<Set<String>>(emptySet())
     val highlightFilterUserIds: StateFlow<Set<String>> = _highlightFilterUserIds.asStateFlow()
 
+    private val _selectedHighlights = MutableStateFlow<List<HighlightModel>>(emptyList())
+    val selectedHighlights: StateFlow<List<HighlightModel>> = _selectedHighlights.asStateFlow()
+
+    private val _highlightPopupPoint = MutableStateFlow(PointF(0f, 0f))
+    val highlightPopupPoint: StateFlow<PointF> = _highlightPopupPoint.asStateFlow()
+
+    private val _showHighlightPopup = MutableStateFlow(false)
+    val showHighlightPopup: StateFlow<Boolean> = _showHighlightPopup.asStateFlow()
+
+
     // ↑ 클래스 필드에 추가
     private data class PendingHighlightKey(val page: Int, val snippet: String, val color: String,
                                            val x1: Double, val y1: Double, val x2: Double, val y2: Double)
@@ -182,6 +192,26 @@ class PdfViewModel @Inject constructor(
 
     fun isRead(userId: String, page1Based: Int): Boolean =
         (progressByUser.value[userId] ?: 0) >= page1Based
+
+    fun showCommentPopup(comments: List<CommentModel>, point: PointF) {
+        _selectedComments.value = comments.distinctBy { it.id }
+        _commentPopupPoint.value = point
+        _showCommentPopup.value = true
+    }
+
+    fun showHighlightPopup(highlights: List<HighlightModel>, point: PointF) {
+        _selectedHighlights.value = highlights.distinctBy { it.id }
+        _highlightPopupPoint.value = point
+        _showHighlightPopup.value = true
+    }
+
+
+    fun hideHighlightPopup() {
+        _showHighlightPopup.value = false
+        _selectedHighlights.value = emptyList()
+        _highlightPopupPoint.value = PointF(0f, 0f)
+    }
+
 
     fun initFromGroupDetail(
         pageCount: Int,
@@ -425,18 +455,6 @@ class PdfViewModel @Inject constructor(
     }
 
     // ========== 댓글 팝업 관리 ==========
-
-    fun showCommentPopup(comments: List<CommentModel>, point: PointF) {
-        Log.d(TAG, "==== 댓글 팝업 표시 ====")
-        Log.d(TAG, "댓글 수: ${comments.size}")
-        Log.d(TAG, "위치: (${point.x}, ${point.y})")
-        comments.forEachIndexed { index, comment ->
-            Log.d(TAG, "댓글 $index: ID=${comment.id}, 텍스트=${comment.text}")
-        }
-        _selectedComments.value = comments
-        _commentPopupPoint.value = point
-        _showCommentPopup.value = true
-    }
 
     fun hideCommentPopup() {
         Log.d(TAG, "댓글 팝업 숨김")
