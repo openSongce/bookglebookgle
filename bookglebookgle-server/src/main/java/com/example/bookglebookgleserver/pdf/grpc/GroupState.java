@@ -13,6 +13,11 @@ class GroupState {
  final long groupId;
  final Map<String, ParticipantMeta> participants = new ConcurrentHashMap<>(); // userId -> meta
  final Map<String, StreamObserver<SyncMessage>> observers = new ConcurrentHashMap<>(); // userId -> stream
+ 
+ final Map<String, Boolean> onlineByUser = new HashMap<>();
+ final Map<String, Integer> progressByUser = new HashMap<>();
+ 
+ 
  volatile String currentLeaderId = null;
  volatile int currentPage = 1;
  final ReentrantLock lock = new ReentrantLock();

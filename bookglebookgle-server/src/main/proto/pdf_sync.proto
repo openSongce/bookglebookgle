@@ -25,6 +25,8 @@ message SyncMessage {
 message ParticipantsSnapshot {
   repeated Participant participants = 1;
   int32 currentPage = 2;
+  map<string, int32> progressByUser = 3;
+  map<string, bool> onlineByUser = 4;
 }
 
 message Participant {
@@ -32,6 +34,8 @@ message Participant {
   string userName       = 2;
   bool   isOriginalHost = 3;
   bool   isCurrentHost  = 4;
+  bool   isOnline       = 5;
+  int32  maxReadPage    = 6;
 }
 
 enum ActionType {
@@ -42,6 +46,7 @@ enum ActionType {
   LEADERSHIP_TRANSFER = 4;
   JOIN_ROOM = 5;
   PARTICIPANTS = 6;
+  PROGRESS_UPDATE = 7;
 }
 
 enum AnnotationType {

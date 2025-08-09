@@ -59,13 +59,15 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
                             state.observers.put(userId, out);
                             GroupState.ParticipantMeta meta =
                                     state.participants.computeIfAbsent(userId, GroupState.ParticipantMeta::new);
+                            
+                            state.onlineByUser.put(userId, true);
 
-                            // ✅ 원조 호스트 식별
+                            // 원조 호스트 식별
                             String origHostId = getOriginalHostId(groupId);
                             if (origHostId != null && origHostId.equals(userId)) {
                                 meta.isOriginalHost = true;
 
-                                // ✅ 현재 리더가 아니면 즉시 회수
+                                // 현재 리더가 아니면 즉시 회수
                                 if (!Objects.equals(state.currentLeaderId, userId)) {
                                     String prev = state.currentLeaderId; // 이전 리더(있을 수도/없을 수도)
 
@@ -106,10 +108,8 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
 	                    case JOIN_ROOM -> handleJoinRoom(req);
 	                    case LEADERSHIP_TRANSFER -> handleLeadershipTransfer(req);
 	                    case PAGE_MOVE -> handlePageMove(req);
-	                    case ADD, UPDATE, DELETE -> {
-	                        handleAnnotation(req);
-	                        broadcastToAll(GroupStore.get(groupId), req);
-	                    }
+	                    case PROGRESS_UPDATE -> handleProgressUpdate(req); // ★ 추가
+	                    case ADD, UPDATE, DELETE -> handleAnnotationAndBroadcast(req); // ★ 변경
 	                    case PARTICIPANTS -> {
 	                        // ignore client-side snapshots
 	                    }
@@ -146,6 +146,8 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
                 try {
                     state.participants.computeIfAbsent(req.getUserId(), GroupState.ParticipantMeta::new);
                     state.observers.put(req.getUserId(), out);
+                    
+                    state.onlineByUser.put(req.getUserId(), true);
 
                     String origHostId = getOriginalHostId(state.groupId);
                     boolean isOriginalHost = (origHostId != null && origHostId.equals(req.getUserId()));
@@ -225,6 +227,8 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
 
                 // 상태 갱신
                 state.currentPage = page;
+                
+                state.progressByUser.merge(uid, page, Math::max);
 
                 // 진도 저장(너희 서비스 로직 유지)
                 try {
@@ -302,6 +306,150 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
                     logger.log(Level.SEVERE, "[PDF-SYNC] DB 처리 중 오류", e);
                 }
             }
+            
+            private void handleProgressUpdate(SyncMessage req) {
+                GroupState state = GroupStore.get(req.getGroupId());
+                int page = req.getPayload().getPage();
+                if (page <= 0) return;
+
+                state.lock.lock();
+                try {
+                    // 최댓값 유지
+                    state.progressByUser.merge(req.getUserId(), page, Math::max);
+
+                    // 1) 즉시 PROGRESS_UPDATE 이벤트 브로드캐스트 (클라 progressObserver가 받음)
+                    SyncMessage evt = SyncMessage.newBuilder()
+                            .setGroupId(state.groupId)
+                            .setUserId(req.getUserId())
+                            .setActionType(ActionType.PROGRESS_UPDATE)
+                            .setAnnotationType(AnnotationType.NONE)
+                            .setPayload(AnnotationPayload.newBuilder().setPage(page).build())
+                            .build();
+                    broadcastToAll(state, evt);
+
+                    // 2) 스냅샷도 한번 뿌려주면(선택) 지도/리스트 즉시 갱신됨
+                    broadcastSnapshot(state);
+                } finally {
+                    state.lock.unlock();
+                }
+            }
+            
+            private void handleAnnotationAndBroadcast(SyncMessage req) {
+                GroupState state = GroupStore.get(groupId);
+                try {
+                    Group group = groupRepository.findById(groupId)
+                            .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 그룹입니다."));
+                    String sender = req.getUserId();
+                    AnnotationType type = req.getAnnotationType();
+                    ActionType action = req.getActionType();
+                    AnnotationPayload p = req.getPayload();
+
+                    if (type == AnnotationType.HIGHLIGHT) {
+                        if (action == ActionType.ADD) {
+                            Highlight h = highlightRepository.save(
+                                    Highlight.builder()
+                                            .group(group).userId(Long.valueOf(sender))
+                                            .page(p.getPage()).snippet(p.getSnippet()).color(p.getColor())
+                                            .startX(p.getCoordinates().getStartX()).startY(p.getCoordinates().getStartY())
+                                            .endX(p.getCoordinates().getEndX()).endY(p.getCoordinates().getEndY())
+                                            .build());
+
+                            // ★ 저장된 ID로 payload 재구성해서 브로드캐스트
+                            AnnotationPayload payload = AnnotationPayload.newBuilder()
+                                    .setId(h.getId())
+                                    .setPage(h.getPage())
+                                    .setSnippet(h.getSnippet())
+                                    .setColor(h.getColor())
+                                    .setCoordinates(Coordinates.newBuilder()
+                                            .setStartX(h.getStartX()).setStartY(h.getStartY())
+                                            .setEndX(h.getEndX()).setEndY(h.getEndY())
+                                            .build())
+                                    .build();
+
+                            SyncMessage evt = SyncMessage.newBuilder()
+                                    .setGroupId(groupId)
+                                    .setUserId(sender)
+                                    .setActionType(ActionType.ADD)
+                                    .setAnnotationType(AnnotationType.HIGHLIGHT)
+                                    .setPayload(payload)
+                                    .build();
+                            broadcastToAll(state, evt);
+                            return;
+                        } else if (action == ActionType.UPDATE) {
+                            highlightRepository.findById(p.getId()).ifPresent(h -> {
+                                if (!p.getSnippet().isEmpty()) h.setSnippet(p.getSnippet());   //빈값 방어
+                                if (!p.getColor().isEmpty())   h.setColor(p.getColor());      //빈값 방어
+                                if (p.hasCoordinates()) {                                     //좌표 있을 때만
+                                    h.setStartX(p.getCoordinates().getStartX());
+                                    h.setStartY(p.getCoordinates().getStartY());
+                                    h.setEndX(p.getCoordinates().getEndX());
+                                    h.setEndY(p.getCoordinates().getEndY());
+                                }
+                                highlightRepository.save(h);
+                            });
+                            broadcastToAll(state, req);
+                            return;
+                        } else if (action == ActionType.DELETE) {
+                            highlightRepository.deleteById(p.getId());
+                            broadcastToAll(state, req);
+                            return;
+                        }
+                    } else if (type == AnnotationType.COMMENT) {
+                        if (action == ActionType.ADD) {
+                            Comment c = commentRepository.save(
+                                    Comment.builder()
+                                            .group(group).userId(Long.valueOf(sender))
+                                            .page(p.getPage()).snippet(p.getSnippet()).text(p.getText())
+                                            .startX(p.getCoordinates().getStartX()).startY(p.getCoordinates().getStartY())
+                                            .endX(p.getCoordinates().getEndX()).endY(p.getCoordinates().getEndY())
+                                            .build());
+
+                            AnnotationPayload payload = AnnotationPayload.newBuilder()
+                                    .setId(c.getId())
+                                    .setPage(c.getPage())
+                                    .setSnippet(c.getSnippet())
+                                    .setText(c.getText())
+                                    .setCoordinates(Coordinates.newBuilder()
+                                            .setStartX(c.getStartX()).setStartY(c.getStartY())
+                                            .setEndX(c.getEndX()).setEndY(c.getEndY())
+                                            .build())
+                                    .build();
+
+                            SyncMessage evt = SyncMessage.newBuilder()
+                                    .setGroupId(groupId)
+                                    .setUserId(sender)
+                                    .setActionType(ActionType.ADD)
+                                    .setAnnotationType(AnnotationType.COMMENT)
+                                    .setPayload(payload)
+                                    .build();
+                            broadcastToAll(state, evt);
+                            return;
+                        } else if (action == ActionType.UPDATE) {
+                            commentRepository.findById(p.getId()).ifPresent(c2 -> {
+                                if (!p.getText().isEmpty())    c2.setText(p.getText());       // 빈값 방어
+                                if (!p.getSnippet().isEmpty()) c2.setSnippet(p.getSnippet()); // 빈값 방어
+                                if (p.hasCoordinates()) {
+                                    c2.setStartX(p.getCoordinates().getStartX());
+                                    c2.setStartY(p.getCoordinates().getStartY());
+                                    c2.setEndX(p.getCoordinates().getEndX());
+                                    c2.setEndY(p.getCoordinates().getEndY());
+                                }
+                                commentRepository.save(c2);
+                            });
+                            broadcastToAll(state, req);
+                            return;
+                        } else if (action == ActionType.DELETE) {
+                            commentRepository.deleteById(p.getId());
+                            broadcastToAll(state, req);
+                            return;
+                        }
+                    }
+                } catch (Exception e) {
+                    logger.log(Level.SEVERE, "[PDF-SYNC] DB 처리 중 오류", e);
+                }
+            }
+
+
 
             private void handleLeave() {
                 if (groupId == null || userId == null) return;
@@ -310,7 +458,7 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
                 try {
                     // 관찰자/참가자 제거
                     state.observers.remove(userId);
-                    GroupState.ParticipantMeta removed = state.participants.remove(userId);
+                    state.onlineByUser.put(userId, false);
 
                     // 리더였으면 재선정
                     if (Objects.equals(userId, state.currentLeaderId)) {
