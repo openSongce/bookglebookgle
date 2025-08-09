@@ -5,6 +5,7 @@ import com.example.bookglebookgleserver.pdf.grpc.ActionType
 import com.example.bookglebookgleserver.pdf.grpc.AnnotationPayload
 import com.example.bookglebookgleserver.pdf.grpc.AnnotationType
 import com.example.bookglebookgleserver.pdf.grpc.ParticipantsSnapshot
+import com.example.bookglebookgleserver.pdf.grpc.ReadingMode as RpcReadingMode
 import com.ssafy.bookglebookgle.entity.CommentSync
 import com.ssafy.bookglebookgle.entity.HighlightSync
 import com.ssafy.bookglebookgle.entity.Participant
@@ -24,6 +25,7 @@ interface PdfGrpcRepository {
     val leadershipTransfers: LiveData<String>
     val joinRequests: LiveData<String>
     val participantsSnapshot: LiveData<ParticipantsSnapshot>
+    val progressUpdates: LiveData<Pair<String, Int>>
 
 
     /** 현재 gRPC 연결 상태 */
@@ -57,4 +59,7 @@ interface PdfGrpcRepository {
 
     fun sendJoinRequest()
 
+    fun sendProgressUpdate(groupId: Long, userId: String, page: Int)
+
+    fun sendReadingMode(groupId: Long, userId: String, mode: RpcReadingMode)
 }

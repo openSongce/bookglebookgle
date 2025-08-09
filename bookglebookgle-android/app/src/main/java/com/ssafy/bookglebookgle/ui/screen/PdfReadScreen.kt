@@ -4,12 +4,15 @@ import android.graphics.Bitmap
 import android.graphics.PointF
 import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -17,11 +20,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.LocalTextSelectionColors
 import androidx.compose.foundation.text.selection.TextSelectionColors
+import androidx.compose.material.ripple.rememberRipple
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
@@ -51,8 +56,18 @@ import com.ssafy.bookglebookgle.viewmodel.PdfViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import com.ssafy.bookglebookgle.entity.Participant
-import kotlinx.coroutines.delay
+import com.ssafy.bookglebookgle.viewmodel.GroupDetailViewModel
+import androidx.compose.ui.semantics.disabled
 
 
 @Composable
@@ -119,6 +134,11 @@ fun PdfReadScreen(
 
     val selectedFilters by viewModel.highlightFilterUserIds.collectAsState()
 
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+
+    val userColors by viewModel.colorByUser.collectAsState()
+
+
     //grpc
 
     // 1) 네비에서 넘어온 isHost 플래그
@@ -141,6 +161,29 @@ fun PdfReadScreen(
                 groupId       = gid,
                 isHostFromNav = isHostFromNav
             )
+
+            // PdfReadScreen.kt (LaunchedEffect(groupId, userId, isHostFromNav) 내부, setUserInfo(...) '바로 다음'에 추가)
+            val handle = navController.previousBackStackEntry?.savedStateHandle
+
+            val pageCountArg = handle?.get<Int>("pageCount") ?: totalPages
+            val membersJson  = handle?.get<String>("initialMembersJson")
+            val progressJson = handle?.get<String>("initialProgressJson")
+
+            val gson = Gson()
+            val membersType = object : TypeToken<List<GroupDetailViewModel.InitialMember>>() {}.type
+            val progressType = object : TypeToken<Map<String, Int>>() {}.type
+
+            val initialMembers: List<GroupDetailViewModel.InitialMember> =
+                membersJson?.let { gson.fromJson(it, membersType) } ?: emptyList()
+            val initialProgress: Map<String, Int> =
+                progressJson?.let { gson.fromJson(it, progressType) } ?: emptyMap()
+
+            viewModel.initFromGroupDetail(
+                pageCount = pageCountArg,
+                initialMembers = initialMembers,
+                initialProgress = initialProgress
+            )
+
             // 3) gRPC 동기화 연결
             Log.d("PdfReadScreen", "gRPC 동기화 연결: groupId=$gid, userId=$userId")
             viewModel.connectToSync(gid, userId)
@@ -149,15 +192,36 @@ fun PdfReadScreen(
 
 
     // 3) 화면 떠날 때(퇴장) 자동 위임 + gRPC 연결 해제
-    DisposableEffect(Unit) {
-        onDispose {
-            viewModel.leaveSyncRoom()
+// PdfReadScreen
+    DisposableEffect(lifecycleOwner) {
+        val obs = LifecycleEventObserver { _, e ->
+            when (e) {
+                Lifecycle.Event.ON_START -> viewModel.onAppForeground()
+                Lifecycle.Event.ON_STOP  -> viewModel.onAppBackground()
+                else -> Unit
+            }
         }
+        lifecycleOwner.lifecycle.addObserver(obs)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
     }
+
+// 네비 스택에서 화면이 완전히 사라질 때만 해제
+    DisposableEffect(Unit) {
+        onDispose { viewModel.leaveSyncRoom() }
+    }
+
 
     // 4) ViewModel state 가져오기
     val isCurrentLeader by viewModel.isCurrentLeader.collectAsState()
     val participants    by viewModel.participants.collectAsState()
+
+    val readingMode by viewModel.readingMode.collectAsState()
+    val myMaxReadPage by viewModel.myMaxReadPage.collectAsState()
+
+    val allowSwipe = remember(isCurrentLeader, readingMode) {
+        readingMode == PdfViewModel.ReadingMode.FREE || isCurrentLeader
+    }
+
 
     //thumbnail
     val thumbnails by viewModel.thumbnails.collectAsState()
@@ -276,9 +340,9 @@ fun PdfReadScreen(
     }
 
 // Compose
-    LaunchedEffect(isCurrentLeader) {
-        pdfView?.isSwipeEnabled = isCurrentLeader
-        pdfView?.setPageFling(isCurrentLeader)
+    LaunchedEffect(allowSwipe) {
+        pdfView?.isSwipeEnabled = allowSwipe
+        pdfView?.setPageFling(allowSwipe)
         pdfView?.centerCurrentPage(withAnimation = false)
     }
 
@@ -564,14 +628,14 @@ fun PdfReadScreen(
                                     try {
                                         fromFile(pdfFile!!)
                                             .defaultPage(0)
-                                            .enableSwipe(isCurrentLeader)              // 스와이프 비활성화
+                                            .enableSwipe(allowSwipe)              // 스와이프 비활성화
                                             .swipeHorizontal(false)         // 수평 스와이프 비활성화
                                             .pageSnap(true)                 // 페이지 스냅 활성화
                                             .pageFitPolicy(FitPolicy.WIDTH) // 페이지를 화면 너비에 맞춤
                                             .fitEachPage(true)              // 각 페이지를 개별적으로 맞춤
                                             .enableDoubleTap(true)          // 더블탭 줌 활성화
                                             .autoSpacing(true)
-                                            .pageFling(isCurrentLeader)
+                                            .pageFling(allowSwipe)
                                             .load()
                                         Log.d("PdfReadScreen", "PDF 파일 로드 호출 완료")
                                     } catch (e: Exception) {
@@ -804,31 +868,41 @@ fun PdfReadScreen(
                     thumbnails = thumbnails,
                     currentPage = currentPage,
                     onThumbnailClick = { page ->
-                        if(isCurrentLeader){viewModel.goToPage(page + 1) }},
+                        if (readingMode == PdfViewModel.ReadingMode.FREE || isCurrentLeader) {
+                            viewModel.goToPage(page + 1)
+                        }
+                    }
+                    ,
                     modifier = Modifier.align(Alignment.BottomCenter)
                 )
             }
 
             // 참가자 목록 바텀시트
             if (showParticipantsSheet) {
+// PdfReadScreen.kt (호출부)
                 ParticipantsBottomSheet(
                     currentUserId = userId,
                     isCurrentLeader = isCurrentLeader,
                     participants = participants,
-                    selectedFilterUserIds = selectedFilters,           // <- Set 전달
+                    selectedFilterUserIds = selectedFilters,
+                    currentPage = currentPage,                 // ← 추가
                     onDismiss = { showParticipantsSheet = false },
                     onTransferClick = { targetId ->
                         if (targetId != userId && isCurrentLeader) {
                             pendingTransferUserId = targetId
                         } else if (!isCurrentLeader) {
-                            // 리더만 가능
                             android.widget.Toast
                                 .makeText(context, "리더만 권한을 이양할 수 있어요.", android.widget.Toast.LENGTH_SHORT)
                                 .show()
-                        } },
-                    onToggleFilter = { id -> viewModel.toggleHighlightFilterUser(id) }, // <- 토글
-                    onClearFilter = { viewModel.clearHighlightFilter() }                // <- 전체
+                        }
+                    },
+                    onToggleFilter = { id -> viewModel.toggleHighlightFilterUser(id) },
+                    onClearFilter = { viewModel.clearHighlightFilter() },
+                    readingMode = readingMode,
+                    onChangeMode = { mode -> viewModel.setReadingMode(mode) },
+                    userColors = userColors
                 )
+
             }
 
 // 권한 이양 확인 다이얼로그
@@ -889,6 +963,7 @@ fun ThumbnailBottomSheet(
         tonalElevation = 4.dp,
         shadowElevation = 8.dp
     ) {
+
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -922,21 +997,34 @@ private fun ParticipantsBottomSheet(
     isCurrentLeader: Boolean,
     participants: List<Participant>,
     selectedFilterUserIds: Set<String>,                 // <- Set
+    currentPage: Int,
     onDismiss: () -> Unit,
     onTransferClick: (String) -> Unit,
     onToggleFilter: (String) -> Unit,                   // <- 여러명 토글
-    onClearFilter: () -> Unit                           // <- 전체 해제
+    onClearFilter: () -> Unit,                           // <- 전체 해제
+    readingMode: PdfViewModel.ReadingMode,
+    onChangeMode: (PdfViewModel.ReadingMode) -> Unit,
+    userColors: Map<String, String>
+
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     // 정렬: 나 → 리더(내가 아니면) → 이름/아이디 순
-    val sorted = remember(participants, currentUserId) {
-        participants.sortedWith(
+    val sorted = remember(participants, currentUserId, readingMode) {
+        val base = if (readingMode == PdfViewModel.ReadingMode.FOLLOW) {
+            participants.filter { it.userId == currentUserId || it.isOnline } // 나는 항상 보이기
+        } else {
+            participants
+        }
+
+        base.sortedWith(
             compareByDescending<Participant> { it.userId == currentUserId }
                 .thenByDescending { it.isCurrentHost }
-                .thenBy { p -> p.userName.ifBlank { "사용자${p.userId}" } } //
+                .thenBy { p -> p.userName.ifBlank { "사용자${p.userId}" } }
         )
     }
+
+
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -947,6 +1035,22 @@ private fun ParticipantsBottomSheet(
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+                horizontalArrangement = Arrangement.End
+            ) {
+                ModeSwitch(
+                    value = readingMode,
+                    onChange = onChangeMode,     // 방장만 바뀌도록 외부에서 enabled=false 처리
+                    enabled = isCurrentLeader
+                )
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+
             // ==== 필터 칩 (시트 안으로 이동) ====
             LazyRow(
                 contentPadding = PaddingValues(end = 8.dp),
@@ -972,7 +1076,7 @@ private fun ParticipantsBottomSheet(
             Spacer(Modifier.height(12.dp))
 
             Text(
-                text = "참여자 (${participants.size})",
+                text = "참여자 (${sorted.size})",
                 fontWeight = FontWeight.Bold,
                 fontSize = 18.sp,
                 modifier = Modifier.padding(bottom = 8.dp)
@@ -981,14 +1085,18 @@ private fun ParticipantsBottomSheet(
             Spacer(Modifier.height(4.dp))
 
             sorted.forEach { p ->
+                val read = p.maxReadPage >= currentPage   // ← 현재 페이지 기준 읽음/안읽음
+                val colorHex = userColors[p.userId]
                 ParticipantRow(
                     me = (p.userId == currentUserId),
                     isLeader = p.isCurrentHost,
+                    online = p.isOnline,                                 // ← 추가
+                    readingMode = readingMode,                           // ← 추가
+                    read = read,                                         // ← 추가 (오른쪽 라벨)
                     userName = p.userName.ifBlank { p.userId },
-                    onClick = {
-                        if (p.userId != currentUserId) onTransferClick(p.userId)
-                    },
-                    enabled = isCurrentLeader && p.userId != currentUserId
+                    onClick = { if (p.userId != currentUserId) onTransferClick(p.userId) },
+                    enabled = isCurrentLeader && p.userId != currentUserId,
+                    avatarColorHex = colorHex
                 )
                 Spacer(Modifier.height(8.dp))
             }
@@ -998,52 +1106,69 @@ private fun ParticipantsBottomSheet(
     }
 }
 
+
 @Composable
 private fun SimpleFilterChip(
     label: String,
     selected: Boolean,
     onClick: () -> Unit
 ) {
-    val bg = if (selected) Color(0xFFE0ECFF) else Color(0xFFEFF3F7)
+    val bg = if (selected) Color(0xFFE0ECFF) else Color(0xFFF1F5F9)
     val fg = if (selected) BaseColor else Color(0xFF334155)
     Box(
         modifier = Modifier
+            .height(32.dp) // 칩 높이 통일
             .clip(RoundedCornerShape(999.dp))
             .background(bg)
+            .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(999.dp))
             .clickable { onClick() }
-            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .padding(horizontal = 12.dp),
+        contentAlignment = Alignment.Center
     ) {
-        Text(label, fontSize = 12.sp, color = fg, fontWeight = FontWeight.Medium)
+        Text(label, fontSize = 12.sp, color = fg, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
+
 
 
 @Composable
 private fun ParticipantRow(
     me: Boolean,
     isLeader: Boolean,
+    online: Boolean,
+    readingMode: PdfViewModel.ReadingMode,
+    read: Boolean,
     userName: String,
     enabled: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    avatarColorHex: String?
 ) {
+    val rowAlpha = if (readingMode == PdfViewModel.ReadingMode.FREE && !online) 0.5f else 1f
+    val nameWeight = when {
+        me -> FontWeight.Bold
+        readingMode == PdfViewModel.ReadingMode.FREE && online -> FontWeight.SemiBold
+        else -> FontWeight.Normal
+    }
     val borderWidth = if (isLeader) 2.dp else 0.dp
     val borderColor = if (isLeader) BaseColor else Color.Transparent
+    val avatarBg = avatarColorHex.toComposeColorOrDefault(Color(0xFFEFEFEF))
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .height(56.dp) // ★ 고정 높이로 깔끔하게
+            .alpha(rowAlpha)
             .clip(RoundedCornerShape(12.dp))
             .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // 아바타(이니셜) + 리더 테두리
         Box(
             modifier = Modifier
                 .size(40.dp)
                 .clip(CircleShape)
                 .border(borderWidth, borderColor, CircleShape)
-                .background(Color(0xFFEFEFEF)),
+                .background(avatarBg),
             contentAlignment = Alignment.Center
         ) {
             Text(
@@ -1054,28 +1179,47 @@ private fun ParticipantRow(
 
         Spacer(Modifier.width(12.dp))
 
-        Column(Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = userName,
-                    fontWeight = if (me) FontWeight.Bold else FontWeight.Normal,
-                    fontSize = 15.sp
-                )
-                if (me) {
-                    Spacer(Modifier.width(6.dp))
-                    AssistChip(text = "나")
-                }
-                if (isLeader) {
-                    Spacer(Modifier.width(6.dp))
-                    AssistChip(text = "리더")
-                }
+        // 가운데: 이름 + 뱃지들 (한 줄, 말줄임, 오른쪽 배지에 밀리지 않게 weight 부여)
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .padding(end = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = userName,
+                fontWeight = nameWeight,
+                fontSize = 15.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = true)
+            )
+            if (me) {
+                Spacer(Modifier.width(6.dp)); AssistChip(text = "나")
             }
-            if (!enabled && !me && !isLeader) {
-                Text("리더만 이양할 수 있어요", color = Color.Gray, fontSize = 12.sp)
+            if (isLeader) {
+                Spacer(Modifier.width(6.dp)); AssistChip(text = "리더")
             }
+            if (readingMode == PdfViewModel.ReadingMode.FREE) {
+                Spacer(Modifier.width(6.dp)); AssistChip(text = if (online) "온라인" else "오프라인")
+            }
+        }
+
+        // 오른쪽 읽음/안읽음
+        val readColor = if (read) BaseColor else Color.Gray
+        val readText  = if (read) "읽음" else "안읽음"
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(999.dp))
+                .border(1.dp, readColor, RoundedCornerShape(999.dp))
+                .padding(horizontal = 10.dp, vertical = 4.dp)
+        ) {
+            Text(readText, fontSize = 12.sp, color = readColor, fontWeight = FontWeight.Medium)
         }
     }
 }
+
+
 
 @Composable
 private fun AssistChip(text: String) {
@@ -1088,3 +1232,76 @@ private fun AssistChip(text: String) {
         Text(text, fontSize = 11.sp, color = Color(0xFF334155), fontWeight = FontWeight.Medium)
     }
 }
+
+// PdfReadScreen.kt ➏ 헬퍼 함수 (파일 하단 등 공통 위치에 추가)
+private fun String?.toComposeColorOrDefault(default: Color): Color {
+    return try {
+        this?.let { Color(android.graphics.Color.parseColor(it)) } ?: default
+    } catch (_: Exception) {
+        default
+    }
+}
+
+@Composable
+fun ModeSwitch(
+    value: PdfViewModel.ReadingMode,
+    onChange: (PdfViewModel.ReadingMode) -> Unit,
+    enabled: Boolean
+) {
+    val checked = value == PdfViewModel.ReadingMode.FOLLOW
+
+    val trackOn = Color(0xFF22C55E)   // green
+    val trackOff = Color(0xFFCBD5E1)  // gray
+    val trackDisabled = Color(0xFFE5E7EB)
+    val thumb = Color.White
+
+    val width = 56.dp
+    val height = 32.dp
+    val padding = 4.dp
+    val thumbSize = 24.dp
+    val maxOffset = width - padding * 2 - thumbSize
+
+    val offset by animateDpAsState(
+        targetValue = if (checked) maxOffset else 0.dp,
+        animationSpec = tween(durationMillis = 160)
+    )
+    val trackColor = when {
+        !enabled -> trackDisabled
+        checked -> trackOn
+        else -> trackOff
+    }
+
+    Box(
+        modifier = Modifier
+            .size(width, height)
+            .clip(RoundedCornerShape(999.dp))
+            .background(trackColor)
+            .clickable(
+                enabled = enabled,
+                indication = rememberRipple(bounded = false, radius = 24.dp),
+                interactionSource = remember { MutableInteractionSource() }
+            ) {
+                val newChecked = !checked
+                onChange(if (newChecked) PdfViewModel.ReadingMode.FOLLOW
+                else PdfViewModel.ReadingMode.FREE)
+            }
+            .padding(padding)
+            .semantics(mergeDescendants = true) {
+                role = Role.Switch
+                stateDescription = if (checked) "FOLLOW" else "FREE"
+                if (!enabled) disabled()
+            }
+        ,
+        contentAlignment = Alignment.CenterStart
+    ) {
+        Box(
+            modifier = Modifier
+                .offset(x = offset)
+                .size(thumbSize)
+                .clip(CircleShape)
+                .background(thumb)
+                .border(1.dp, Color(0x14000000), CircleShape)
+        )
+    }
+}
+

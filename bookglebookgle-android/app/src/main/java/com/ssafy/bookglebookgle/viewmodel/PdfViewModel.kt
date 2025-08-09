@@ -23,7 +23,7 @@ import androidx.lifecycle.Observer
 import com.example.bookglebookgleserver.pdf.grpc.ActionType
 import com.example.bookglebookgleserver.pdf.grpc.AnnotationPayload
 import com.example.bookglebookgleserver.pdf.grpc.AnnotationType
-import com.example.bookglebookgleserver.pdf.grpc.SyncMessage
+import com.example.bookglebookgleserver.pdf.grpc.ReadingMode as RpcReadingMode
 // UI 좌표
 import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.Coordinates as UiCoordinates
 // gRPC 좌표
@@ -37,7 +37,10 @@ import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.PdfAnnotationModel
 import com.ssafy.bookglebookgle.repository.PdfGrpcRepository
 import com.ssafy.bookglebookgle.repository.PdfSyncConnectionStatus
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.update
+import kotlin.math.max
 
 
 private const val TAG = "싸피_PdfViewModel"
@@ -149,6 +152,94 @@ class PdfViewModel @Inject constructor(
 
     private val pendingHighlights = mutableMapOf<PendingHighlightKey, Long>() // key -> tempId
     private val pendingComments   = mutableMapOf<PendingCommentKey, Long>()
+
+    private var appInForeground = true
+    private var autoTransferJob: Job? = null
+    private val AUTO_TRANSFER_DELAY = 10_000L // 10초 정도
+
+    private var progressDebounceJob: Job? = null
+    private var lastProgressPage: Int = 0
+
+    enum class ReadingMode { FOLLOW, FREE }
+
+
+    private val _readingMode = MutableStateFlow(ReadingMode.FREE)
+    val readingMode: StateFlow<ReadingMode> = _readingMode.asStateFlow()
+
+    private val _myMaxReadPage = MutableStateFlow(0)
+    val myMaxReadPage: StateFlow<Int> = _myMaxReadPage.asStateFlow()
+
+    private val _progressByUser = MutableStateFlow<Map<String, Int>>(emptyMap())
+    val progressByUser: StateFlow<Map<String, Int>> = _progressByUser.asStateFlow()
+
+    private val _colorByUser = MutableStateFlow<Map<String, String>>(emptyMap())
+    val colorByUser: StateFlow<Map<String, String>> = _colorByUser.asStateFlow()
+
+    // 온라인 상태 (맵 또는 집합)
+    private val _onlineByUser = MutableStateFlow<Map<String, Boolean>>(emptyMap())
+    val onlineByUser: StateFlow<Map<String, Boolean>> = _onlineByUser.asStateFlow()
+
+
+    fun isRead(userId: String, page1Based: Int): Boolean =
+        (progressByUser.value[userId] ?: 0) >= page1Based
+
+    fun initFromGroupDetail(
+        pageCount: Int,
+        initialMembers: List<GroupDetailViewModel.InitialMember>,
+        initialProgress: Map<String, Int>
+    ) {
+        _totalPages.value = pageCount
+
+        _participants.value = initialMembers.map {
+            Participant(
+                userId = it.userId,
+                userName = it.nickname,
+                isOriginalHost = it.isHost,
+                isCurrentHost = false
+            )
+        }
+
+        _progressByUser.value = initialProgress
+        _myMaxReadPage.value = initialProgress[myUserId] ?: _myMaxReadPage.value
+
+        _colorByUser.value = initialMembers.associate { m ->
+            m.userId to (m.color?.takeIf { it.isNotBlank() } ?: "#E5E7EB")
+        }
+    }
+
+
+
+    fun setReadingMode(mode: ReadingMode) {
+        if (!_isCurrentLeader.value) return
+
+        val gid = currentGroupId ?: return
+        val uid = myUserId
+        if (syncConnected.value) {
+            pdfGrpcRepository.sendReadingMode(gid, uid, mode.toGrpc()) // 여기!
+        }
+        // 선택: 로컬 프리뷰
+        _readingMode.value = mode
+        if (mode == ReadingMode.FOLLOW && _isCurrentLeader.value) {
+            pdfGrpcRepository.sendPageUpdate(_currentPage.value)
+        }
+    }
+
+
+    private fun scheduleProgressUpdate(newPage: Int) {
+        // 페이지가 늘어난 경우만 반영
+        if (newPage <= _myMaxReadPage.value) return
+        _myMaxReadPage.value = newPage
+        lastProgressPage = newPage
+        progressDebounceJob?.cancel()
+        progressDebounceJob = viewModelScope.launch {
+            delay(400) // 스크롤 중 난사 방지
+            val gid = currentGroupId ?: return@launch
+            val uid = userId ?: return@launch
+            if (_syncConnected.value) {
+                pdfGrpcRepository.sendProgressUpdate(gid, uid, lastProgressPage)
+            }
+        }
+    }
 
 
     fun toggleHighlightFilterUser(userId: String) {
@@ -740,6 +831,57 @@ class PdfViewModel @Inject constructor(
         }
     }
 
+
+
+    fun onAppForeground() {
+        appInForeground = true
+        autoTransferJob?.cancel()
+
+        if (!pdfGrpcRepository.isConnected()) {
+            currentGroupId?.let { gid -> userId?.let { uid ->
+                pdfGrpcRepository.connectAndJoinRoom(gid, uid)
+            } }
+            // 연결되면 아래 동작은 connectionObserver의 CONNECTED에서 처리
+            return
+        }
+
+        // 이미 연결 중이면 스냅샷(참가자/진도)부터 받아오자
+        pdfGrpcRepository.sendJoinRequest()
+
+        when (readingMode.value) {
+            ReadingMode.FOLLOW -> {
+                // FOLLOW + 리더일 때만 현재 페이지 브로드캐스트
+                if (isCurrentLeader.value) {
+                    pdfGrpcRepository.sendPageUpdate(currentPage.value)
+                }
+            }
+            ReadingMode.FREE -> {
+                // FREE는 페이지 이동 브로드캐스트 안 함 (스냅샷으로 진도 최신화됨)
+                // 필요하면 내 현재 maxReadPage를 서버에 갱신 (선택)
+            }
+        }
+    }
+
+    fun onAppBackground() {
+        appInForeground = false
+        if (isCurrentLeader.value) {
+            autoTransferJob?.cancel()
+            autoTransferJob = viewModelScope.launch(Dispatchers.IO) {
+                delay(AUTO_TRANSFER_DELAY)
+                if (!appInForeground && isCurrentLeader.value) {
+                    selectNextLeader()?.let { transferLeadershipToUser(it.userId) }
+                }
+            }
+        }
+    }
+
+
+    // 간단한 후보 선택 로직(원하면 정교화)
+    private fun selectNextLeader(): Participant? =
+        participants.value.firstOrNull { it.userId != myUserId }
+
+
+
     // Observer들 - Chat과 동일한 패턴
     private val pdfPageObserver = Observer<PdfPageSync> { pageSync ->
         handleRemotePageChange(pageSync.page)
@@ -763,30 +905,71 @@ class PdfViewModel @Inject constructor(
     }
 
     // ParticipantsSnapshot 타입 주의!
+    // PdfViewModel.kt (기존 participantsObserver 교체)
+// 타입: Observer<com.example.bookglebookgleserver.pdf.grpc.ParticipantsSnapshot>
     private val participantsObserver =
         Observer<com.example.bookglebookgleserver.pdf.grpc.ParticipantsSnapshot> { snapshot ->
-            val updated = snapshot.participantsList.map { p ->
-                Participant(
-                    userId = p.userId, userName = p.userName,
-                    isOriginalHost = p.isOriginalHost, isCurrentHost = p.isCurrentHost
+
+            val base = _participants.value  // ← initFromGroupDetail로 넣어둔 '모임원 전체'를 기준으로 유지
+            val onlineMap = snapshot.onlineByUserMap
+            val progMap   = snapshot.progressByUserMap
+
+            // 스냅샷 내 호스트/닉네임 정보를 가져오기 위한 빠른 룩업
+            val snapById = snapshot.participantsList.associateBy { it.userId }
+            val hostId   = snapshot.participantsList.firstOrNull { it.isCurrentHost }?.userId
+
+            // 1) 기존 모임원 리스트를 '삭제 없이' 필드만 업데이트(merge)
+            val merged = base.map { p ->
+                val snap = snapById[p.userId]
+                val newOnline = onlineMap[p.userId] ?: p.isOnline
+                val newProg   = progMap[p.userId] ?: p.maxReadPage
+                val newIsHost = if (hostId != null) p.userId == hostId else p.isCurrentHost
+                p.copy(
+                    userName       = if (p.userName.isBlank()) (snap?.userName ?: p.userName) else p.userName,
+                    isOriginalHost = snap?.isOriginalHost ?: p.isOriginalHost,
+                    isCurrentHost  = newIsHost,
+                    isOnline       = newOnline,
+                    maxReadPage    = max(p.maxReadPage, newProg)
                 )
             }
-            _participants.value = updated
 
-            val newLeader = updated.find { it.isCurrentHost }?.userId
-            if (newLeader != null) {
-                _currentLeaderId.value = newLeader
-                _isCurrentLeader.value = (newLeader == myUserId)
-            }
+            // 2) base에 없던(= gRPC에서만 온) 구성원이 있으면 '추가' (삭제는 절대 안 함)
+            val extraFromSnap = snapshot.participantsList
+                .filter { sp -> merged.none { it.userId == sp.userId } }
+                .map { sp ->
+                    com.ssafy.bookglebookgle.entity.Participant(
+                        userId         = sp.userId,
+                        userName       = sp.userName,
+                        isOriginalHost = sp.isOriginalHost,
+                        isCurrentHost  = sp.isCurrentHost,
+                        isOnline       = onlineMap[sp.userId] == true,
+                        maxReadPage    = progMap[sp.userId] ?: 0
+                    )
+                }
 
-            // currentPage 동기화
+            val finalList = merged + extraFromSnap
+            _participants.value = finalList
+
+            // 3) 리더 상태 반영
+            _currentLeaderId.value = hostId
+            _isCurrentLeader.value = (hostId == myUserId)
+
+            _readingMode.value = snapshot.readingMode.toLocal()
+
+            // 4) FOLLOW 모드에서만(내가 리더가 아닐 때만) 페이지 스냅 동기화
             val page = snapshot.currentPage
-            if (page > 0) {
+            if (_readingMode.value == ReadingMode.FOLLOW &&
+                !_isCurrentLeader.value &&
+                page > 0 && page != _currentPage.value) {
                 currentPdfView?.jumpTo(page - 1, false, false, false)
+                currentPdfView?.centerCurrentPage(withAnimation = false)
                 _currentPage.value = page
                 _showPageInfo.value = true
             }
         }
+
+
+
 
     private var currentPdfView: com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.PDFView? = null
     private var isRemotePageChange = false
@@ -805,14 +988,50 @@ class PdfViewModel @Inject constructor(
             }
             is PdfSyncConnectionStatus.CONNECTED -> {
                 _syncError.value = null
+                // 재접속 직후: 스냅샷 요청
                 Log.d(TAG, "gRPC 연결 완료")
+                pdfGrpcRepository.sendJoinRequest()
+
+                if (readingMode.value == ReadingMode.FOLLOW && _isCurrentLeader.value) {
+                    pdfGrpcRepository.sendPageUpdate(_currentPage.value)
+                }
+                // FREE는 그냥 스냅샷만으로 충분 (원하면 아래 호출)
+                // if (readingMode.value == ReadingMode.FREE) sendProgressUpdateIfNeeded()
             }
+
             is PdfSyncConnectionStatus.DISCONNECTED -> {
                 _syncError.value = null
                 Log.d(TAG, "gRPC 연결 해제")
             }
         }
     }
+
+    // PdfViewModel.kt (클래스 안에 필드로 추가)
+    private val progressObserver = Observer<Pair<String, Int>> { pair ->
+        val uid = pair.first
+        val page = pair.second
+
+        // 1) 전체 맵 갱신 (최댓값 유지)
+        _progressByUser.update { prev ->
+            prev + (uid to max(prev[uid] ?: 0, page))
+        }
+
+        // 2) participants 갱신
+        _participants.update { list ->
+            list.map { p ->
+                if (p.userId == uid) p.copy(
+                    maxReadPage = max(p.maxReadPage, page),
+                    isOnline = true
+                ) else p
+            }
+        }
+
+        // 3) 내 것이라면 내 max 갱신
+        if (uid == myUserId) {
+            _myMaxReadPage.value = max(_myMaxReadPage.value, page)
+        }
+    }
+
 
     init {
         // Observer 등록 - Chat과 동일한 패턴
@@ -827,6 +1046,8 @@ class PdfViewModel @Inject constructor(
         pdfGrpcRepository.joinRequests.observeForever(joinObserver)
         pdfGrpcRepository.leadershipTransfers.observeForever(leadershipObserver)
         pdfGrpcRepository.participantsSnapshot.observeForever(participantsObserver)
+        pdfGrpcRepository.progressUpdates.observeForever(progressObserver)
+
 
 
     }
@@ -845,19 +1066,19 @@ class PdfViewModel @Inject constructor(
         this.currentGroupId = groupId
         this.userId = userId
 
-        _participants.value = listOf(
-            Participant(
-                userId         = myUserId,
-                userName       = "",
+        // 이미 initFromGroupDetail()에서 전체 멤버를 넣어뒀다면 유지
+        if (_participants.value.none { it.userId == myUserId }) {
+            _participants.update { it + Participant(
+                userId = myUserId,
+                userName = "",
                 isOriginalHost = _isHost.value,
-                isCurrentHost  = _isCurrentLeader.value
-            )
-        )
-        Log.d(TAG, "PDF 동기화 연결 시작: groupId=$groupId, userId=$userId")
+                isCurrentHost = _isCurrentLeader.value
+            ) }
+        }
 
-        // Repository를 통해 연결
         pdfGrpcRepository.connectAndJoinRoom(groupId, userId)
     }
+
 
     fun leaveSyncRoom() {
         Log.d(TAG, "PDF 뷰어 나가기 - gRPC 방 떠나기")
@@ -865,32 +1086,43 @@ class PdfViewModel @Inject constructor(
     }
 
     fun handleRemotePageChange(page: Int) {
-        Log.d(TAG, "원격 페이지 변경 수신: $page")
-        if (_currentPage.value != page) {
-            isRemotePageChange = true
-            currentPdfView?.jumpTo(
-                page - 1,
-                withAnimation = false,
-                resetZoom = false,
-                resetHorizontalScroll = false
-            )
-            currentPdfView?.centerCurrentPage(withAnimation = false)
+        // FREE 모드면 무시(각자 자유)
+        if (_readingMode.value == ReadingMode.FREE) return
 
-            // UI 상태도 업데이트
-            _currentPage.value = page
-            _showPageInfo.value = true
-        }
+        Log.d(TAG, "원격 페이지 변경 수신: $page")
+        // FOLLOW 모드에서만, 리더가 아닌 경우에만 적용
+        if (_isCurrentLeader.value) return
+        if (_currentPage.value == page) return
+
+        isRemotePageChange = true
+        currentPdfView?.jumpTo(page - 1, withAnimation = false, resetZoom = false, resetHorizontalScroll = false)
+        currentPdfView?.centerCurrentPage(withAnimation = false)
+        _currentPage.value = page
+        _showPageInfo.value = true
     }
+
 
     fun getPage(){
         pdfGrpcRepository.sendJoinRequest()
     }
 
     fun notifyPageChange(page: Int) {
-        // 원격에서 온 페이지 변경이 아니고, 동기화가 연결되어 있을 때만 전송
+        // 공통: 진도 저장(둘 다)
+        scheduleProgressUpdate(page)
+
         if (!isRemotePageChange && _syncConnected.value) {
-            Log.d(TAG, "페이지 변경 알림 전송: $page")
-            pdfGrpcRepository.sendPageUpdate(page)
+            when (_readingMode.value) {
+                ReadingMode.FOLLOW -> {
+                    // FOLLOW에선 '리더만' PAGE_MOVE 의미있음(서버도 리더만 반영)
+                    if (_isCurrentLeader.value) {
+                        pdfGrpcRepository.sendPageUpdate(page)
+                    }
+                }
+                ReadingMode.FREE -> {
+                    // FREE는 PAGE_MOVE 안 보냄(각자 자유 스크롤)
+                    // 아무 것도 안 함
+                }
+            }
         }
         isRemotePageChange = false
     }
@@ -995,6 +1227,8 @@ class PdfViewModel @Inject constructor(
         pdfGrpcRepository.joinRequests.removeObserver(joinObserver)
         pdfGrpcRepository.leadershipTransfers.removeObserver(leadershipObserver)
         pdfGrpcRepository.participantsSnapshot.removeObserver(participantsObserver)
+        pdfGrpcRepository.progressUpdates.removeObserver(progressObserver)
+
 
         // 연결 종료
         pdfGrpcRepository.leaveRoom()
@@ -1080,5 +1314,15 @@ class PdfViewModel @Inject constructor(
     }
 
 
+    private fun RpcReadingMode.toLocal(): ReadingMode = when (this) {
+        RpcReadingMode.FOLLOW -> ReadingMode.FOLLOW
+        RpcReadingMode.FREE   -> ReadingMode.FREE
+        else                  -> ReadingMode.FREE // 디폴트(원하는 값으로)
+    }
+
+    private fun ReadingMode.toGrpc(): RpcReadingMode = when (this) {
+        ReadingMode.FOLLOW -> RpcReadingMode.FOLLOW
+        ReadingMode.FREE   -> RpcReadingMode.FREE
+    }
 
 }
