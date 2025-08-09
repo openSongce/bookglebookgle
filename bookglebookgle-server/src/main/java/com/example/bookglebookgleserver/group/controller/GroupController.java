@@ -108,7 +108,7 @@ public class GroupController {
                     @ApiResponse(responseCode = "404", description = "그룹 또는 PDF 없음")
             }
     )
-    @GetMapping(value = "/{groupId}/pdf", produces = { MediaType.APPLICATION_PDF_VALUE, "application/zip" })
+    @GetMapping(value = "/{groupId}/pdf")
     public ResponseEntity<?> getGroupPdf(
             @Parameter(description = "그룹 ID") @PathVariable Long groupId,
             @Parameter(
