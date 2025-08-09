@@ -19,12 +19,13 @@ public interface GroupRepository extends JpaRepository<Group, Long> {
     );
 
     @Query("""
-    select g from Group g
-    join fetch g.pdfFile pf
-    left join fetch g.members gm
+    select distinct g
+    from Group g
+    left join fetch g.pdfFile pf
+    left join fetch g.groupMembers gm
     left join fetch gm.user u
     where g.id = :groupId
-    """)
+""")
     Optional<Group> findByIdWithPdfAndMembers(@Param("groupId") Long groupId);
 
 }
