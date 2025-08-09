@@ -1,5 +1,8 @@
 server:
   port: 8081
+  error:
+    whitelabel:
+      enabled: false
 
 ocr:
   server:
@@ -9,8 +12,8 @@ spring:
   config:
     import: optional:env[.env]
   datasource:
-    url: jdbc:mysql://127.0.0.1:3307/bookglebookgle
-#    url: jdbc:mysql://mysql:3306/bookglebookgle
+#    url: jdbc:mysql://127.0.0.1:3307/bookglebookgle
+    url: jdbc:mysql://mysql:3306/bookglebookgle
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -52,3 +55,9 @@ grpc:
     port: 6565
     security:
       enabled: false
+
+firebase:
+  enabled: true
+  credentials:
+    base64: ${FIREBASE_CREDENTIALS_BASE64:}   # 운영: 여기로 받음
+    file-path: classpath:service-account.json # 로컬 개발만 사용

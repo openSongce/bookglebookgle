@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface GroupRepository extends JpaRepository<Group, Long> {
 
@@ -17,5 +18,14 @@ public interface GroupRepository extends JpaRepository<Group, Long> {
             @Param("category") com.example.bookglebookgleserver.group.entity.Group.Category category
     );
 
-    boolean existsByIdAndGroupMembers_Id(Long groupId, Long userId);
+    @Query("""
+    select distinct g
+    from Group g
+    left join fetch g.pdfFile pf
+    left join fetch g.groupMembers gm
+    left join fetch gm.user u
+    where g.id = :groupId
+""")
+    Optional<Group> findByIdWithPdfAndMembers(@Param("groupId") Long groupId);
+
 }

@@ -28,6 +28,10 @@ public class User {
     private String nickname;
 
     private String provider;
+
+    @Column(name = "profile_color", length = 9)
+    private String profileColor;   // "#RRGGBB" 또는 "#AARRGGBB"
+
     private String profileImageUrl;
 
     @Column(name = "avg_rating")

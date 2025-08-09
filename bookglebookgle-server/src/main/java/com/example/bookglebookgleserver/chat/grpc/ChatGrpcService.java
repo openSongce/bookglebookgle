@@ -141,9 +141,6 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
                                     @Override public void onCompleted() { }
                                 }
                         );
-                        // (옵션) AI Moderation 요청 중에도 일반 메시지는 저장/브로드캐스트할지 결정
-                        // 아래 두 줄을 넣으면 토론 중 채팅도 저장/전파됨
-                        saveAndBroadcastNormalMessage(message, groupId);
                     }
                     // === 3. 일반 채팅 메시지 처리 ===
                     else {

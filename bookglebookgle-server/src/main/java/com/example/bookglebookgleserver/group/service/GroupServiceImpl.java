@@ -5,6 +5,8 @@ import com.example.bookglebookgleserver.chat.entity.ChatRoom;
 import com.example.bookglebookgleserver.chat.entity.ChatRoomMember;
 import com.example.bookglebookgleserver.chat.repository.ChatRoomMemberRepository;
 import com.example.bookglebookgleserver.chat.repository.ChatRoomRepository;
+import com.example.bookglebookgleserver.fcm.service.GroupNotificationScheduler;
+import com.example.bookglebookgleserver.fcm.util.KoreanScheduleParser;
 import com.example.bookglebookgleserver.global.exception.BadRequestException;
 import com.example.bookglebookgleserver.global.exception.ForbiddenException;
 import com.example.bookglebookgleserver.global.exception.NotFoundException;
@@ -28,13 +30,16 @@ import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.scheduling.support.CronTrigger;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 import java.io.File;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.TimeZone;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -51,31 +56,34 @@ public class GroupServiceImpl implements GroupService {
     private final UserRepository userRepository;
     private final ChatRoomRepository chatRoomRepository;
     private final ChatRoomMemberRepository chatRoomMemberRepository;
+    private final GroupNotificationScheduler groupNotificationScheduler;
+
+    private static final TimeZone TZ = TimeZone.getTimeZone("Asia/Seoul");
 
     @Override
     @Transactional
-    public GroupCreateResponseDto createGroup(GroupCreateRequestDto dto, MultipartFile pdfFile, User user) {
+    public GroupCreateResponseDto createGroup(GroupCreateRequestDto dto, MultipartFile pdfUpload, User user) {
         String uploadDir = "/home/ubuntu/pdf-uploads/";
         File uploadDirFile = new File(uploadDir);
-        if (!uploadDirFile.exists()) {
-            uploadDirFile.mkdirs();
-        }
+        if (!uploadDirFile.exists()) uploadDirFile.mkdirs();
 
-        String storedFileName = UUID.randomUUID() + "_" + pdfFile.getOriginalFilename();
+        String storedFileName = UUID.randomUUID() + "_" + pdfUpload.getOriginalFilename();
         String filePath = uploadDir + storedFileName;
 
         try {
-            pdfFile.transferTo(new File(filePath));
+            pdfUpload.transferTo(new File(filePath));
         } catch (IOException e) {
             throw new BadRequestException("PDF 파일 저장 중 오류가 발생했습니다.");
         }
 
         PdfFile pdf = PdfFile.builder()
-                .fileName(pdfFile.getOriginalFilename())
+                .fileName(pdfUpload.getOriginalFilename())
                 .pageCnt(0)
                 .uploadUser(user)
                 .createdAt(LocalDateTime.now())
                 .filePath(filePath)
+                .imageBased(dto.isImageBased())
+                .hasOcr(false)
                 .build();
         pdfFileRepository.save(pdf);
 
@@ -84,12 +92,23 @@ public class GroupServiceImpl implements GroupService {
         pdfFileRepository.save(pdf);
         log.info("📄 PDF 페이지 수 추출 완료: {} 페이지", pageCount);
 
+        // 스케줄 CRON 변환
+        String cron = null;
+        if (dto.getSchedule() != null && !dto.getSchedule().isBlank()) {
+            try {
+                try { new CronTrigger(dto.getSchedule(), TZ); cron = dto.getSchedule(); }
+                catch (Exception ignore) { cron = KoreanScheduleParser.toCron(dto.getSchedule()); }
+            } catch (Exception e) {
+                log.warn("⚠️ 그룹 스케줄 파싱 실패: 입력='{}', reason={}. 스케줄 없이 생성.", dto.getSchedule(), e.getMessage());
+            }
+        }
+
         Group group = Group.builder()
                 .roomTitle(dto.getRoomTitle())
                 .description(dto.getDescription())
                 .category(Group.Category.valueOf(dto.getCategory().toUpperCase()))
                 .minRequiredRating(dto.getMinRequiredRating())
-                .schedule(dto.getSchedule())
+                .schedule(cron)
                 .groupMaxNum(dto.getGroupMaxNum())
                 .readingMode(Group.ReadingMode.valueOf(dto.getReadingMode().toUpperCase()))
                 .hostUser(user)
@@ -101,29 +120,41 @@ public class GroupServiceImpl implements GroupService {
                 .build();
         groupRepository.save(group);
 
+        if (cron != null) {
+            try {
+                groupNotificationScheduler.register(group.getId(), cron);
+            } catch (Exception e) {
+                log.warn("⚠️ 스케줄 등록 실패: groupId={}, cron='{}', reason={}", group.getId(), cron, e.getMessage());
+            }
+        }
+
         pdf.setGroup(group);
 
-        List<OcrTextBlockDto> ocrResultList = null;
+        List<OcrTextBlockDto> ocrResultList = List.of();
 
+        // ✅ OCR 처리 분기
         if (dto.isImageBased()) {
-            ProcessPdfResponse response = grpcOcrClient.sendPdf(pdf.getPdfId(), pdfFile, group.getId());
+            ProcessPdfResponse response = grpcOcrClient.sendPdf(pdf.getPdfId(), pdfUpload, group.getId());
             if (!response.getSuccess()) {
+                log.warn("❌ OCR 실패: {}", response.getMessage());
                 throw new BadRequestException("OCR 실패: " + response.getMessage());
             }
             ocrService.saveOcrResults(pdf, response);
+            pdf.setHasOcr(true);
+            pdfFileRepository.save(pdf);
 
             ocrResultList = response.getTextBlocksList().stream()
                     .map(block -> OcrTextBlockDto.builder()
                             .pageNumber(block.getPageNumber())
                             .text(block.getText())
-                            .rectX((int) block.getX0())
-                            .rectY((int) block.getY0())
-                            .rectW((int) (block.getX1() - block.getX0()))
-                            .rectH((int) (block.getY1() - block.getY0()))
+                            .rectX(block.getX0())
+                            .rectY(block.getY0())
+                            .rectW((block.getX1() - block.getX0()))
+                            .rectH((block.getY1() - block.getY0()))
                             .build())
                     .collect(Collectors.toList());
         } else {
-            grpcOcrClient.sendPdfNoOcr(pdf.getPdfId(), pdfFile, group.getId());
+            grpcOcrClient.sendPdfNoOcr(pdf.getPdfId(), pdfUpload, group.getId());
         }
 
         ChatRoom chatRoom = ChatRoom.builder()
@@ -136,7 +167,6 @@ public class GroupServiceImpl implements GroupService {
                 .memberCount(1)
                 .build();
         chatRoomRepository.save(chatRoom);
-        log.info("[GroupService] 그룹 생성 및 채팅방 생성 완료 - groupId={}, chatRoom memberCount=1", group.getId());
 
         ChatRoomMember chatRoomMember = ChatRoomMember.builder()
                 .chatRoom(chatRoom)
@@ -157,80 +187,78 @@ public class GroupServiceImpl implements GroupService {
         return GroupCreateResponseDto.builder()
                 .groupId(group.getId())
                 .pdfId(pdf.getPdfId())
-                .ocrResultlist(ocrResultList != null ? ocrResultList : List.of())
+                .ocrResultlist(ocrResultList)
                 .build();
     }
 
-//    @Override
-//    public void createGroupWithoutOcr(GroupCreateRequestDto dto, MultipartFile pdfFile, User user) {
-//        dto.setImageBased(false);
-//        createGroup(dto, pdfFile, user);
-//    }
-
     @Override
     public List<GroupListResponseDto> getNotJoinedGroupList(Long userId) {
-        log.info("📌 [GroupService] (미가입자용) 그룹 목록 조회 시작");
-
-        // 1. 전체 그룹 조회
         List<Group> groups = groupRepository.findAll();
-        log.info("📌 [GroupService] 전체 그룹 수: {}", groups.size());
-
-        // 2. 사용자가 가입한 그룹 ID 목록 조회
         List<Long> joinedGroupIds = groupMemberRepository.findGroupIdsByUserId(userId);
-        log.info("📌 [GroupService] 사용자가 가입한 그룹 수: {}", joinedGroupIds.size());
 
-        // 3. 가입하지 않은 그룹만 필터링
         return groups.stream()
                 .filter(group -> !joinedGroupIds.contains(group.getId()))
                 .map(group -> {
-                    try {
-                        log.info("📌 그룹 ID: {}, 제목: {}", group.getId(), group.getRoomTitle());
-
-                        int currentNum = groupMemberRepository.countByGroup(group);
-                        log.info("📌 currentNum 조회 완료: {}", currentNum);
-
-                        return GroupListResponseDto.builder()
-                                .groupId(group.getId())
-                                .roomTitle(group.getRoomTitle())
-                                .description(group.getDescription())
-                                .category(group.getCategory().name())
-                                .groupMaxNum(group.getGroupMaxNum())
-                                .currentNum(currentNum)
-                                .minimumRating(group.getMinRequiredRating())
-                                .build();
-                    } catch (Exception e) {
-                        log.error("❌ 그룹 ID {} 의 currentNum 조회 중 예외 발생", group.getId(), e);
-                        throw new RuntimeException("그룹 정보 처리 중 오류 발생");
-                    }
+                    int currentNum = groupMemberRepository.countByGroup(group);
+                    return GroupListResponseDto.builder()
+                            .groupId(group.getId())
+                            .roomTitle(group.getRoomTitle())
+                            .description(group.getDescription())
+                            .category(group.getCategory().name())
+                            .groupMaxNum(group.getGroupMaxNum())
+                            .currentNum(currentNum)
+                            .minimumRating(group.getMinRequiredRating())
+                            .build();
                 })
-                .collect(java.util.stream.Collectors.toList());
+                .collect(Collectors.toList());
     }
 
-
     @Override
-    public GroupDetailResponse getGroupDetail(Long groupId, User user) {
-        Group group = groupRepository.findById(groupId)
+    @Transactional()
+    public GroupDetailResponse getGroupDetail(Long groupId, User requester) {
+        Group group = groupRepository.findByIdWithPdfAndMembers(groupId)
                 .orElseThrow(() -> new NotFoundException("해당 모임이 존재하지 않습니다."));
 
-        int memberCount = groupMemberRepository.countByGroup(group);
-        boolean isHost = group.getHostUser().getId().equals(user.getId());
+        int pageCount = resolvePageCount(group);
+        boolean requesterIsHost = group.getHostUser().getId().equals(requester.getId());
+
+        List<GroupMember> gmList = group.getGroupMembers(); // fetch join으로 이미 로드됨
+
+        List<GroupMemberDetailDto> members = gmList.stream().map(gm -> {
+            var u = gm.getUser();
+            int last = Math.max(0, gm.getLastPageRead());
+            int progress = (pageCount > 0) ? (int) Math.round((last * 100.0) / pageCount) : 0;
+            return new GroupMemberDetailDto(
+                    u.getId(),
+                    u.getNickname(),
+                    u.getProfileColor(),
+                    last,
+                    progress,
+                    gm.isHost()
+            );
+        }).toList();
 
         return new GroupDetailResponse(
                 group.getRoomTitle(),
                 group.getCategory().name(),
                 group.getSchedule(),
-                memberCount,
+                gmList.size(),
                 group.getGroupMaxNum(),
                 group.getDescription(),
                 null,
-                isHost,
-                group.getMinRequiredRating()
+                requesterIsHost,
+                group.getMinRequiredRating(),
+                pageCount,
+                members
         );
     }
 
+
+
+    // (호환) PDF만 반환
     @Override
     public ResponseEntity<Resource> getPdfFileResponse(Long groupId, User user) {
-        if (!groupMemberRepository.existsByGroup_IdAndUser_Id(groupId, user.getId())) {
+        if (!groupMemberRepository.isMember(groupId, user.getId())) {
             throw new ForbiddenException("해당 그룹에 속해 있지 않습니다.");
         }
 
@@ -242,32 +270,113 @@ public class GroupServiceImpl implements GroupService {
             throw new NotFoundException("서버에 PDF 파일이 존재하지 않습니다.");
         }
 
-        Resource resource = new FileSystemResource(file);
-
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_PDF)
                 .header("Content-Disposition", "inline; filename=\"" + pdfFile.getFileName() + "\"")
-                .body(resource);
+                .header("X-OCR-Available", String.valueOf(pdfFile.isHasOcr()))
+                .body(new FileSystemResource(file));
     }
 
-    @Override
-    public List<MyGroupSummaryDto> getMyGroupList(Long userId) {
-        List<GroupMember> memberships = groupMemberRepository.findByUser_Id(userId);
+    // ✅ Accept 헤더 기반: PDF 혹은 ZIP
 
-        return memberships.stream()
-                .map(GroupMember::getGroup)
-                .distinct()
-                .map(group -> new MyGroupSummaryDto(
-                        group.getId(),
-                        group.getRoomTitle(),
-                        group.getDescription(),
-                        null, // 이미지 URL은 아직 없음
-                        group.getCategory().name(),
-                        group.getGroupMembers().size(),
-                        group.getGroupMaxNum(),
-                        group.getHostUser().getId().equals(userId)
-                ))
-                .collect(Collectors.toList());
+    // after
+    @Override
+    public ResponseEntity<StreamingResponseBody> getPdfResponse(Long groupId, User user, String accept) {
+        if (!groupMemberRepository.isMember(groupId, user.getId())) {
+            throw new ForbiddenException("해당 그룹에 속해 있지 않습니다.");
+        }
+
+        PdfFile pdfFile = pdfFileRepository.findByGroup_Id(groupId)
+                .orElseThrow(() -> new NotFoundException("PDF 파일이 없습니다."));
+
+        boolean wantZip = wantsZip(accept);
+        boolean hasOcr = pdfFile.isHasOcr();
+
+        if (wantZip && hasOcr) {
+            return getPdfAndOcrZip(groupId, user); // 이미 StreamingResponseBody 반환
+        }
+
+        File file = new File(pdfFile.getFilePath());
+        if (!file.exists()) throw new NotFoundException("서버에 PDF 파일이 존재하지 않습니다.");
+
+        String filename = safeFilename(pdfFile.getFileName());
+
+        StreamingResponseBody body = outputStream -> {
+            try (java.io.FileInputStream in = new java.io.FileInputStream(file)) {
+                in.transferTo(outputStream);
+                outputStream.flush();
+            }
+        };
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header("Content-Disposition", "inline; filename=\"" + filename + "\"")
+                .header("X-OCR-Available", String.valueOf(hasOcr))
+                .body(body);
+    }
+
+
+    @Override
+    public ResponseEntity<StreamingResponseBody> getPdfAndOcrZip(Long groupId, User user) {
+        if (!groupMemberRepository.isMember(groupId, user.getId())) {
+            throw new ForbiddenException("해당 그룹에 속해 있지 않습니다.");
+        }
+
+        PdfFile pdfFile = pdfFileRepository.findByGroup_Id(groupId)
+                .orElseThrow(() -> new NotFoundException("PDF 파일이 없습니다."));
+        File file = new File(pdfFile.getFilePath());
+        if (!file.exists()) throw new NotFoundException("서버에 PDF 파일이 존재하지 않습니다.");
+        if (!pdfFile.isHasOcr()) throw new BadRequestException("해당 PDF는 OCR 결과가 없습니다.");
+
+        // OCR 직렬화
+        var blocks = ocrService.getOcrBlocksByPdfId(pdfFile.getPdfId());
+        String ocrJson;
+        try {
+            ocrJson = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(blocks);
+        } catch (Exception e) {
+            throw new BadRequestException("OCR 직렬화 실패: " + e.getMessage());
+        }
+
+        StreamingResponseBody body = outputStream -> {
+            try (java.util.zip.ZipOutputStream zos = new java.util.zip.ZipOutputStream(outputStream)) {
+                // 1) PDF
+                zos.putNextEntry(new java.util.zip.ZipEntry("document.pdf"));
+                try (java.io.FileInputStream in = new java.io.FileInputStream(file)) {
+                    in.transferTo(zos);
+                }
+                zos.closeEntry();
+
+                // 2) OCR JSON
+                zos.putNextEntry(new java.util.zip.ZipEntry("ocr.json"));
+                zos.write(ocrJson.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                zos.closeEntry();
+
+                zos.finish();
+            }
+        };
+
+        String zipName = safeFilename("group-" + groupId + "-pdf-with-ocr.zip");
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType("application/zip"))
+                .header("Content-Disposition", "attachment; filename=\"" + zipName + "\"")
+                .header("X-OCR-Available", "true")
+                // Nginx 사용 시 버퍼링 방지(선택): .header("X-Accel-Buffering","no")
+                .body(body);
+    }
+
+    private static boolean wantsZip(String accept) {
+        if (accept == null || accept.isBlank()) return false;
+        try {
+            for (var mt : MediaType.parseMediaTypes(accept)) {
+                if (mt.isCompatibleWith(MediaType.valueOf("application/zip"))) return true;
+            }
+        } catch (Exception ignored) {}
+        return false;
+    }
+
+    private static String safeFilename(String name) {
+        if (name == null) return "document";
+        return name.replaceAll("[\\r\\n\"]", "_");
     }
 
     @Override
@@ -276,12 +385,10 @@ public class GroupServiceImpl implements GroupService {
         Group group = groupRepository.findById(groupId)
                 .orElseThrow(() -> new NotFoundException("해당 그룹이 존재하지 않습니다."));
 
-        // 이미 참가 여부 확인
         if (groupMemberRepository.existsByGroupAndUser(group, user)) {
             throw new BadRequestException("이미 참가한 그룹입니다.");
         }
 
-        // 정원 초과 여부
         int currentNum = groupMemberRepository.countByGroup(group);
         if (currentNum >= group.getGroupMaxNum()) {
             throw new BadRequestException("그룹 정원이 초과되었습니다.");
@@ -291,7 +398,6 @@ public class GroupServiceImpl implements GroupService {
             throw new BadRequestException("평점이 낮아 그룹에 참가할 수 없습니다.");
         }
 
-        // 참가자 추가
         GroupMember member = GroupMember.builder()
                 .group(group)
                 .user(user)
@@ -311,7 +417,6 @@ public class GroupServiceImpl implements GroupService {
                 .build();
         chatRoomMemberRepository.save(chatMember);
 
-        // memberCount 1 증가 후 저장
         chatRoom.setMemberCount(chatRoom.getMemberCount() + 1);
         chatRoomRepository.save(chatRoom);
 
@@ -332,24 +437,64 @@ public class GroupServiceImpl implements GroupService {
         if (dto.getRoomTitle() != null) group.setRoomTitle(dto.getRoomTitle());
         if (dto.getDescription() != null) group.setDescription(dto.getDescription());
         if (dto.getCategory() != null) group.setCategory(Group.Category.valueOf(dto.getCategory().toUpperCase()));
-        if (dto.getSchedule() != null) group.setSchedule(dto.getSchedule());
         if (dto.getGroupMaxNum() > 0) group.setGroupMaxNum(dto.getGroupMaxNum());
         if (dto.getMinRequiredRating() > 0) group.setMinRequiredRating(dto.getMinRequiredRating());
         if (dto.getReadingMode() != null) group.setReadingMode(Group.ReadingMode.valueOf(dto.getReadingMode().toUpperCase()));
 
-        int memberCount = groupMemberRepository.countByGroup(group);
-        boolean isHost = group.getHostUser().getId().equals(user.getId());
+        // 스케줄 업데이트
+        if (dto.getSchedule() != null) {
+            String input = dto.getSchedule();
+            if (input.isBlank()) {
+                group.setSchedule(null);
+                groupNotificationScheduler.unregister(groupId);
+                log.info("🗑️ 그룹 스케줄 해제: groupId={}", groupId);
+            } else {
+                try {
+                    String cron;
+                    try { new CronTrigger(input, TZ); cron = input; }
+                    catch (Exception ignore) { cron = KoreanScheduleParser.toCron(input); }
+                    group.setSchedule(cron);
+                    groupNotificationScheduler.register(groupId, cron);
+                } catch (Exception e) {
+                    throw new BadRequestException("스케줄 형식이 올바르지 않습니다: " + e.getMessage());
+                }
+            }
+        }
+
+        // 변경사항을 반영한 최신 상태를 fetch join으로 다시 조회
+        Group loaded = groupRepository.findByIdWithPdfAndMembers(groupId)
+                .orElseThrow(() -> new NotFoundException("해당 모임이 존재하지 않습니다."));
+
+        boolean isHost = loaded.getHostUser().getId().equals(user.getId());
+        int pageCount = resolvePageCount(loaded);
+        List<GroupMember> gmList = loaded.getGroupMembers();
+
+        List<GroupMemberDetailDto> members = gmList.stream().map(gm -> {
+            var u = gm.getUser();
+            int last = Math.max(0, gm.getLastPageRead());
+            int progress = (pageCount > 0) ? (int) Math.round((last * 100.0) / pageCount) : 0;
+            return new GroupMemberDetailDto(
+                    u.getId(),
+                    u.getNickname(),
+                    u.getProfileColor(),
+                    last,
+                    progress,
+                    gm.isHost()
+            );
+        }).toList();
 
         return new GroupDetailResponse(
-                group.getRoomTitle(),
-                group.getCategory().name(),
-                group.getSchedule(),
-                memberCount,
-                group.getGroupMaxNum(),
-                group.getDescription(),
+                loaded.getRoomTitle(),
+                loaded.getCategory().name(),
+                loaded.getSchedule(),
+                gmList.size(),
+                loaded.getGroupMaxNum(),
+                loaded.getDescription(),
                 null,
                 isHost,
-                group.getMinRequiredRating()
+                loaded.getMinRequiredRating(),
+                pageCount,
+                members
         );
     }
 
@@ -361,21 +506,19 @@ public class GroupServiceImpl implements GroupService {
         if (!group.getHostUser().getId().equals(user.getId())) {
             throw new ForbiddenException("그룹 삭제 권한이 없습니다.");
         }
+        groupNotificationScheduler.unregister(groupId);
         groupRepository.delete(group);
+        log.info("🗑️ 그룹 삭제 완료 및 스케줄 해제: groupId={}", groupId);
     }
 
-// GroupServiceImpl.java
     @Override
     public List<GroupListResponseDto> searchGroups(String roomTitle, String category) {
         Group.Category categoryEnum = null;
         if (category != null && !category.isBlank()) {
-            categoryEnum = Group.Category.valueOf(category.toUpperCase()); // Enum 파싱
+            categoryEnum = Group.Category.valueOf(category.toUpperCase());
         }
         List<Group> groups = groupRepository.searchGroups(roomTitle, categoryEnum);
-
-        return groups.stream()
-                .map(GroupListResponseDto::fromEntity)
-                .collect(Collectors.toList());
+        return groups.stream().map(GroupListResponseDto::fromEntity).collect(Collectors.toList());
     }
 
     @Override
@@ -396,13 +539,10 @@ public class GroupServiceImpl implements GroupService {
         ChatRoom chatRoom = chatRoomRepository.findByGroupId(groupId)
                 .orElseThrow(() -> new NotFoundException("채팅방 없음"));
 
-        ChatRoomMember chatRoomMember = chatRoomMemberRepository.findByChatRoomAndUser(chatRoom, user)
-                .orElse(null);
+        ChatRoomMember chatRoomMember = chatRoomMemberRepository.findByChatRoomAndUser(chatRoom, user).orElse(null);
 
         if (chatRoomMember != null) {
             chatRoomMemberRepository.delete(chatRoomMember);
-
-            // memberCount 1 감소 후 저장
             chatRoom.setMemberCount(Math.max(0, chatRoom.getMemberCount() - 1));
             chatRoomRepository.save(chatRoom);
 
@@ -411,13 +551,11 @@ public class GroupServiceImpl implements GroupService {
         }
     }
 
-
     @Override
     public boolean isMember(Long groupId, Long userId) {
-        return groupMemberRepository.existsByGroup_IdAndUser_Id(groupId, userId);
+        return groupMemberRepository.isMember(groupId, userId);
     }
 
-    // 리더(그룹장) 여부 체크
     @Override
     public boolean isLeader(Long groupId, Long userId) {
         Group group = groupRepository.findById(groupId)
@@ -431,11 +569,34 @@ public class GroupServiceImpl implements GroupService {
                 .orElseThrow(() -> new NotFoundException("그룹을 찾을 수 없습니다."));
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("유저를 찾을 수 없습니다."));
-
         GroupMember member = groupMemberRepository.findByGroupAndUser(group, user)
                 .orElseThrow(() -> new NotFoundException("해당 그룹 멤버를 찾을 수 없습니다."));
-
         return member.getLastPageRead();
+    }
+
+    @Override
+    public List<MyGroupSummaryDto> getMyGroupList(Long userId) {
+        List<GroupMember> memberships = groupMemberRepository.findByUser_Id(userId);
+        return memberships.stream()
+                .map(GroupMember::getGroup)
+                .distinct()
+                .map(group -> new MyGroupSummaryDto(
+                        group.getId(),
+                        group.getRoomTitle(),
+                        group.getDescription(),
+                        null,
+                        group.getCategory().name(),
+                        group.getGroupMembers().size(),
+                        group.getGroupMaxNum(),
+                        group.getHostUser().getId().equals(userId)
+                ))
+                .collect(java.util.stream.Collectors.toList());
+    }
+
+    private int resolvePageCount(Group group) {
+        if (group.getPdfFile() != null) return group.getPdfFile().getPageCnt();
+        // totalPages가 int면 그대로, Integer면 null 가드
+        try { return group.getTotalPages(); } catch (NullPointerException e) { return 0; }
     }
 
 }

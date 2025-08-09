@@ -24,12 +24,9 @@ services:
       - "6565:6565"
     depends_on:
       - mysql
-      - redis                 # ⭐️ spring이 redis보다 나중에 뜨도록!
-    environment:
-      DB_USERNAME: root
-      DB_PASSWORD: ${DB_PASSWORD}
-      MAIL_USERNAME: ${MAIL_USERNAME}
-      MAIL_PASSWORD: ${MAIL_PASSWORD}
+      - redis
+    env_file:
+      - ./bookglebookgle-server/.env
     volumes:
       - ./backend-logs:/logs
       - /home/ubuntu/bookglebookgle-server/uploads:/home/ubuntu/pdf-uploads
@@ -85,20 +82,20 @@ services:
     networks:
       - test-net
 
-  redis:                                    # ⭐️ 추가
+  redis:
     image: redis:7.2
     container_name: redis
     restart: always
     ports:
-      - "6379:6379"                         # 호스트 6479 → 컨테이너 6379
+      - "6379:6379"
     volumes:
-      - redis-data:/data                    # (선택) 데이터 유지
+      - redis-data:/data
     networks:
-      - test-net                            # 네트워크 연결
+      - test-net
 
 volumes:
   grafana-storage:
-  redis-data:                               # ⭐️ redis 데이터 유지용 볼륨
+  redis-data:
 
 networks:
   test-net:

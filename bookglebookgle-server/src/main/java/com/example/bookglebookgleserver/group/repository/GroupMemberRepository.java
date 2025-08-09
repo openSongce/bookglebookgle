@@ -12,7 +12,9 @@ import java.util.Optional;
 
 public interface GroupMemberRepository extends JpaRepository<GroupMember, Long> {
     int countByGroup(Group group);
-    boolean existsByGroup_IdAndUser_Id(Long groupId, Long userId);
+    @Query("select count(gm) > 0 from GroupMember gm " +
+            "where gm.group.id = :groupId and gm.user.id = :userId")
+    boolean isMember(@Param("groupId") Long groupId, @Param("userId") Long userId);
     List<GroupMember> findByUser_Id(Long userId);
     boolean existsByGroupAndUser(Group group, User user);
     Optional<GroupMember> findByGroupAndUser(Group group, User user);
@@ -31,4 +33,5 @@ public interface GroupMemberRepository extends JpaRepository<GroupMember, Long> 
     @Query("SELECT COUNT(gm) FROM GroupMember gm WHERE gm.user.id = :userId AND gm.progressPercent < 100")
     int countIncompleteGroupsByUserId(@Param("userId") Long userId);
 
+    List<GroupMember> findByGroup(Group group);
 }

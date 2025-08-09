@@ -79,6 +79,9 @@ dependencies {
     implementation "io.grpc:grpc-protobuf:${grpcVersion}"
     implementation "io.grpc:grpc-stub:${grpcVersion}"
     implementation "com.google.protobuf:protobuf-java:${protobufVersion}"
+    implementation "io.grpc:grpc-core:${grpcVersion}"
+    implementation "io.grpc:grpc-xds:${grpcVersion}"
+    implementation "io.grpc:grpc-services:${grpcVersion}"
     implementation 'net.devh:grpc-spring-boot-starter:2.15.0.RELEASE'
 
     implementation 'javax.annotation:javax.annotation-api:1.3.2'
@@ -97,6 +100,8 @@ dependencies {
     //pdf
     implementation 'org.apache.pdfbox:pdfbox:2.0.27'
 
+    //FCM
+    implementation("com.google.firebase:firebase-admin:9.3.0")
 }
 
 tasks.named('test') {
