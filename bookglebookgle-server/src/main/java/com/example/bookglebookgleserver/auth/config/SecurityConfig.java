@@ -2,6 +2,8 @@ package com.example.bookglebookgleserver.auth.config;
 
 import com.example.bookglebookgleserver.auth.filter.JwtAuthenticationFilter;
 import com.example.bookglebookgleserver.auth.service.CustomUserDetailsService;
+import jakarta.servlet.DispatcherType;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -31,7 +33,6 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
-    // ✅ AuthenticationManager 직접 구성 (Spring Security 6 방식)
     @Bean
     public AuthenticationManager authenticationManager() {
         DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
@@ -49,10 +50,17 @@ public class SecurityConfig {
                 .formLogin(formLogin -> formLogin.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/auth/**").permitAll()
+                        .dispatcherTypeMatchers(DispatcherType.ERROR, DispatcherType.FORWARD, DispatcherType.ASYNC).permitAll()
+                        .requestMatchers("/error", "/favicon.ico").permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-resources/**", "/webjars/**").permitAll()
+                        .requestMatchers("/auth/**").permitAll()
                         .requestMatchers(HttpMethod.PUT, "/users/profile").authenticated()
                         .anyRequest().authenticated()
+                )
+                // (선택) 이미 커밋된 응답이면 추가로 에러 쓰지 않도록 방어
+                .exceptionHandling(ex -> ex
+                        .accessDeniedHandler((req, res, e) -> { if (!res.isCommitted()) res.sendError(HttpServletResponse.SC_FORBIDDEN); })
+                        .authenticationEntryPoint((req, res, e) -> { if (!res.isCommitted()) res.sendError(HttpServletResponse.SC_UNAUTHORIZED); })
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
