@@ -1,5 +1,7 @@
 package com.example.bookglebookgleserver.pdf.grpc;
 
+import com.example.bookglebookgleserver.group.entity.Group.ReadingMode;
+
 //src/main/java/com/example/bookglebookgleserver/pdf/grpc/GroupState.java
 
 import com.example.bookglebookgleserver.pdf.grpc.Participant;
@@ -16,6 +18,8 @@ class GroupState {
  
  final Map<String, Boolean> onlineByUser = new HashMap<>();
  final Map<String, Integer> progressByUser = new HashMap<>();
+ 
+ volatile ReadingMode readingMode = ReadingMode.FREE;
  
  
  volatile String currentLeaderId = null;

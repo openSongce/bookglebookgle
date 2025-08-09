@@ -105,11 +105,13 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
 
                     // 액션 처리
                     switch (req.getActionType()) {
+                    
 	                    case JOIN_ROOM -> handleJoinRoom(req);
 	                    case LEADERSHIP_TRANSFER -> handleLeadershipTransfer(req);
 	                    case PAGE_MOVE -> handlePageMove(req);
 	                    case PROGRESS_UPDATE -> handleProgressUpdate(req); // ★ 추가
-	                    case ADD, UPDATE, DELETE -> handleAnnotationAndBroadcast(req); // ★ 변경
+	                    case ADD, UPDATE, DELETE -> handleAnnotationAndBroadcast(req); //변경
+	                    case READING_MODE_CHANGE -> handleReadingModeChange(req);
 	                    case PARTICIPANTS -> {
 	                        // ignore client-side snapshots
 	                    }
@@ -182,6 +184,25 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
                     state.lock.unlock();
                 }
             }
+            
+            private void handleReadingModeChange(SyncMessage req) {
+                GroupState state = GroupStore.get(req.getGroupId());
+                state.lock.lock();
+                try {
+                  String from = req.getUserId();
+                  boolean allowed = Objects.equals(from, state.currentLeaderId) ||
+                                    (state.participants.get(from) != null && state.participants.get(from).isOriginalHost);
+                  if (!allowed) return;
+
+                  // ★ 서버 상태 갱신
+                  state.readingMode = req.getReadingMode();
+
+                  // ★ 모두에게 스냅샷 브로드캐스트(모드 포함)
+                  broadcastSnapshot(state);
+                } finally {
+                  state.lock.unlock();
+                }
+              }
 
 
             private void handleLeadershipTransfer(SyncMessage req) {
@@ -528,7 +549,8 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
 
                 ParticipantsSnapshot.Builder b = ParticipantsSnapshot.newBuilder()
                         .addAllParticipants(list)
-                        .setCurrentPage(state.currentPage);
+                        .setCurrentPage(state.currentPage)
+                        .setReadingMode(state.readingMode);;
 
                 // ★ 맵 필수
                 state.progressByUser.forEach((k, v) -> b.putProgressByUser(k, v));
