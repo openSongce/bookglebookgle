@@ -1,6 +1,6 @@
 package com.example.bookglebookgleserver.pdf.grpc;
 
-import com.example.bookglebookgleserver.group.entity.Group.ReadingMode;
+import com.example.bookglebookgleserver.pdf.grpc.ReadingMode;
 
 //src/main/java/com/example/bookglebookgleserver/pdf/grpc/GroupState.java
 
