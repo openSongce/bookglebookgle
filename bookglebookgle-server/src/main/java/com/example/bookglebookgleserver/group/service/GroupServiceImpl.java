@@ -214,11 +214,34 @@ public class GroupServiceImpl implements GroupService {
     }
 
     @Override
-    public GroupDetailResponse getGroupDetail(Long groupId, User user) {
+    @Transactional()
+    public GroupDetailResponse getGroupDetail(Long groupId, User requester) {
         Group group = groupRepository.findById(groupId)
                 .orElseThrow(() -> new NotFoundException("해당 모임이 존재하지 않습니다."));
-        int memberCount = groupMemberRepository.countByGroup(group);
-        boolean isHost = group.getHostUser().getId().equals(user.getId());
+
+        // ✅ 멤버 리스트를 리포지토리로 조회
+        List<GroupMember> gmList = groupMemberRepository.findByGroup(group);
+        int memberCount = gmList.size();
+
+        int pageCount = (group.getPdfFile() != null) ? group.getPdfFile().getPageCnt() : 0;
+        boolean requesterIsHost = group.getHostUser().getId().equals(requester.getId());
+
+        List<GroupMemberDetailDto> members = gmList.stream().map(gm -> {
+            var u = gm.getUser();
+            int last = Math.max(0, gm.getLastPageRead());
+            int progress = (pageCount > 0) ? (int) Math.round((last * 100.0) / pageCount) : 0;
+
+            return new GroupMemberDetailDto(
+                    u.getId(),
+                    u.getNickname(),
+                    u.getProfileColor(),   // User.profileColor 사용
+                    last,
+                    progress,
+                    gm.isHost()
+            );
+        }).toList();
+
+        // ✅ GroupDetailResponse의 최신 시그니처에 맞게 전체 인자 전달
         return new GroupDetailResponse(
                 group.getRoomTitle(),
                 group.getCategory().name(),
@@ -226,11 +249,15 @@ public class GroupServiceImpl implements GroupService {
                 memberCount,
                 group.getGroupMaxNum(),
                 group.getDescription(),
-                null,
-                isHost,
-                group.getMinRequiredRating()
+                null,                 // photoUrl
+                requesterIsHost,
+                group.getMinRequiredRating(),
+                pageCount,            // ✅ 추가됨
+                members               // ✅ 추가됨
         );
     }
+
+
 
     // (호환) PDF만 반환
     @Override
@@ -438,19 +465,40 @@ public class GroupServiceImpl implements GroupService {
             }
         }
 
-        int memberCount = groupMemberRepository.countByGroup(group);
         boolean isHost = group.getHostUser().getId().equals(user.getId());
+        List<GroupMember> gmList = groupMemberRepository.findByGroup(group);
+
+        int pageCount =
+                (group.getPdfFile() != null)
+                        ? group.getPdfFile().getPageCnt()
+                        : (group.getTotalPages() != 0 ? group.getTotalPages() : 0);
+
+        List<GroupMemberDetailDto> members = gmList.stream().map(gm -> {
+            var u = gm.getUser();
+            int last = Math.max(0, gm.getLastPageRead());
+            int progress = (pageCount > 0) ? (int) Math.round((last * 100.0) / pageCount) : 0;
+            return new GroupMemberDetailDto(
+                    u.getId(),
+                    u.getNickname(),
+                    u.getProfileColor(),
+                    last,
+                    progress,
+                    gm.isHost()
+            );
+        }).toList();
 
         return new GroupDetailResponse(
                 group.getRoomTitle(),
                 group.getCategory().name(),
                 group.getSchedule(),
-                memberCount,
+                gmList.size(),             // memberCount 대신 바로 size()
                 group.getGroupMaxNum(),
                 group.getDescription(),
                 null,
                 isHost,
-                group.getMinRequiredRating()
+                group.getMinRequiredRating(),
+                pageCount,
+                members
         );
     }
 

@@ -33,4 +33,5 @@ public interface GroupMemberRepository extends JpaRepository<GroupMember, Long> 
     @Query("SELECT COUNT(gm) FROM GroupMember gm WHERE gm.user.id = :userId AND gm.progressPercent < 100")
     int countIncompleteGroupsByUserId(@Param("userId") Long userId);
 
+    List<GroupMember> findByGroup(Group group);
 }

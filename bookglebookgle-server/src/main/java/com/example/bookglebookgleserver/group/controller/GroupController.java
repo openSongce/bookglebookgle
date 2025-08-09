@@ -60,13 +60,12 @@ public class GroupController {
         return ResponseEntity.ok(groupService.getNotJoinedGroupList(user.getId()));
     }
 
-    @Operation(summary = "그룹 상세", description = "그룹 상세 정보를 조회합니다.")
+    @Operation(summary = "그룹 상세", description = "그룹 상세 및 멤버 리스트 조회")
     @ApiResponse(responseCode = "200", description = "조회 성공",
             content = @Content(schema = @Schema(implementation = GroupDetailResponse.class)))
-    @ApiResponse(responseCode = "404", description = "그룹 없음")
-    @GetMapping("/{groupId}")
+    @GetMapping("/groups/{groupId}")
     public ResponseEntity<GroupDetailResponse> getGroupDetail(
-            @Parameter(description = "그룹 ID") @PathVariable("groupId") Long groupId,
+            @PathVariable Long groupId,
             @AuthenticationPrincipal CustomUserDetails userDetails
     ) {
         return ResponseEntity.ok(groupService.getGroupDetail(groupId, userDetails.getUser()));
