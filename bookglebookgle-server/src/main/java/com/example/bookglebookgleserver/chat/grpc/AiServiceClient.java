@@ -6,38 +6,73 @@ import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.stub.StreamObserver;
 import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Component
 public class AiServiceClient {
 
     private AIServiceGrpc.AIServiceBlockingStub blockingStub;
-    private AIServiceGrpc.AIServiceStub stub;  // ⭐️ 추가 (비동기용)
+//    private AIServiceGrpc.AIServiceStub stub;  // ⭐️ 추가 (비동기용)
+    private AIServiceGrpc.AIServiceStub asyncStub;
 
     @Value("${ocr.server.url}")
     private String ocrServerUrl; // 기존 OCR 환경 변수
+
+    private ManagedChannel channel;
+
 
     // [1] 그룹별 토론 세션ID 관리
     private final Map<Long, String> groupSessionMap = new ConcurrentHashMap<>();
 
     @PostConstruct
     public void init() {
-        String[] parts = ocrServerUrl.split(":");
-        ManagedChannel channel = ManagedChannelBuilder
-                .forAddress(parts[0], Integer.parseInt(parts[1]))
-                .usePlaintext()
-                .build();
-        this.blockingStub = AIServiceGrpc.newBlockingStub(channel);
-        this.stub = AIServiceGrpc.newStub(channel);
-        log.info("✅ [AI gRPC] 클라이언트 초기화 완료 - URL: {}", ocrServerUrl);
+        try {
+            String[] parts = ocrServerUrl.split(":");
+            if (parts.length != 2) {
+                throw new IllegalArgumentException("Invalid ocr.server.url format. Expected host:port but got " + ocrServerUrl);
+            }
+
+            String host = parts[0];
+            int port = Integer.parseInt(parts[1]);
+
+            channel = ManagedChannelBuilder
+                    .forAddress(host, port)
+                    .usePlaintext()
+                    .build();
+
+            blockingStub = AIServiceGrpc.newBlockingStub(channel);
+            asyncStub = AIServiceGrpc.newStub(channel);
+
+            log.info("[AI gRPC] 클라이언트 초기화 완료 - host={}, port={}", host, port);
+        } catch (Exception e) {
+            log.error(" [AI gRPC] 초기화 실패", e);
+            throw e;
+        }
     }
+
+    @PreDestroy
+    public void shutdown() {
+        if (channel != null) {
+            try {
+                channel.shutdownNow().awaitTermination(3, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            log.info(" [AI gRPC] 채널 종료");
+        }
+    }
+
 
     // [2] 토론 세션 시작
     public DiscussionInitResponse initializeDiscussion(Long groupId) {
@@ -84,7 +119,7 @@ public class AiServiceClient {
         String sessionId = groupSessionMap.getOrDefault(groupId, "session-" + groupId);
 
         // gRPC 비동기 스트림 생성
-        StreamObserver<ChatMessageRequest> requestObserver = stub.processChatMessage(responseObserver);
+        StreamObserver<ChatMessageRequest> requestObserver = asyncStub.processChatMessage(responseObserver);
 
         // 실제 메시지 전송
         ChatMessageRequest req = ChatMessageRequest.newBuilder()
@@ -110,4 +145,34 @@ public class AiServiceClient {
             requestObserver.onError(e);
         }
     }
+
+
+
+    // 퀴즈 세트 요청 (문제+정답 포함)
+    public GenerateQuizResult generateQuiz(String documentId, String meetingId, int progressPercentage) {
+        QuizRequest req = QuizRequest.newBuilder()
+                .setDocumentId(documentId)
+                .setMeetingId(meetingId)
+                .setProgressPercentage(progressPercentage) // 50 or 100
+                .build();
+
+        // GenerateQuiz 타임아웃
+        var res = blockingStub.withDeadlineAfter(8, TimeUnit.SECONDS).generateQuiz(req);
+        if (!res.getSuccess()) {
+            throw new IllegalStateException("AI GenerateQuiz failed: " + res.getMessage());
+        }
+
+        List<QuizItem> items = new ArrayList<>();
+        for (Question q : res.getQuestionsList()) {
+            items.add(new QuizItem(q.getQuestionText(), q.getOptionsList(), q.getCorrectAnswerIndex()));
+        }
+        return new GenerateQuizResult(res.getQuizId(), items);
+    }
+
+    // 단순 DTO
+    public record QuizItem(String text, List<String> options, int correctIdx) {}
+    public record GenerateQuizResult(String quizId, List<QuizItem> items) {}
+
+
+
 }

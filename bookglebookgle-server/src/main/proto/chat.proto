@@ -11,10 +11,90 @@ message ChatMessage {
   string senderName = 3;
   string content = 4;
   int64 timestamp = 5;
+
+  // "NORMAL", "QUIZ_START", "QUIZ_QUESTION", "QUIZ_ANSWER",
+  // "QUIZ_REVEAL", "QUIZ_SUMMARY", "QUIZ_END" 등
   string type = 6; // "NORMAL", "AI_RESPONSE", "DISCUSSION_START", "DISCUSSION_END"
   string aiResponse = 7; // AI 응답(있을 때만)
   repeated string suggestedTopics = 8; // AI가 추천한 토론 주제(있을 때만)
+
+    oneof quiz_payload {
+        QuizStart quiz_start = 20;
+        QuizQuestion quiz_question = 21;
+        QuizAnswerSubmit quiz_answer = 22;
+        QuizReveal quiz_reveal = 23;
+        QuizSummary quiz_summary = 24;
+        QuizEnd quiz_end = 25;
+      }
+
 }
+
+enum QuizPhase {
+  QUIZ_PHASE_UNKNOWN = 0;
+  MIDTERM = 1;
+  FINAL = 2;
+}
+
+message QuizStart {
+  int64 groupId = 1;
+  string meetingId = 2;
+  string documentId = 3;
+  QuizPhase phase = 4;            // MIDTERM / FINAL
+  int32 progressPercentage = 5;   // 50 or 100
+  int32 totalQuestions = 6;       // 보통 4
+  string quizId = 7;              // 서버가 채워줌
+  int64 startedAt = 8;
+}
+
+message QuizQuestion {
+  string quizId = 1;
+  int32 questionIndex = 2;
+  string questionText = 3;
+  repeated string options = 4;
+  int32 timeoutSeconds = 5;   // 15
+  int64 issuedAt = 6; //질문발행시간
+
+  int32 correctAnswerIndex=7;
+}
+
+message QuizAnswerSubmit {
+  string quizId = 1;
+  int32 questionIndex = 2;
+  int32 selectedIndex = 3;    // 0~3
+}
+
+message QuizReveal {
+  string quizId = 1;
+  int32 questionIndex = 2;
+  int32 correctAnswerIndex = 3;
+  repeated PerUserAnswer userAnswers = 4; // 선택
+}
+
+message PerUserAnswer {
+  int64 userId = 1;
+  int32 selectedIndex = 2;
+  bool isCorrect = 3;
+}
+
+message QuizSummary {
+  string quizId = 1;
+  QuizPhase phase = 2;
+  int32 totalQuestions = 3;
+  repeated UserScore scores = 4;
+}
+
+message UserScore {
+  int64 userId = 1;
+  string nickname = 2;
+  int32 correctCount = 3;
+  int32 rank = 4;
+}
+
+message QuizEnd {
+  string quizId = 1;
+  string reason = 2; // COMPLETED, CANCELLED, ERROR
+}
+
 
 service ChatService {
   rpc Chat(stream ChatMessage) returns (stream ChatMessage);

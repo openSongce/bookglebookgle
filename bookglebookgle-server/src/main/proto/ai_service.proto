@@ -25,7 +25,7 @@ service AIService {
 
   // Chat History Management
   rpc GetChatHistory(GetChatHistoryRequest) returns (GetChatHistoryResponse);
-  rpc GetChatSessionStats(ChatSessionStatsRequest) returns (ChatSessionStatsResponse);
+  rpc GetChaZtSessionStats(ChatSessionStatsRequest) returns (ChatSessionStatsResponse);
 
   // PDF OCR Processing (includes vector DB storage)
   rpc ProcessPdf(stream ProcessPdfRequest) returns (ProcessPdfResponse);

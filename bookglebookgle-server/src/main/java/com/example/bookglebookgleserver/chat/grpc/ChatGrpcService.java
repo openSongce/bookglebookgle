@@ -3,21 +3,32 @@ package com.example.bookglebookgleserver.chat.grpc;
 import com.example.bookglebookgleserver.chat.ChatMessage;
 import com.bgbg.ai.grpc.AIServiceProto.ChatMessageResponse;// (AI 응답용 proto 메시지 import)
 import com.example.bookglebookgleserver.chat.ChatServiceGrpc;
+import com.example.bookglebookgleserver.chat.QuizEnd;
+import com.example.bookglebookgleserver.chat.QuizQuestion;
 import com.example.bookglebookgleserver.chat.entity.ChatRoom;
 import com.example.bookglebookgleserver.chat.repository.ChatMessageRepository;
 import com.example.bookglebookgleserver.chat.repository.ChatRoomRepository;
 import com.example.bookglebookgleserver.user.entity.User;
 import com.example.bookglebookgleserver.user.repository.UserRepository;
 import io.grpc.stub.StreamObserver;
+import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.devh.boot.grpc.server.service.GrpcService;
 
 import java.time.Instant;
 import java.time.ZoneId;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
+
+import java.util.List;
+import java.util.ArrayList;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @GrpcService
@@ -33,6 +44,13 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
     private final ConcurrentHashMap<Long, Set<StreamObserver<ChatMessage>>> roomObservers = new ConcurrentHashMap<>();
     // 토론 활성 상태 관리
     private final ConcurrentHashMap<Long, Boolean> discussionActiveMap = new ConcurrentHashMap<>();
+
+    // ✅ 퀴즈 상태/스케줄 관리
+    private final ConcurrentHashMap<Long, QuizRunner> quizRunners = new ConcurrentHashMap<>();
+    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);
+
+
+
 
     @Override
     public StreamObserver<ChatMessage> chat(StreamObserver<ChatMessage> responseObserver) {
@@ -50,6 +68,37 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
 
                     String msgType = message.getType();
 
+                    if ("QUIZ_START".equals(msgType)) {
+                        // content나 별도 필드로 넘어오는 값들 가정 (프론트에서 전달)
+                        // 예: message.content = "documentId:...,meetingId:...,progress:50,total:4"
+                        // 실제로는 proto에 QuizStart payload가 있다면 그걸 쓰면 더 좋음.
+                        QuizStartParam p = parseQuizStart(message);
+                        startQuiz(groupId, message.getSenderId(), p);
+                        return;
+                    }
+
+                    // ==== ✅ 퀴즈 강제 종료 ====
+                    if ("QUIZ_CANCEL".equals(msgType)) {
+                        stopQuiz(groupId, "CANCELLED");
+                        return;
+                    }
+
+                    if ("QUIZ_ANSWER".equals(msgType)) {
+                        var qa = message.getQuizAnswer();
+                        var runner = quizRunners.get(groupId);
+                        if (runner != null) {
+                            runner.handleAnswer(
+                                    message.getSenderId(),
+                                    qa.getQuizId(),
+                                    qa.getQuestionIndex(),
+                                    qa.getSelectedIndex()
+                            );
+                        }
+                        return; // 다른 처리 안 함
+                    }
+
+
+
                     // === 1. 토론 시그널 분기 및 ai_service gRPC 호출 ===
                     if ("DISCUSSION_START".equals(msgType)) {
                         log.info("[gRPC-Chat] 토론 시작 시그널 수신 - groupId={}", groupId);
@@ -59,7 +108,7 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
                         } catch (Exception e) {
                             log.error("[gRPC-Chat] AI 토론 시작 요청 실패", e);
                         }
-                        broadcastToRoom(groupId, message);
+                        ChatGrpcService.this.broadcastToRoom(groupId, message);
                     } else if ("DISCUSSION_END".equals(msgType)) {
                         log.info("[gRPC-Chat] 토론 종료 시그널 수신 - groupId={}", groupId);
                         discussionActiveMap.remove(groupId); // 토론 비활성화
@@ -68,7 +117,7 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
                         } catch (Exception e) {
                             log.error("[gRPC-Chat] AI 토론 종료 요청 실패", e);
                         }
-                        broadcastToRoom(groupId, message);
+                        ChatGrpcService.this.broadcastToRoom(groupId, message);
                     }
                     // === 2. 토론 중 AI Moderation (피드백/알림) 요청 ===
                     else if (isDiscussionActive(groupId)) {
@@ -86,7 +135,7 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
                                                 .setAiResponse(aiResp.getAiResponse())
                                                 .addAllSuggestedTopics(aiResp.getSuggestedTopicsList())
                                                 .build();
-                                        broadcastToRoom(groupId, aiMsg);
+                                        ChatGrpcService.this.broadcastToRoom(groupId, aiMsg);
                                     }
                                     @Override public void onError(Throwable t) { log.error("AI 응답 오류", t); }
                                     @Override public void onCompleted() { }
@@ -135,19 +184,10 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
                     log.error("[gRPC-Chat] 메시지 저장 에러: {}", ex.getMessage(), ex);
                 }
                 // 브로드캐스트
-                broadcastToRoom(groupId, message);
+                //broadcastToRoom(groupId, message);
+                ChatGrpcService.this.broadcastToRoom(groupId, message);
             }
 
-            private void broadcastToRoom(Long groupId, ChatMessage msg) {
-                Set<StreamObserver<ChatMessage>> observers = roomObservers.getOrDefault(groupId, Set.of());
-                for (StreamObserver<ChatMessage> observer : observers) {
-                    try { observer.onNext(msg); }
-                    catch (Exception e) {
-                        observers.remove(observer);
-                        try { observer.onCompleted(); } catch (Exception ex) { }
-                    }
-                }
-            }
 
             @Override
             public void onError(Throwable t) {
@@ -177,4 +217,241 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
             }
         };
     }
+
+
+    // === 퀴즈 시작 ===
+    private void startQuiz(Long groupId, Long senderId, QuizStartParam p) {
+        // TODO: 방장 권한 체크
+        if (quizRunners.containsKey(groupId)) {
+            broadcastSystem(groupId, "이미 진행 중인 퀴즈가 있습니다.");
+            return;
+        }
+        // AI에서 문제 세트 수신
+        var result = aiServiceClient.generateQuiz(p.documentId(), p.meetingId(), p.progressPercentage());
+        var items = result.items();
+        int total = Math.min(p.totalQuestions(), items.size());
+        if (total <= 0) {
+            broadcastSystem(groupId, "퀴즈 문제를 불러오지 못했습니다.");
+            return;
+        }
+
+        QuizRunner runner = new QuizRunner(
+                result.quizId(), groupId, items, total,
+                (msg) -> ChatGrpcService.this.broadcastToRoom(groupId, msg),
+                scheduler,
+                () -> quizRunners.remove(groupId) //종료 시 맵에서 제거
+        );
+        quizRunners.put(groupId, runner);
+
+        // 1번 문제(+정답) 즉시 송출, 이후 15초 간격
+        runner.start();
+    }
+
+    // === 퀴즈 종료/정리 ===
+    private void stopQuiz(Long groupId, String reason) {
+        var r = quizRunners.remove(groupId);
+        if (r != null) r.stop(reason);
+    }
+
+    private void broadcastSystem(Long groupId, String content) {
+        broadcastToRoom(groupId, ChatMessage.newBuilder()
+                .setGroupId(groupId)
+                .setType("SYSTEM")
+                .setContent(content)
+                .setTimestamp(System.currentTimeMillis())
+                .build());
+    }
+
+    // === 간단 파서(프론트가 별도 payload 안 보낸다고 가정 시) ===
+    private QuizStartParam parseQuizStart(ChatMessage msg) {
+        // 실제로는 msg에 QuizStart payload를 넣는 게 더 좋음.
+        // 여기서는 content 파싱 예시만.
+        // ex) "documentId=doc_xxx;meetingId=meet_xxx;progress=50;total=4"
+        String documentId = "doc-" + msg.getGroupId();
+        String meetingId = String.valueOf(msg.getGroupId());
+        int progress = 50;
+        int total = 4;
+        try {
+            if (msg.getContent() != null) {
+                for (String part : msg.getContent().split("[;,&]")) {
+                    String[] kv = part.split("=");
+                    if (kv.length != 2) continue;
+                    switch (kv[0].trim()) {
+                        case "documentId" -> documentId = kv[1].trim();
+                        case "meetingId" -> meetingId = kv[1].trim();
+                        case "progress" -> progress = Integer.parseInt(kv[1].trim());
+                        case "total" -> total = Integer.parseInt(kv[1].trim());
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+        return new QuizStartParam(documentId, meetingId, progress, total);
+    }
+    private record QuizStartParam(String documentId, String meetingId, int progressPercentage, int totalQuestions) {}
+
+
+    private static class QuizRunner {
+        private final String quizId;
+        private final long groupId;
+        private final List<AiServiceClient.QuizItem> items;
+        private final int total;
+        private final java.util.function.Consumer<ChatMessage> broadcaster;
+        private final ScheduledExecutorService scheduler;
+
+        private final Runnable onFinish;
+
+        private volatile int idx = 0;                 // 현재 문제 index
+        private ScheduledFuture<?> future;
+
+        // ✅ 정답 집계: userId -> 맞춘 개수
+        private final ConcurrentHashMap<Long, Integer> correctCounts = new ConcurrentHashMap<>();
+
+        // ✅ 현재 문제에서 중복 제출 방지
+        private final Set<Long> answeredThisQuestion = ConcurrentHashMap.newKeySet();
+
+        QuizRunner(String quizId, long groupId, List<AiServiceClient.QuizItem> items, int total,
+                   java.util.function.Consumer<ChatMessage> broadcaster,
+                   ScheduledExecutorService scheduler,
+                   Runnable onFinish) {
+            this.quizId = quizId;
+            this.groupId = groupId;
+            this.items = items;
+            this.total = total;
+            this.broadcaster = broadcaster;
+            this.scheduler = scheduler;
+            this.onFinish = onFinish;
+        }
+
+        void start() {
+            // 1번 문제(+정답) 즉시
+            sendCurrent();
+
+            // 이후 15초마다 다음 문제(+정답)
+            future = scheduler.scheduleAtFixedRate(() -> {
+                // 다음 문제로 넘어가기 전에, 현재 문제에 대한 중복 제출 기록 초기화
+                answeredThisQuestion.clear();
+
+                idx++;
+                if (idx >= total) {
+                    // 네 문제 끝: 요약 먼저, 그 다음 종료 알림
+                    broadcastSummary();
+                    stop("COMPLETED");
+                    return;
+                }
+                sendCurrent();
+            }, 15, 15, TimeUnit.SECONDS);
+        }
+
+        // ✅ 정답 제출 처리
+        void handleAnswer(long userId, String quizId, int questionIndex, int selectedIndex) {
+            if (!this.quizId.equals(quizId)) return;
+            if (questionIndex != idx) return;           // 현재 문제에 대해서만 인정
+            if (!answeredThisQuestion.add(userId)) return; // 이미 제출했다면 무시
+
+            var item = items.get(questionIndex);
+            if (selectedIndex == item.correctIdx()) {
+                correctCounts.merge(userId, 1, Integer::sum);
+            }
+        }
+
+        // ✅ 최종 요약 브로드캐스트
+        private void broadcastSummary() {
+            // 정답수 desc, userId asc 정렬
+            List<Map.Entry<Long, Integer>> ranking = new ArrayList<>(correctCounts.entrySet());
+            ranking.sort((a, b) -> {
+                int c = Integer.compare(b.getValue(), a.getValue());
+                if (c != 0) return c;
+                return Long.compare(a.getKey(), b.getKey());
+            });
+
+            var sum = com.example.bookglebookgleserver.chat.QuizSummary.newBuilder()
+                    .setQuizId(quizId)
+                    .setTotalQuestions(total);  // 필요시 phase 등 추가 가능
+
+            int rank = 1;
+            for (var e : ranking) {
+                sum.addScores(com.example.bookglebookgleserver.chat.UserScore.newBuilder()
+                        .setUserId(e.getKey())
+                        .setNickname("")              // 닉네임 필요시 채워넣기
+                        .setCorrectCount(e.getValue())
+                        .setRank(rank++)
+                        .build());
+            }
+
+            ChatMessage summaryMsg = ChatMessage.newBuilder()
+                    .setGroupId(groupId)
+                    .setType("QUIZ_SUMMARY")
+                    .setTimestamp(System.currentTimeMillis())
+                    .setQuizSummary(sum.build())
+                    .build();
+            broadcaster.accept(summaryMsg);
+        }
+
+        void stop(String reason) {
+            if (future != null && !future.isCancelled()) future.cancel(false);
+
+            if (onFinish != null) onFinish.run();
+
+            ChatMessage end = ChatMessage.newBuilder()
+                    .setGroupId(groupId)
+                    .setType("QUIZ_END")
+                    .setTimestamp(System.currentTimeMillis())
+                    .setQuizEnd(QuizEnd.newBuilder()
+                            .setQuizId(quizId)
+                            .setReason(reason)
+                            .build())
+                    .build();
+            broadcaster.accept(end);
+        }
+
+        private void sendCurrent() {
+            var it = items.get(idx);
+            ChatMessage msg = ChatMessage.newBuilder()
+                    .setGroupId(groupId)
+                    .setType("QUIZ_QUESTION") // 문제+정답 같이 담아 보냄
+                    .setTimestamp(System.currentTimeMillis())
+                    .setQuizQuestion(QuizQuestion.newBuilder()
+                            .setQuizId(quizId)
+                            .setQuestionIndex(idx)
+                            .setQuestionText(it.text())
+                            .addAllOptions(it.options())
+                            .setTimeoutSeconds(15)
+                            .setIssuedAt(System.currentTimeMillis())
+                            .setCorrectAnswerIndex(it.correctIdx())  // ✅ 정답 포함
+                            .build())
+                    .build();
+            broadcaster.accept(msg);
+        }
+    }
+
+    // ChatGrpcService 클래스 바깥 메서드 (외부에서 사용)
+    private void broadcastToRoom(Long groupId, ChatMessage msg) {
+        Set<StreamObserver<ChatMessage>> observers = roomObservers.get(groupId);
+        if (observers == null || observers.isEmpty()) return;
+
+        // 예외 난 스트림 정리
+        List<StreamObserver<ChatMessage>> toRemove = new ArrayList<>();
+
+        for (StreamObserver<ChatMessage> observer : observers) {
+            try {
+                observer.onNext(msg);
+            } catch (Exception e) {
+                toRemove.add(observer);
+            }
+        }
+
+        // 끊긴 스트림 제거
+        for (StreamObserver<ChatMessage> o : toRemove) {
+            observers.remove(o);
+            try { o.onCompleted(); } catch (Exception ignored) {}
+        }
+    }
+
+
+    @PreDestroy
+    public void shutdownScheduler() {
+        scheduler.shutdownNow();
+    }
+
+
 }
