@@ -20,6 +20,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.LocalTextSelectionColors
 import androidx.compose.foundation.text.selection.TextSelectionColors
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.ripple.rememberRipple
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -138,6 +140,11 @@ fun PdfReadScreen(
 
     val userColors by viewModel.colorByUser.collectAsState()
 
+    val selectedHighlights by viewModel.selectedHighlights.collectAsState()
+    val highlightPopupPoint by viewModel.highlightPopupPoint.collectAsState()
+    val showHighlightPopup by viewModel.showHighlightPopup.collectAsState()
+
+
 
     //grpc
 
@@ -247,6 +254,14 @@ fun PdfReadScreen(
         commentText = ""
         showCommentDialog = true
     }
+
+    LaunchedEffect(showHighlightPopup) {
+        if (showHighlightPopup) {
+            kotlinx.coroutines.delay(3000)
+            viewModel.hideHighlightPopup()
+        }
+    }
+
 
     // 텍스트 선택 옵션 창
     val textSelectionOptionsWindow = remember {
@@ -579,6 +594,11 @@ fun PdfReadScreen(
                                             Log.d("PdfReadScreen", "댓글 클릭: ${comments.size}개")
                                         }
 
+                                        override fun onHighlightClicked(highlights: List<HighlightModel>, pointOfHighlight: PointF) {
+                                            viewModel.showHighlightPopup(highlights, pointOfHighlight)
+                                            Log.d("PdfReadScreen", "하이라이트 클릭: ${highlights.size}개")
+                                        }
+
                                         override fun loadTopPdfChunk(
                                             mergeId: Int,
                                             pageIndexToLoad: Int
@@ -711,39 +731,16 @@ fun PdfReadScreen(
                 textSelectionOptionsWindow.ComposeContent()
             }
 
-            // 댓글 팝업
-            if (showCommentPopup) {
-                Card(
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .padding(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp)
-                    ) {
-                        Text(
-                            text = "댓글 (${selectedComments.size}개)",
-                            fontSize = 16.sp,
-                            color = Color.Black
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        selectedComments.forEach { comment ->
-                            Text(
-                                text = comment.text,
-                                fontSize = 14.sp,
-                                modifier = Modifier.padding(vertical = 4.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Button(
-                            onClick = { viewModel.hideCommentPopup() }
-                        ) {
-                            Text("닫기")
-                        }
-                    }
-                }
+            if (showCommentPopup && selectedComments.isNotEmpty()) {
+                CommentPopupDialogMini(
+                    comments = selectedComments,                // distinctBy(id) 적용됨
+                    currentUserId = userId,
+                    onDelete = { id -> viewModel.deleteComment(id); viewModel.hideCommentPopup() },
+                    onDismiss = { viewModel.hideCommentPopup() }
+                )
             }
+
+
 
             // 댓글 작성 다이얼로그
             if (showCommentDialog && commentDialogData != null) {
@@ -762,21 +759,6 @@ fun PdfReadScreen(
                     },
                     text = {
                         Column {
-                            Text(
-                                text = "선택된 텍스트:",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = Color.Gray
-                            )
-                            Text(
-                                text = "\"${commentDialogData!!.first}\"",
-                                fontSize = 14.sp,
-                                modifier = Modifier.padding(vertical = 4.dp),
-                                style = androidx.compose.ui.text.TextStyle(
-                                    background = BaseColor.copy(alpha = 0.3f)
-                                )
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
                             CompositionLocalProvider(
                                 LocalTextSelectionColors provides TextSelectionColors(
                                     handleColor = BaseColor, // 드래그 핸들(물방울) 색상
@@ -923,6 +905,21 @@ fun PdfReadScreen(
                     }
                 )
             }
+
+// 중앙 Dialog로 간단 팝업
+            if (showHighlightPopup && selectedHighlights.isNotEmpty()) {
+                HighlightPopupDialogMini(
+                    highlights = selectedHighlights,      // distinctBy(id)된 리스트(이미 ViewModel에서 처리)
+                    currentUserId = userId,
+                    onDelete = { id ->
+                        viewModel.deleteHighlight(id)
+                        viewModel.hideHighlightPopup()
+                    },
+                    onDismiss = { viewModel.hideHighlightPopup() }
+                )
+            }
+
+
 
 
 
@@ -1163,18 +1160,41 @@ private fun ParticipantRow(
             .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+
         Box(
             modifier = Modifier
                 .size(40.dp)
                 .clip(CircleShape)
-                .border(borderWidth, borderColor, CircleShape)
-                .background(avatarBg),
+                .background(avatarBg)
+                .then(
+                    if (isLeader) Modifier.border(2.dp, Color(0xFFFFC107), CircleShape) // 금색 테두리
+                    else Modifier
+                ),
             contentAlignment = Alignment.Center
         ) {
+            val initial = userName.firstOrNull()?.uppercaseChar()?.toString() ?: "🙂"
             Text(
-                text = userName.firstOrNull()?.uppercase() ?: "🙂",
-                fontWeight = FontWeight.Bold
+                text = initial,
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = (40 * 0.45f).sp
             )
+
+            if (isLeader) {
+                // 오른쪽 위 왕관 배지
+                Box(
+                    modifier = Modifier
+                        .size((40 * 0.38f).dp)                 // 배지 크기
+                        .align(Alignment.TopEnd)
+                        .offset(x = (40 * 0.04f).dp, y = -(40 * 0.04f).dp) // 살짝 밖으로
+                        .clip(CircleShape)
+                        .background(Color(0xFFFFF8E1))      // 밝은 배경
+                        .border(1.dp, Color(0xFFFFC107), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("👑", fontSize = (40 * 0.22f).sp)
+                }
+            }
         }
 
         Spacer(Modifier.width(12.dp))
@@ -1196,9 +1216,6 @@ private fun ParticipantRow(
             )
             if (me) {
                 Spacer(Modifier.width(6.dp)); AssistChip(text = "나")
-            }
-            if (isLeader) {
-                Spacer(Modifier.width(6.dp)); AssistChip(text = "리더")
             }
             if (readingMode == PdfViewModel.ReadingMode.FREE) {
                 Spacer(Modifier.width(6.dp)); AssistChip(text = if (online) "온라인" else "오프라인")
@@ -1302,6 +1319,174 @@ fun ModeSwitch(
                 .background(thumb)
                 .border(1.dp, Color(0x14000000), CircleShape)
         )
+    }
+}
+
+@Composable
+private fun HighlightPopupDialogMini(
+    highlights: List<HighlightModel>,
+    currentUserId: String,
+    onDelete: (Long) -> Unit,
+    onDismiss: () -> Unit
+) {
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true,
+            usePlatformDefaultWidth = true // 기본 너비 → 작은 팝업
+        )
+    ) {
+        Card(
+            shape = RoundedCornerShape(14.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            modifier = Modifier.widthIn(max = 320.dp)
+        ) {
+            Column(Modifier.padding(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("하이라이트", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.width(6.dp))
+                    // 개수 배지(정확한 카운트)
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(BaseColor.copy(alpha = 0.12f))
+                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                    ) { Text("${highlights.size}", fontSize = 11.sp, color = BaseColor) }
+                    Spacer(Modifier.weight(1f))
+                    TextButton(onClick = onDismiss) { Text("닫기") }
+                }
+                Spacer(Modifier.height(6.dp))
+
+                // 색 점 + (내 것이면) 삭제 아이콘만
+                highlights.forEach { hl ->
+                    val isMine = hl.userId == currentUserId
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(36.dp)
+                            .padding(start = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(14.dp)
+                                .clip(CircleShape)
+                                .background(hl.color.toComposeColorOrDefault(Color(0xFFE5E7EB)))
+                        )
+                        Spacer(Modifier.weight(1f))
+                        if (isMine) {
+                            IconButton(onClick = { onDelete(hl.id) }) {
+                                Icon(
+                                    imageVector = androidx.compose.material.icons.Icons.Default.Delete,
+                                    contentDescription = "삭제"
+                                )
+                            }
+                        } else {
+                            Icon(
+                                imageVector = androidx.compose.material.icons.Icons.Default.Lock,
+                                contentDescription = null,
+                                tint = Color(0xFF94A3B8)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CommentPopupDialogMini(
+    comments: List<CommentModel>,
+    currentUserId: String,
+    onDelete: (Long) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val items = remember(comments) { comments.distinctBy { it.id } } // ★ 정확한 카운트
+
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true,
+            usePlatformDefaultWidth = true
+        )
+    ) {
+        Card(
+            shape = RoundedCornerShape(14.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 10.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            modifier = Modifier.widthIn(max = 360.dp)
+        ) {
+            Column(Modifier.padding(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("댓글", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.width(6.dp))
+                    // ★ 칩 스타일 배지
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(BaseColor.copy(alpha = 0.12f))
+                            .border(1.dp, BaseColor.copy(alpha = 0.25f), RoundedCornerShape(999.dp))
+                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                    ) { Text("${items.size}", fontSize = 11.sp, color = BaseColor, fontWeight = FontWeight.SemiBold) }
+                    Spacer(Modifier.weight(1f))
+                    TextButton(onClick = onDismiss) { Text("닫기") }
+                }
+
+                Spacer(Modifier.height(6.dp))
+
+                items.forEachIndexed { idx, c ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // ★ 말풍선 느낌 박스
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0xFFF8FAFC))
+                                .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(12.dp))
+                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                        ) {
+                            Text(
+                                c.text,
+                                fontSize = 13.sp,
+                                color = Color(0xFF334155),
+                                lineHeight = 18.sp
+                            )
+                        }
+
+                        Spacer(Modifier.width(8.dp))
+
+                        if (c.userId == currentUserId) {
+                            IconButton(onClick = { onDelete(c.id) }) {
+                                Icon(
+                                    imageVector = androidx.compose.material.icons.Icons.Default.Delete,
+                                    contentDescription = "삭제",
+                                )
+                            }
+                        } else {
+                            Icon(
+                                imageVector = androidx.compose.material.icons.Icons.Default.Lock,
+                                contentDescription = null,
+                                tint = Color(0xFF94A3B8)
+                            )
+                        }
+                    }
+
+                    if (idx != items.lastIndex) {
+                        Spacer(Modifier.height(2.dp))
+                        Divider(color = Color(0xFFE2E8F0))
+                    }
+                }
+            }
+        }
     }
 }
 
