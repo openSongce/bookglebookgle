@@ -32,6 +32,7 @@ public class ChatRoom {
     private LocalDateTime lastMessageTime;
     private int memberCount;
 
+    @Builder.Default
     @OneToMany(mappedBy = "chatRoom", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ChatRoomMember> chatRoomMembers = new ArrayList<>();
 }
