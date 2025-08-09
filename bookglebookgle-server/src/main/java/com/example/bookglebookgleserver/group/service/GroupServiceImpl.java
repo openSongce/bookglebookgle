@@ -255,13 +255,12 @@ public class GroupServiceImpl implements GroupService {
     }
 
     // ✅ Accept 헤더 기반: PDF 혹은 ZIP
-    @Override
-    public ResponseEntity<?> getPdfResponse(Long groupId, User user, String accept) {
-        boolean isMember = groupMemberRepository.isMember(groupId, user.getId());
-        log.debug("📌 PDF 요청: groupId={}, userId={}, isMember={}", groupId, user.getId(), isMember);
 
-        if (!isMember) {
-            throw new ForbiddenException("다운로드 권한 없음(그룹 미가입)");
+    // after
+    @Override
+    public ResponseEntity<StreamingResponseBody> getPdfResponse(Long groupId, User user, String accept) {
+        if (!groupMemberRepository.isMember(groupId, user.getId())) {
+            throw new ForbiddenException("해당 그룹에 속해 있지 않습니다.");
         }
 
         PdfFile pdfFile = pdfFileRepository.findByGroup_Id(groupId)
@@ -271,19 +270,28 @@ public class GroupServiceImpl implements GroupService {
         boolean hasOcr = pdfFile.isHasOcr();
 
         if (wantZip && hasOcr) {
-            return getPdfAndOcrZip(groupId, user);
+            return getPdfAndOcrZip(groupId, user); // 이미 StreamingResponseBody 반환
         }
 
         File file = new File(pdfFile.getFilePath());
         if (!file.exists()) throw new NotFoundException("서버에 PDF 파일이 존재하지 않습니다.");
 
         String filename = safeFilename(pdfFile.getFileName());
+
+        StreamingResponseBody body = outputStream -> {
+            try (java.io.FileInputStream in = new java.io.FileInputStream(file)) {
+                in.transferTo(outputStream);
+                outputStream.flush();
+            }
+        };
+
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_PDF)
                 .header("Content-Disposition", "inline; filename=\"" + filename + "\"")
                 .header("X-OCR-Available", String.valueOf(hasOcr))
-                .body(new org.springframework.core.io.FileSystemResource(file));
+                .body(body);
     }
+
 
     @Override
     public ResponseEntity<StreamingResponseBody> getPdfAndOcrZip(Long groupId, User user) {

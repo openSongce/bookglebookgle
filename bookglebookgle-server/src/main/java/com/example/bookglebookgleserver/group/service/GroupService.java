@@ -37,7 +37,7 @@ public interface GroupService {
 
     ResponseEntity<Resource> getPdfFileResponse(Long groupId, User user);
 
-    ResponseEntity<?> getPdfResponse(Long groupId, User user, String accept);
+    ResponseEntity<StreamingResponseBody> getPdfResponse(Long groupId, User user, String accept);
 
     ResponseEntity<StreamingResponseBody> getPdfAndOcrZip(Long groupId, User user);
 }
