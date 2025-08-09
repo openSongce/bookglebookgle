@@ -23,7 +23,6 @@ import com.example.bookglebookgleserver.pdf.repository.PdfFileRepository;
 import com.example.bookglebookgleserver.pdf.util.PdfUtils;
 import com.example.bookglebookgleserver.user.entity.User;
 import com.example.bookglebookgleserver.user.repository.UserRepository;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -37,15 +36,12 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.TimeZone;
 import java.util.UUID;
 import java.util.stream.Collectors;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipOutputStream;
 
 @Slf4j
 @Service
@@ -239,7 +235,7 @@ public class GroupServiceImpl implements GroupService {
     // (호환) PDF만 반환
     @Override
     public ResponseEntity<Resource> getPdfFileResponse(Long groupId, User user) {
-        if (!groupMemberRepository.existsByGroup_IdAndUser_Id(groupId, user.getId())) {
+        if (!groupMemberRepository.isMember(groupId, user.getId())) {
             throw new ForbiddenException("해당 그룹에 속해 있지 않습니다.");
         }
 
@@ -261,14 +257,17 @@ public class GroupServiceImpl implements GroupService {
     // ✅ Accept 헤더 기반: PDF 혹은 ZIP
     @Override
     public ResponseEntity<?> getPdfResponse(Long groupId, User user, String accept) {
-        if (!groupMemberRepository.existsByGroup_IdAndUser_Id(groupId, user.getId())) {
-            throw new ForbiddenException("해당 그룹에 속해 있지 않습니다.");
+        boolean isMember = groupMemberRepository.isMember(groupId, user.getId());
+        log.debug("📌 PDF 요청: groupId={}, userId={}, isMember={}", groupId, user.getId(), isMember);
+
+        if (!isMember) {
+            throw new ForbiddenException("다운로드 권한 없음(그룹 미가입)");
         }
 
         PdfFile pdfFile = pdfFileRepository.findByGroup_Id(groupId)
                 .orElseThrow(() -> new NotFoundException("PDF 파일이 없습니다."));
 
-        boolean wantZip = accept != null && accept.contains("application/zip");
+        boolean wantZip = wantsZip(accept);
         boolean hasOcr = pdfFile.isHasOcr();
 
         if (wantZip && hasOcr) {
@@ -278,17 +277,17 @@ public class GroupServiceImpl implements GroupService {
         File file = new File(pdfFile.getFilePath());
         if (!file.exists()) throw new NotFoundException("서버에 PDF 파일이 존재하지 않습니다.");
 
+        String filename = safeFilename(pdfFile.getFileName());
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_PDF)
-                .header("Content-Disposition", "inline; filename=\"" + pdfFile.getFileName() + "\"")
+                .header("Content-Disposition", "inline; filename=\"" + filename + "\"")
                 .header("X-OCR-Available", String.valueOf(hasOcr))
-                .body(new FileSystemResource(file));
+                .body(new org.springframework.core.io.FileSystemResource(file));
     }
 
-    // ✅ ZIP(document.pdf + ocr.json) 스트리밍
     @Override
     public ResponseEntity<StreamingResponseBody> getPdfAndOcrZip(Long groupId, User user) {
-        if (!groupMemberRepository.existsByGroup_IdAndUser_Id(groupId, user.getId())) {
+        if (!groupMemberRepository.isMember(groupId, user.getId())) {
             throw new ForbiddenException("해당 그룹에 속해 있지 않습니다.");
         }
 
@@ -296,32 +295,28 @@ public class GroupServiceImpl implements GroupService {
                 .orElseThrow(() -> new NotFoundException("PDF 파일이 없습니다."));
         File file = new File(pdfFile.getFilePath());
         if (!file.exists()) throw new NotFoundException("서버에 PDF 파일이 존재하지 않습니다.");
+        if (!pdfFile.isHasOcr()) throw new BadRequestException("해당 PDF는 OCR 결과가 없습니다.");
 
-        if (!pdfFile.isHasOcr()) {
-            throw new BadRequestException("해당 PDF는 OCR 결과가 없습니다.");
-        }
-
-        // OCR 블록 조회 → JSON 직렬화
-        List<OcrTextBlockDto> blocks = ocrService.getOcrBlocksByPdfId(pdfFile.getPdfId());
-        ObjectMapper om = new ObjectMapper();
-        final String ocrJson;
+        // OCR 직렬화
+        var blocks = ocrService.getOcrBlocksByPdfId(pdfFile.getPdfId());
+        String ocrJson;
         try {
-            ocrJson = om.writeValueAsString(blocks);
+            ocrJson = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(blocks);
         } catch (Exception e) {
             throw new BadRequestException("OCR 직렬화 실패: " + e.getMessage());
         }
 
         StreamingResponseBody body = outputStream -> {
-            try (ZipOutputStream zos = new ZipOutputStream(outputStream)) {
+            try (java.util.zip.ZipOutputStream zos = new java.util.zip.ZipOutputStream(outputStream)) {
                 // 1) PDF
-                zos.putNextEntry(new ZipEntry("document.pdf"));
-                try (FileInputStream in = new FileInputStream(file)) {
+                zos.putNextEntry(new java.util.zip.ZipEntry("document.pdf"));
+                try (java.io.FileInputStream in = new java.io.FileInputStream(file)) {
                     in.transferTo(zos);
                 }
                 zos.closeEntry();
 
                 // 2) OCR JSON
-                zos.putNextEntry(new ZipEntry("ocr.json"));
+                zos.putNextEntry(new java.util.zip.ZipEntry("ocr.json"));
                 zos.write(ocrJson.getBytes(java.nio.charset.StandardCharsets.UTF_8));
                 zos.closeEntry();
 
@@ -329,12 +324,28 @@ public class GroupServiceImpl implements GroupService {
             }
         };
 
-        String zipName = "group-" + groupId + "-pdf-with-ocr.zip";
+        String zipName = safeFilename("group-" + groupId + "-pdf-with-ocr.zip");
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType("application/zip"))
                 .header("Content-Disposition", "attachment; filename=\"" + zipName + "\"")
                 .header("X-OCR-Available", "true")
+                // Nginx 사용 시 버퍼링 방지(선택): .header("X-Accel-Buffering","no")
                 .body(body);
+    }
+
+    private static boolean wantsZip(String accept) {
+        if (accept == null || accept.isBlank()) return false;
+        try {
+            for (var mt : MediaType.parseMediaTypes(accept)) {
+                if (mt.isCompatibleWith(MediaType.valueOf("application/zip"))) return true;
+            }
+        } catch (Exception ignored) {}
+        return false;
+    }
+
+    private static String safeFilename(String name) {
+        if (name == null) return "document";
+        return name.replaceAll("[\\r\\n\"]", "_");
     }
 
     @Override
@@ -490,7 +501,7 @@ public class GroupServiceImpl implements GroupService {
 
     @Override
     public boolean isMember(Long groupId, Long userId) {
-        return groupMemberRepository.existsByGroup_IdAndUser_Id(groupId, userId);
+        return groupMemberRepository.isMember(groupId, userId);
     }
 
     @Override
