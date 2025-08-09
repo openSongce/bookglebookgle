@@ -2,6 +2,7 @@ package com.example.bookglebookgleserver.ocr.service;
 
 import com.bgbg.ai.grpc.AIServiceProto.ProcessPdfResponse;
 import com.bgbg.ai.grpc.AIServiceProto.TextBlock;
+import com.example.bookglebookgleserver.ocr.dto.OcrTextBlockDto;
 import com.example.bookglebookgleserver.ocr.entity.OcrResult;
 import com.example.bookglebookgleserver.ocr.repository.OcrResultRepository;
 import com.example.bookglebookgleserver.pdf.entity.PdfFile;
@@ -36,5 +37,20 @@ public class OcrService {
         }
 
         ocrResultRepository.saveAll(results);
+    }
+
+    // ✅ 추가: pdfId로 OCR 블록 조회 (GroupServiceImpl의 ZIP 응답에서 사용)
+    @Transactional(readOnly = true)
+    public List<OcrTextBlockDto> getOcrBlocksByPdfId(Long pdfId) {
+        return ocrResultRepository.findByPdfFile_PdfId(pdfId).stream()
+                .map(e -> OcrTextBlockDto.builder()
+                        .pageNumber(e.getPageNumber())
+                        .text(e.getText())
+                        .rectX(e.getRectX())
+                        .rectY(e.getRectY())
+                        .rectW(e.getRectW())
+                        .rectH(e.getRectH())
+                        .build())
+                .toList();
     }
 }
