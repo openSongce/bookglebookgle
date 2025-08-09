@@ -7,7 +7,6 @@ import com.example.bookglebookgleserver.group.service.GroupService;
 import com.example.bookglebookgleserver.user.entity.User;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -19,6 +18,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 import java.util.List;
 
@@ -108,16 +108,9 @@ public class GroupController {
                     @ApiResponse(responseCode = "404", description = "그룹 또는 PDF 없음")
             }
     )
-    @GetMapping(value = "/{groupId}/pdf")
-    public ResponseEntity<?> getGroupPdf(
-            @Parameter(description = "그룹 ID") @PathVariable Long groupId,
-            @Parameter(
-                    in = ParameterIn.HEADER,
-                    name = "Accept",
-                    description = "원하는 응답 포맷 (application/pdf | application/zip)",
-                    schema = @Schema(allowableValues = { MediaType.APPLICATION_PDF_VALUE, "application/zip" }),
-                    required = false
-            )
+    @GetMapping("/{groupId}/pdf") // produces 제거 유지
+    public ResponseEntity<StreamingResponseBody> getGroupPdf(
+            @PathVariable Long groupId,
             @RequestHeader(value = "Accept", required = false, defaultValue = MediaType.APPLICATION_PDF_VALUE) String accept,
             @AuthenticationPrincipal CustomUserDetails customUser
     ) {
