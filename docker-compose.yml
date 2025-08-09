@@ -25,13 +25,8 @@ services:
     depends_on:
       - mysql
       - redis
-    environment:
-      DB_USERNAME: root
-      DB_PASSWORD: ${DB_PASSWORD}
-      MAIL_USERNAME: ${MAIL_USERNAME}
-      MAIL_PASSWORD: ${MAIL_PASSWORD}
-      # 🔐 Jenkins에서 흘러오는 환경변수 (파일에 쓰지 않음)
-      FIREBASE_CREDENTIALS_BASE64: ${FIREBASE_CREDENTIALS_BASE64}
+    env_file:
+      - ./bookglebookgle-server/.env
     volumes:
       - ./backend-logs:/logs
       - /home/ubuntu/bookglebookgle-server/uploads:/home/ubuntu/pdf-uploads
