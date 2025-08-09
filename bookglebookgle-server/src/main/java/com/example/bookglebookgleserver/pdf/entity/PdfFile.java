@@ -46,4 +46,10 @@ public class PdfFile {
         this.group = group;
     }
 
+    // ✅ 추가
+    @Column(name = "image_based", nullable = false)
+    private boolean imageBased;   // 클라이언트 의도/메타
+
+    @Column(name = "has_ocr", nullable = false)
+    private boolean hasOcr;       // 실제 OCR 결과 존재 여부(분기용)
 }
