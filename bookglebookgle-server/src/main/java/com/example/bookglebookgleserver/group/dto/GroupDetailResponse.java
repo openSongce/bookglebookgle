@@ -23,9 +23,14 @@ public record GroupDetailResponse(
         boolean isHost,
         @Schema(description = "최소 요구 평점", example = "3")
         int minRequiredRating,
+
         // ✅ 추가
         @Schema(description = "PDF 총 페이지 수", example = "120")
         int pageCount,
         @Schema(description = "멤버 상세 리스트")
-        List<GroupMemberDetailDto> members
+        List<GroupMemberDetailDto> members,
+
+        @Schema(description = "완독 여부", example = "false")
+        boolean isCompleted
+
 ) {}

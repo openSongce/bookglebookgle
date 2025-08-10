@@ -23,7 +23,7 @@ import com.example.bookglebookgleserver.pdf.repository.PdfFileRepository;
 import com.example.bookglebookgleserver.pdf.util.PdfUtils;
 import com.example.bookglebookgleserver.user.entity.User;
 import com.example.bookglebookgleserver.user.repository.UserRepository;
-import jakarta.transaction.Transactional;
+import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.FileSystemResource;
@@ -39,6 +39,7 @@ import java.io.File;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.TimeZone;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -178,7 +179,7 @@ public class GroupServiceImpl implements GroupService {
                 .group(group)
                 .user(user)
                 .isHost(true)
-                .lastPageRead(0)
+                .maxReadPage(0)
                 .progressPercent(0f)
                 .isFollowingHost(false)
                 .build();
@@ -212,46 +213,84 @@ public class GroupServiceImpl implements GroupService {
                 })
                 .collect(Collectors.toList());
     }
-
-    @Override
-    @Transactional()
+    @Transactional(readOnly = true)
     public GroupDetailResponse getGroupDetail(Long groupId, User requester) {
-        Group group = groupRepository.findByIdWithPdfAndMembers(groupId)
+        Group group = groupRepository.findById(groupId)
                 .orElseThrow(() -> new NotFoundException("해당 모임이 존재하지 않습니다."));
 
         int pageCount = resolvePageCount(group);
         boolean requesterIsHost = group.getHostUser().getId().equals(requester.getId());
 
-        List<GroupMember> gmList = group.getGroupMembers(); // fetch join으로 이미 로드됨
+        // 한 쿼리로 DTO 바로 받아오기
+        List<GroupMemberDetailDto> members =
+                groupMemberRepository.findMemberDetailsByGroupId(groupId, pageCount);
 
-        List<GroupMemberDetailDto> members = gmList.stream().map(gm -> {
-            var u = gm.getUser();
-            int last = Math.max(0, gm.getLastPageRead());
-            int progress = (pageCount > 0) ? (int) Math.round((last * 100.0) / pageCount) : 0;
-            return new GroupMemberDetailDto(
-                    u.getId(),
-                    u.getNickname(),
-                    u.getProfileColor(),
-                    last,
-                    progress,
-                    gm.isHost()
-            );
-        }).toList();
+
+        // 요청자 완독 여부
+        boolean requesterCompleted = members.stream()
+                .filter(m -> Objects.equals(m.userId(), requester.getId()))
+                .findFirst()
+                .map(GroupMemberDetailDto::isCompleted)
+                .orElse(false);
 
         return new GroupDetailResponse(
                 group.getRoomTitle(),
                 group.getCategory().name(),
                 group.getSchedule(),
-                gmList.size(),
+                members.size(),
                 group.getGroupMaxNum(),
                 group.getDescription(),
                 null,
                 requesterIsHost,
                 group.getMinRequiredRating(),
                 pageCount,
-                members
+                members,
+                requesterCompleted
         );
     }
+
+//    @Override
+//    @Transactional()
+//    public GroupDetailResponse getGroupDetail(Long groupId, User requester) {
+//        Group group = groupRepository.findByIdWithPdfAndMembers(groupId)
+//                .orElseThrow(() -> new NotFoundException("해당 모임이 존재하지 않습니다."));
+//
+//        int pageCount = resolvePageCount(group);
+//
+//        log.info("📄 그룹 ID={} 의 PDF 총 페이지 수: {}", groupId, pageCount);
+//
+//        boolean requesterIsHost = group.getHostUser().getId().equals(requester.getId());
+//
+//        List<GroupMember> gmList = group.getGroupMembers(); // fetch join으로 이미 로드됨
+//
+//        List<GroupMemberDetailDto> members = gmList.stream().map(gm -> {
+//            var u = gm.getUser();
+//            int last = Math.max(0, gm.getLastPageRead());
+//            int progress = (pageCount > 0) ? (int) Math.round((last * 100.0) / pageCount) : 0;
+//            return new GroupMemberDetailDto(
+//                    u.getId(),
+//                    u.getNickname(),
+//                    u.getProfileColor(),
+//                    last,
+//                    progress,
+//                    gm.isHost()
+//            );
+//        }).toList();
+//
+//        return new GroupDetailResponse(
+//                group.getRoomTitle(),
+//                group.getCategory().name(),
+//                group.getSchedule(),
+//                gmList.size(),
+//                group.getGroupMaxNum(),
+//                group.getDescription(),
+//                null,
+//                requesterIsHost,
+//                group.getMinRequiredRating(),
+//                pageCount,
+//                members
+//        );
+//    }
 
 
 
@@ -402,7 +441,7 @@ public class GroupServiceImpl implements GroupService {
                 .group(group)
                 .user(user)
                 .isHost(false)
-                .lastPageRead(0)
+                .maxReadPage(0)
                 .progressPercent(0f)
                 .isFollowingHost(false)
                 .build();
@@ -471,17 +510,25 @@ public class GroupServiceImpl implements GroupService {
 
         List<GroupMemberDetailDto> members = gmList.stream().map(gm -> {
             var u = gm.getUser();
-            int last = Math.max(0, gm.getLastPageRead());
-            int progress = (pageCount > 0) ? (int) Math.round((last * 100.0) / pageCount) : 0;
+            int max = Math.max(0, gm.getMaxReadPage());
+            int progress = (pageCount > 0) ? (int) Math.round((max * 100.0) / pageCount) : 0;
+            boolean completed = pageCount > 0 && max >= pageCount;
+
             return new GroupMemberDetailDto(
                     u.getId(),
                     u.getNickname(),
                     u.getProfileColor(),
-                    last,
+                    max,
                     progress,
-                    gm.isHost()
+                    gm.isHost(),
+                    completed
             );
         }).toList();
+
+        // 요청자 완독 여부 계산해서 응답에 포함 (getGroupDetail과 동일 정책)
+        boolean requesterCompleted = members.stream()
+                .anyMatch(m -> Objects.equals(m.userId(), user.getId()) && m.isCompleted());
+
 
         return new GroupDetailResponse(
                 loaded.getRoomTitle(),
@@ -494,7 +541,8 @@ public class GroupServiceImpl implements GroupService {
                 isHost,
                 loaded.getMinRequiredRating(),
                 pageCount,
-                members
+                members,
+                requesterCompleted
         );
     }
 
@@ -571,7 +619,7 @@ public class GroupServiceImpl implements GroupService {
                 .orElseThrow(() -> new NotFoundException("유저를 찾을 수 없습니다."));
         GroupMember member = groupMemberRepository.findByGroupAndUser(group, user)
                 .orElseThrow(() -> new NotFoundException("해당 그룹 멤버를 찾을 수 없습니다."));
-        return member.getLastPageRead();
+        return member.getMaxReadPage();
     }
 
     @Override
@@ -598,5 +646,9 @@ public class GroupServiceImpl implements GroupService {
         // totalPages가 int면 그대로, Integer면 null 가드
         try { return group.getTotalPages(); } catch (NullPointerException e) { return 0; }
     }
+
+
+
+
 
 }

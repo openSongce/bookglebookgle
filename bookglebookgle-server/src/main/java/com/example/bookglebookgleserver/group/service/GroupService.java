@@ -40,4 +40,7 @@ public interface GroupService {
     ResponseEntity<StreamingResponseBody> getPdfResponse(Long groupId, User user, String accept);
 
     ResponseEntity<StreamingResponseBody> getPdfAndOcrZip(Long groupId, User user);
+
 }
+
+

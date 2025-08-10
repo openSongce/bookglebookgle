@@ -170,19 +170,5 @@ public class GroupController {
         return ResponseEntity.noContent().build();
     }
 
-    @Operation(summary = "마지막으로 본 페이지 조회", description = "특정 참여자의 마지막 열람 페이지를 조회합니다.")
-    @ApiResponse(responseCode = "200", description = "조회 성공",
-            content = @Content(schema = @Schema(implementation = LastPageReadResponseDto.class)))
-    @ApiResponse(responseCode = "403", description = "본인만 조회 가능")
-    @GetMapping("/{groupId}/members/{userId}/last-page")
-    public ResponseEntity<LastPageReadResponseDto> getLastPageRead(
-            @Parameter(description = "그룹 ID") @PathVariable Long groupId,
-            @Parameter(description = "사용자 ID(본인)") @PathVariable Long userId,
-            @AuthenticationPrincipal CustomUserDetails userDetails
-    ) {
-        if (!userDetails.getUser().getId().equals(userId)) {
-            throw new ForbiddenException("본인만 조회할 수 있습니다.");
-        }
-        return ResponseEntity.ok(new LastPageReadResponseDto(groupService.getLastPageRead(groupId, userId)));
-    }
+
 }

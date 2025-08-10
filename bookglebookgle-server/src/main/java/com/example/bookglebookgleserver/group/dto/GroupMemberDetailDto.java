@@ -10,10 +10,13 @@ public record GroupMemberDetailDto(
         String userNickName,
         @Schema(description = "프로필 컬러", example = "#A1B2C3")
         String profileColor,
-        @Schema(description = "마지막 읽은 페이지(0-based)", example = "45")
-        int lastPageRead,
+        @Schema(description = "최대 읽은 페이지(0-based)", example = "45")
+        int maxReadPage,
         @Schema(description = "진행 퍼센트(0~100)", example = "38")
         int progressPercent,
         @Schema(description = "방장 여부", example = "false")
-        boolean isHost
+        boolean isHost,
+
+        @Schema(description = "완독 여부", example = "false")
+        boolean isCompleted
 ) {}

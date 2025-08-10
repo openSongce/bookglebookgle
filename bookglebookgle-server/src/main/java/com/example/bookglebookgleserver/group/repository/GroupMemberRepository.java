@@ -1,9 +1,11 @@
 package com.example.bookglebookgleserver.group.repository;
 
+import com.example.bookglebookgleserver.group.dto.GroupMemberDetailDto;
 import com.example.bookglebookgleserver.group.entity.Group;
 import com.example.bookglebookgleserver.group.entity.GroupMember;
 import com.example.bookglebookgleserver.user.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -32,6 +34,48 @@ public interface GroupMemberRepository extends JpaRepository<GroupMember, Long> 
     // 미완료한 모임 수
     @Query("SELECT COUNT(gm) FROM GroupMember gm WHERE gm.user.id = :userId AND gm.progressPercent < 100")
     int countIncompleteGroupsByUserId(@Param("userId") Long userId);
+
+
+    @Query("""
+select new com.example.bookglebookgleserver.group.dto.GroupMemberDetailDto(
+    u.id,
+    u.nickname,
+    u.profileColor,
+    coalesce(prp.maxReadPage, 0),
+    case 
+        when :pageCount > 0 then (coalesce(prp.maxReadPage, 0) * 100) / :pageCount
+        else 0
+    end,
+    gm.isHost,
+    case 
+        when :pageCount > 0 and coalesce(prp.maxReadPage, 0) >= :pageCount then true 
+        else false 
+    end
+)
+from GroupMember gm
+join gm.user u
+left join PdfReadingProgress prp 
+    on prp.group = gm.group and prp.user = u
+where gm.group.id = :groupId
+""")
+    List<GroupMemberDetailDto> findMemberDetailsByGroupId(@Param("groupId") Long groupId,
+                                                          @Param("pageCount") int pageCount);
+
+      @Modifying(clearAutomatically = true, flushAutomatically = true)
+        @Query("""
+        update GroupMember gm
+           set gm.maxReadPage = case 
+             when gm.maxReadPage < :page then :page 
+             else gm.maxReadPage 
+             end
+         where gm.group.id = :groupId and gm.user.id = :userId
+    """)
+        int bumpMaxReadPage(@Param("groupId") Long groupId,
+                            @Param("userId") Long userId,
+                            @Param("page") int page);
+
+
+
 
     List<GroupMember> findByGroup(Group group);
 }
