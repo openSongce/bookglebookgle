@@ -14,7 +14,6 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.pdfnotemate.ui.activity.home.PdfScreen
 import com.ssafy.bookglebookgle.ui.screen.PdfReadScreen
-import com.example.pdfnotemate.ui.activity.reader.PdfReaderScreen
 import com.ssafy.bookglebookgle.pdf.response.PdfNoteListModel
 import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.BookmarkModel
 import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.CommentModel
@@ -169,29 +168,11 @@ fun MainNavigation(
                 )
             }
 
-            composable(Screen.PdfReaderScreen.route) {
-                val pdfDetails = navController.previousBackStackEntry
-                    ?.savedStateHandle
-                    ?.get<PdfNoteListModel>(NavKeys.PDF_DETAILS) ?: return@composable
 
-                PdfReaderScreen(
-                    pdfDetails = pdfDetails,
-                    onBackPressed = {
-                        navController.navigateUp()
-                    },
-                    onPdfDeleted = {
-                        navController.previousBackStackEntry
-                            ?.savedStateHandle
-                            ?.set(NavKeys.PDF_DELETED, true)
-                        navController.navigateUp()
-                    }
-                )
-            }
 
             composable(Screen.CommentsListScreen.route) {
                 val comments = navController.previousBackStackEntry
-                    ?.savedStateHandle
-                    ?.get<List<CommentModel>>(NavKeys.COMMENTS) ?: emptyList()
+                    ?.savedStateHandle?.get<List<CommentModel>>(NavKeys.COMMENTS) ?: emptyList()
 
                 CommentsListScreen(
                     initialComments = comments,

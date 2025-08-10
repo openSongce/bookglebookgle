@@ -115,7 +115,7 @@ class GroupRepositoryImpl @Inject constructor(
             if (response.isSuccessful) {
                 Log.d(TAG, "모임 상세 조회 성공 - 응답코드: ${response.code()}")
                 response.body()?.let { groupDetail ->
-                    Log.d(TAG, "조회된 모임 정보 - 제목: ${groupDetail.roomTitle}, 카테고리: ${groupDetail.category}")
+                    Log.d(TAG, "조회된 모임 정보 - 제목: ${groupDetail.roomTitle}, 카테고리: ${groupDetail.category}, ${groupDetail.members}")
                 }
             } else {
                 val errorBody = response.errorBody()?.string()
