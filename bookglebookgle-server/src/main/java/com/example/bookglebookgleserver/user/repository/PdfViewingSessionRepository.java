@@ -6,7 +6,15 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface PdfViewingSessionRepository extends JpaRepository<PdfViewingSession, Long> {
-    @Query("SELECT SUM(p.durationSeconds) FROM PdfViewingSession p WHERE p.user.id = :userId")
+//    @Query("SELECT SUM(p.durationSeconds) FROM PdfViewingSession p " +
+//            "WHERE p.user.id = :userId")
+
+
+    @Query("""
+        select coalesce(sum(p.durationSeconds), 0)
+          from PdfViewingSession p
+         where p.user.id = :userId
+    """)
     Long sumTotalViewingTimeByUserId(@Param("userId") Long userId);
 
 

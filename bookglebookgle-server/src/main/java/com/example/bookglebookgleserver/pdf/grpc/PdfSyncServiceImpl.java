@@ -138,6 +138,7 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
             @Override
             public void onError(Throwable t) {
                 logger.warning("[PDF-SYNC] channel error: " + t.getMessage());
+                recordViewingDuration();
                 handleLeave();
             }
 
