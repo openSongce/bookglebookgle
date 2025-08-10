@@ -31,7 +31,8 @@ public class GroupMember {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    private int maxReadPage;
+    @Column(nullable = false)
+    private int maxReadPage=0;
 
     private float progressPercent;
 

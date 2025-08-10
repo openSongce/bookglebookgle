@@ -9,6 +9,7 @@ import com.example.bookglebookgleserver.common.verification.repository.Verificat
 import com.example.bookglebookgleserver.user.entity.User;
 import com.example.bookglebookgleserver.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -19,6 +20,7 @@ import java.time.LocalDateTime;
 //로그인 로직
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AuthService {
 
     private final UserRepository userRepository;
@@ -68,6 +70,10 @@ public class AuthService {
 
         User user=userRepository.findByEmail(email)
                 .orElseThrow(()->new RuntimeException("존재하지않는 사용자입니다"));
+
+        if (!user.isActive()) {
+            throw new RuntimeException("탈퇴한 계정입니다.");
+        }
 
         if(!passwordEncoder.matches(password, user.getPassword())){
             throw new RuntimeException("비밀번호가 일치하지않습니다");
@@ -150,6 +156,19 @@ public class AuthService {
     //refresh token  저장
     public void saveRefreshToken(String email, String refreshToken) {
         refreshTokenService.saveRefreshToken(email, refreshToken);
+    }
+
+    //계정 비활성화 메서드:
+    public void deactivateUser(String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다."));
+
+        // 계정 상태를 비활성화로 변경
+        user.setActive(false);
+        user.setDeactivatedAt(LocalDateTime.now());
+        userRepository.save(user);
+
+        log.info("계정 비활성화 완료: {}", email);
     }
 
 }
