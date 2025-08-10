@@ -14,6 +14,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -139,7 +140,7 @@ public class AuthController {
             @ApiResponse(responseCode = "500", description = "서버 오류")
     })
     @PostMapping("/signup/email")
-    public ResponseEntity<String> signup(@RequestBody SignupRequest request) {
+    public ResponseEntity<String> signup(@Valid @RequestBody SignupRequest request) {
         try {
             authService.signup(request);
             return ResponseEntity.ok("회원가입 완료");
