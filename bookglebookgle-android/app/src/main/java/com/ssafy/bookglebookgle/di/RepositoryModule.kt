@@ -2,7 +2,6 @@ package com.ssafy.bookglebookgle.di
 
 import com.ssafy.bookglebookgle.repository.AuthRepository
 import com.ssafy.bookglebookgle.repository.AuthRepositoryImpl
-import com.ssafy.bookglebookgle.repository.ChatGrpcRepository
 import com.ssafy.bookglebookgle.repository.ChatRepository
 import com.ssafy.bookglebookgle.repository.ChatRepositoryImpl
 import com.ssafy.bookglebookgle.repository.GroupRepository
@@ -13,6 +12,8 @@ import com.ssafy.bookglebookgle.repository.PdfGrpcRepository
 import com.ssafy.bookglebookgle.repository.PdfGrpcRepositoryImpl
 import com.ssafy.bookglebookgle.repository.PdfRepository
 import com.ssafy.bookglebookgle.repository.PdfRepositoryImpl
+import com.ssafy.bookglebookgle.repository.ProfileRepository
+import com.ssafy.bookglebookgle.repository.ProfileRepositoryImpl
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -60,4 +61,10 @@ abstract class RepositoryModule {
         impl: com.ssafy.bookglebookgle.repository.fcm.FcmRepositoryImpl
     ): com.ssafy.bookglebookgle.repository.fcm.FcmRepository
 
+
+    @Binds
+    @Singleton
+    abstract fun bindProfileRepository(
+        impl: ProfileRepositoryImpl
+    ): ProfileRepository
 }

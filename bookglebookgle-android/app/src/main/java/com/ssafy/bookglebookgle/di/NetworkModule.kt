@@ -21,6 +21,7 @@ import javax.inject.Singleton
 import io.grpc.ManagedChannel
 import io.grpc.ManagedChannelBuilder
 import com.example.bookglebookgleserver.chat.ChatServiceGrpc
+import com.ssafy.bookglebookgle.network.api.ProfileApi
 import java.util.concurrent.TimeUnit
 
 @Module
@@ -127,5 +128,9 @@ object NetworkModule {
     fun provideFcmApi(retrofit: Retrofit): com.ssafy.bookglebookgle.network.api.FcmApi =
         retrofit.create(com.ssafy.bookglebookgle.network.api.FcmApi::class.java)
 
+    @Provides
+    @Singleton
+    fun provideProfileApi(retrofit: Retrofit): ProfileApi =
+        retrofit.create(ProfileApi::class.java)
 
 }

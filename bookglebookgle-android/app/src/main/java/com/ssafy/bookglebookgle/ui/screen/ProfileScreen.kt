@@ -1,7 +1,9 @@
 package com.ssafy.bookglebookgle.ui.screen
 
+import android.util.Log
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -11,6 +13,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -21,6 +25,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -31,6 +36,7 @@ import com.ssafy.bookglebookgle.R
 import com.ssafy.bookglebookgle.navigation.Screen
 import com.ssafy.bookglebookgle.ui.component.CustomTopAppBar
 import com.ssafy.bookglebookgle.util.ScreenSize
+import com.ssafy.bookglebookgle.viewmodel.ProfileUiState
 import com.ssafy.bookglebookgle.viewmodel.ProfileViewModel
 
 @Composable
@@ -75,10 +81,12 @@ fun RatingStatisticItem(label: String, rating: Float, modifier: Modifier = Modif
 
 
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(navController: NavHostController, viewModel: ProfileViewModel = hiltViewModel()) {
     val profileImageSize = ScreenSize.width * 0.3f
     val iconSize = profileImageSize * 0.25f
+
 
     Column(
         modifier = Modifier.fillMaxSize(),
@@ -86,10 +94,23 @@ fun ProfileScreen(navController: NavHostController, viewModel: ProfileViewModel 
     ) {
 
         val logoutDone by viewModel.logoutCompleted.collectAsState()
-        val profileImageUrl by viewModel.profileImageUrl.collectAsState()
-        val nickname by viewModel.nickname.collectAsState()
-        val email by viewModel.email.collectAsState()
-        val averageScore by viewModel.averageScore.collectAsState()
+        val uiState by viewModel.uiState.collectAsState()
+        val saving by viewModel.saving.collectAsState()
+        val nicknameError by viewModel.nicknameError.collectAsState()
+        val snackbar = remember { SnackbarHostState() }
+        val showEditor = remember { androidx.compose.runtime.mutableStateOf(false) }
+
+        LaunchedEffect(Unit) {
+            viewModel.loadProfile()
+        }
+
+        LaunchedEffect(Unit) {
+            viewModel.events.collect { snackbar.showSnackbar(it) }
+        }
+
+        LaunchedEffect(Unit) {
+            viewModel.saved.collect { showEditor.value = false }
+        }
 
         if (logoutDone) {
             LaunchedEffect(Unit) {
@@ -104,126 +125,162 @@ fun ProfileScreen(navController: NavHostController, viewModel: ProfileViewModel 
         Spacer(modifier = Modifier.height(ScreenSize.height * 0.03f))
 
         // 프로필 이미지 + 연필 아이콘
-        Box(
-            modifier = Modifier.size(profileImageSize),
-            contentAlignment = Alignment.BottomEnd
-        ) {
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(profileImageUrl)
-                    .crossfade(true)
-                    .build(),
-                contentDescription = "프로필 이미지",
-                contentScale = ContentScale.Crop,
-                placeholder = painterResource(R.drawable.profile_example), // 로딩 중 기본 이미지
-                error = painterResource(R.drawable.profile_image),       // 로딩 실패 시
-                fallback = painterResource(R.drawable.profile_image),    // null일 경우
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clip(CircleShape)
-                    .background(Color.LightGray)
-            )
-
-
-            Box(
-                modifier = Modifier
-                    .size(iconSize)
-                    .clip(CircleShape)
-                    .background(Color.White)
-                    .clip(CircleShape)
-                    .background(Color(0xFFE0E0E0))
-                    .padding(1.dp)
-                    .clip(CircleShape)
-                    .background(Color.White)
-                    .padding(iconSize * 0.2f),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    painter = painterResource(id = R.drawable.ic_edit),
-                    contentDescription = "수정",
-                    tint = Color.Black,
-                    modifier = Modifier.fillMaxSize()
-                )
+        when (val state = uiState) {
+            is ProfileUiState.Loading -> {
+                CircularProgressIndicator()
             }
-        }
 
-        Spacer(modifier = Modifier.height(ScreenSize.height * 0.015f))
-
-        Text(
-            nickname ?: "닉네임 없음",
-            fontSize = ScreenSize.width.value.times(0.05f).sp,
-            fontWeight = FontWeight.Bold
-        )
-        Text(
-            email ?: "이메일 없음",
-            fontSize = ScreenSize.width.value.times(0.035f).sp,
-            color = Color(0xFF8D7E6E)
-        )
-        Spacer(modifier = Modifier.height(ScreenSize.height * 0.03f))
-        // 구분선
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(1.dp)
-                .padding(horizontal = ScreenSize.width * 0.08f)
-                .background(Color(0xFFE5E5E5))
-        )
-
-        Spacer(modifier = Modifier.height(ScreenSize.height * 0.03f))
-
-        // 버튼들을 가로로 배치
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = ScreenSize.width * 0.08f),
-            horizontalArrangement = Arrangement.spacedBy(ScreenSize.width * 0.04f)
-        ) {
-            ProfileItemHorizontal("내 책장", Modifier.weight(1f)) { }
-            ProfileItemHorizontal("로그아웃", Modifier.weight(1f)) {
-                viewModel.logout()
+            is ProfileUiState.Error -> {
+                Text(text = state.message, color = Color.Red)
+                Spacer(Modifier.height(12.dp))
+                Button(onClick = { viewModel.loadProfile() }) { Text("다시 시도") }
             }
-        }
 
-        Spacer(modifier = Modifier.height(ScreenSize.height * 0.04f))
+            is ProfileUiState.Success -> {
+                val data = state.data
+                val profileImageSize = ScreenSize.width * 0.3f
+                val iconSize = profileImageSize * 0.25f
 
-        // 내 통계 섹션
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = ScreenSize.width * 0.08f)
-        ) {
-            Text(
-                "내 통계",
-                fontSize = ScreenSize.width.value.times(0.060f).sp,
-                fontWeight = FontWeight.Bold
-            )
-
-            Spacer(modifier = Modifier.height(ScreenSize.height * 0.02f))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(ScreenSize.width * 0.08f),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // 원형 그래프
-                CircularProgressChart(
-                    totalMeetings = 15,
-                    completedMeetings = 12,
-                    modifier = Modifier.weight(1.5f)
-                )
-
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(ScreenSize.height * 0.025f)
+                // 프로필 이미지/컬러 뱃지
+                Box(
+                    modifier = Modifier.size(profileImageSize),
+                    contentAlignment = Alignment.BottomEnd
                 ) {
-                    RatingStatisticItem(
-                        label = "내 평점",
-                        rating = averageScore
+                    // 프로필 이미지가 없다면 서버의 profileColor로 배경
+//                    val bgColor = try {
+//                        data.profileColor?.let { Color(android.graphics.Color.parseColor(it)) }
+//                            ?: Color(0xFFE0E0E0)
+//                    } catch (_: Exception) { Color(0xFFE0E0E0) }
+
+                    val avatarSize = ScreenSize.width * 0.3f
+
+                    MemberAvatar(
+                        nickname = data.nickname,
+                        colorHex = data.profileColor,
+                        size = avatarSize
                     )
-                    SimpleStatisticItem(
-                        label = "총 모임 시간",
-                        value = "13시간"
+
+
+                    // 우측 하단 편집 아이콘(동작은 추후 연결)
+                    Box(
+                        modifier = Modifier
+                            .size(iconSize)
+                            .clip(CircleShape)
+                            .background(Color.White)
+                            .padding(iconSize * 0.2f)
+                            .border(1.dp, Color(0x11000000), CircleShape)
+                            .clickable { showEditor.value = true },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_edit),
+                            contentDescription = "수정",
+                            tint = Color.Black,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(ScreenSize.height * 0.015f))
+
+                Text(
+                    data.nickname,
+                    fontSize = ScreenSize.width.value.times(0.05f).sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    data.email,
+                    fontSize = ScreenSize.width.value.times(0.035f).sp,
+                    color = Color(0xFF8D7E6E)
+                )
+
+                Spacer(modifier = Modifier.height(ScreenSize.height * 0.03f))
+
+                // 구분선
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .padding(horizontal = ScreenSize.width * 0.08f)
+                        .background(Color(0xFFE5E5E5))
+                )
+
+                Spacer(modifier = Modifier.height(ScreenSize.height * 0.03f))
+
+                // 버튼들
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = ScreenSize.width * 0.08f),
+                    horizontalArrangement = Arrangement.spacedBy(ScreenSize.width * 0.04f)
+                ) {
+                    ProfileItemHorizontal("내 책장", Modifier.weight(1f)) { /* TODO */ }
+                    ProfileItemHorizontal("로그아웃", Modifier.weight(1f)) {
+                        viewModel.logout()
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(ScreenSize.height * 0.04f))
+
+                // 내 통계
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = ScreenSize.width * 0.08f)
+                ) {
+                    Text(
+                        "내 통계",
+                        fontSize = ScreenSize.width.value.times(0.060f).sp,
+                        fontWeight = FontWeight.Bold
                     )
+
+                    Spacer(modifier = Modifier.height(ScreenSize.height * 0.02f))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(ScreenSize.width * 0.08f),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // 서버 값 적용
+                        CircularProgressChart(
+                            totalMeetings = data.participatedGroups,
+                            completedMeetings = data.completedGroups,
+                            modifier = Modifier.weight(1.5f)
+                        )
+
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(ScreenSize.height * 0.025f)
+                        ) {
+                            RatingStatisticItem(
+                                label = "내 평점",
+                                rating = data.avgRating
+                            )
+                            SimpleStatisticItem(
+                                label = "총 모임 시간",
+                                value = "${data.totalActiveHours}시간"
+                            )
+                        }
+                    }
+                }
+
+                if (showEditor.value) {
+                    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+                    ModalBottomSheet(
+                        onDismissRequest = { showEditor.value = false },
+                        sheetState = sheetState
+                    ) {
+                        EditProfileSheetContent(
+                            currentNickname = data.nickname,
+                            currentColorHex = data.profileColor,
+                            saving = saving,
+                            nicknameError = nicknameError,
+                            onCancel = { showEditor.value = false },
+                            onSave = { newNick, newHex ->
+                                viewModel.updateProfile(newNick, newHex)
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -391,3 +448,169 @@ fun SimpleStatisticItem(label: String, value: String, modifier: Modifier = Modif
         )
     }
 }
+
+@Composable
+private fun MemberAvatar(
+    nickname: String,
+    colorHex: String?,
+    size: Dp = ScreenSize.width * 0.12f
+) {
+    val bg = remember(colorHex) { hexToColorOrDefault(colorHex) }
+
+    Box(
+        modifier = Modifier
+            .size(size)
+            .clip(CircleShape)
+            .background(bg),
+        contentAlignment = Alignment.Center
+    ) {
+        val initial = nickname.firstOrNull()?.uppercaseChar()?.toString() ?: "?"
+        Text(
+            text = initial,
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
+            fontSize = (size.value * 0.45f).sp
+        )
+    }
+}
+
+@Composable
+private fun EditProfileSheetContent(
+    currentNickname: String,
+    currentColorHex: String?,
+    saving: Boolean,
+    nicknameError: String?,
+    onCancel: () -> Unit,
+    onSave: (String, String?) -> Unit
+) {
+    var nickname by remember { androidx.compose.runtime.mutableStateOf(currentNickname) }
+    var colorInput by remember { androidx.compose.runtime.mutableStateOf(currentColorHex ?: "") }
+    val previewColor = hexToColorOrDefault(colorInput)
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Text("프로필 수정", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+
+        // 미리보기
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(previewColor),
+                contentAlignment = Alignment.Center
+            ) {
+                val initial = nickname.firstOrNull()?.uppercaseChar()?.toString() ?: "?"
+                Text(initial, color = Color.White, fontWeight = FontWeight.Bold)
+            }
+            Spacer(Modifier.width(12.dp))
+            Text(nickname, fontWeight = FontWeight.SemiBold)
+        }
+
+        // 닉네임
+        OutlinedTextField(
+            value = nickname,
+            onValueChange = { nickname = it },
+            label = { Text("닉네임") },
+            singleLine = true,
+            isError = nicknameError != null,
+            supportingText = {
+                if (nicknameError != null) {
+                    Text(nicknameError, color = MaterialTheme.colorScheme.error)
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        // 컬러 HEX
+        OutlinedTextField(
+            value = colorInput,
+            onValueChange = { colorInput = it },
+            label = { Text("프로필 색상 (예: #5B7FFF)") },
+            singleLine = true,
+            supportingText = {
+                val valid = isValidHex(colorInput)
+                Text(if (valid) "유효한 색상입니다" else "형식: #RRGGBB 또는 RRGGBB", color = if (valid) Color(0xFF4CAF50) else Color(0xFFD32F2F))
+            },
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        // 팔레트(선택 사항)
+        val palette = listOf("#5B7FFF", "#FF6B6B", "#7DDA58", "#FFB74D", "#9C27B0", "#00897B")
+        FlowRowMainAxisWrap {
+            palette.forEach { hex ->
+                ColorChip(hex) { colorInput = hex }
+            }
+        }
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            OutlinedButton(
+                onClick = onCancel,
+                modifier = Modifier.weight(1f),
+                enabled = !saving
+            ) { Text("취소") }
+
+            Button(
+                onClick = {
+                    val normalized = normalizeHexOrNull(colorInput) // null 허용
+                    onSave(nickname.trim(), normalized)
+                },
+                modifier = Modifier.weight(1f),
+                enabled = !saving && nickname.isNotBlank()
+            ) {
+                if (saving) CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
+                else Text("저장")
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+    }
+}
+
+@Composable
+private fun ColorChip(hex: String, onClick: () -> Unit) {
+    val color = hexToColorOrDefault(hex)
+    Box(
+        modifier = Modifier
+            .size(32.dp)
+            .clip(CircleShape)
+            .background(color)
+            .border(1.dp, Color(0x11000000), CircleShape)
+            .clickable { onClick() }
+    )
+}
+
+@Composable
+private fun FlowRowMainAxisWrap(content: @Composable () -> Unit) {
+    // 간단 대체: 가로 스페이싱만 필요한 경우 Row로 감싸도 OK.
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth()
+    ) { content() }
+}
+
+private fun isValidHex(input: String): Boolean {
+    val t = input.trim().uppercase()
+    val s = if (t.startsWith("#")) t.drop(1) else t
+    return s.length == 6 && s.all { it in "0123456789ABCDEF" }
+}
+
+private fun normalizeHexOrNull(input: String?): String? {
+    if (input.isNullOrBlank()) return null
+    val t = input.trim().uppercase()
+    val s = if (t.startsWith("#")) t else "#$t"
+    return if (isValidHex(s)) s else null
+}
+
+private fun hexToColorOrDefault(input: String?): Color =
+    runCatching {
+        val s = normalizeHexOrNull(input) ?: "#E0E0E0"
+        Color(android.graphics.Color.parseColor(s))
+    }.getOrDefault(Color(0xFFE0E0E0))

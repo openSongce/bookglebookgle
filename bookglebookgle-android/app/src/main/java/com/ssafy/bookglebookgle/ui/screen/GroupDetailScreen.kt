@@ -551,7 +551,7 @@ fun ProgressStatusCard(
 }
 
 
-private fun hexToColor(hex: String?): Color {
+fun hexToColor(hex: String?): Color {
     if (hex.isNullOrBlank()) return Color(0xFFE5E7EB)
     return try {
         val s = if (hex.startsWith("#")) hex else "#$hex"
