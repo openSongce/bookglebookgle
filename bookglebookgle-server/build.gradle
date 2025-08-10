@@ -102,6 +102,8 @@ dependencies {
 
     //FCM
     implementation("com.google.firebase:firebase-admin:9.3.0")
+
+    testImplementation 'com.h2database:h2'
 }
 
 tasks.named('test') {

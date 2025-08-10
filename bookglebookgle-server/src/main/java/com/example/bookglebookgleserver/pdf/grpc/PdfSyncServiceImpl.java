@@ -4,6 +4,7 @@ package com.example.bookglebookgleserver.pdf.grpc;
 import com.example.bookglebookgleserver.comment.entity.Comment;
 import com.example.bookglebookgleserver.comment.repository.CommentRepository;
 import com.example.bookglebookgleserver.group.entity.Group;
+import com.example.bookglebookgleserver.group.repository.GroupMemberRepository;
 import com.example.bookglebookgleserver.group.repository.GroupRepository;
 import com.example.bookglebookgleserver.highlight.entity.Highlight;
 import com.example.bookglebookgleserver.highlight.repository.HighlightRepository;
@@ -16,6 +17,7 @@ import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
 import lombok.RequiredArgsConstructor;
 import net.devh.boot.grpc.server.service.GrpcService;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -36,6 +38,9 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
     private final PdfService pdfService;
     private final ViewingSessionService viewingSessionService;
     private final UserRepository userRepository;
+
+    private final GroupMemberRepository groupMemberRepository;
+    private final PdfReadingProgressRepository pdfReadingProgressRepository;
 
     @Override
     public StreamObserver<SyncMessage> sync(StreamObserver<SyncMessage> out) {
@@ -218,29 +223,27 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
 
             private void handlePageMove(SyncMessage req) {
                 GroupState state = GroupStore.get(req.getGroupId());
-                String uid = req.getUserId();
+                String uidStr = req.getUserId();
                 int page = req.getPayload().getPage();
                 if (page <= 0) return;
 
                 // 리더만 반영
-                if (!Objects.equals(uid, state.currentLeaderId)) return;
+                if (!Objects.equals(uidStr, state.currentLeaderId)) return;
 
                 // 상태 갱신
                 state.currentPage = page;
                 
-                state.progressByUser.merge(uid, page, Math::max);
+                state.progressByUser.merge(uidStr, page, Math::max);
 
-                // 진도 저장(너희 서비스 로직 유지)
-                try {
-                    pdfService.updateOrInsertProgress(Long.valueOf(uid), state.groupId, page);
-                } catch (Exception e) {
-                    logger.log(Level.WARNING, "[PDF-SYNC] progress update failed", e);
-                }
+                // ★ DB에도 최댓값으로 반영
+                Long uid = Long.valueOf(uidStr);
+                Long gid = req.getGroupId();
+                persistMaxRead(gid, uid, page);
 
                 // PAGE_MOVE 브로드캐스트(에코 포함)
                 SyncMessage evt = SyncMessage.newBuilder()
                         .setGroupId(state.groupId)
-                        .setUserId(uid)
+                        .setUserId(uidStr)
                         .setActionType(ActionType.PAGE_MOVE)
                         .setAnnotationType(AnnotationType.PAGE)
                         .setPayload(AnnotationPayload.newBuilder().setPage(page).build())
@@ -317,6 +320,11 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
                     // 최댓값 유지
                     state.progressByUser.merge(req.getUserId(), page, Math::max);
 
+                    // DB 반영 (최댓값으로)
+                    Long uid = Long.valueOf(req.getUserId());
+                    Long gid = req.getGroupId();
+                    persistMaxRead(gid, uid, page);
+
                     // 1) 즉시 PROGRESS_UPDATE 이벤트 브로드캐스트 (클라 progressObserver가 받음)
                     SyncMessage evt = SyncMessage.newBuilder()
                             .setGroupId(state.groupId)
@@ -327,7 +335,7 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
                             .build();
                     broadcastToAll(state, evt);
 
-                    // 2) 스냅샷도 한번 뿌려주면(선택) 지도/리스트 즉시 갱신됨
+                    //스냅샷도 한번 뿌려주면(선택) 지도/리스트 즉시 갱신됨
                     broadcastSnapshot(state);
                 } finally {
                     state.lock.unlock();
@@ -589,6 +597,25 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
                         })
                         .orElse(null);
             }
+
+
+            @Transactional
+            private void persistMaxRead(Long groupId, Long userId, int page) {
+                // 1) group_member.max_read_page 최댓값 갱신
+                int updated = groupMemberRepository.bumpMaxReadPage(groupId, userId, page);
+                if (updated == 0) {
+                    // 혹시 멤버 행이 없다면(이상 케이스) 스킵 or 생성 로직
+                    // 일반적으로는 이미 그룹 가입되어 있으므로 0이 나올 일이 없음.
+                }
+
+                // 2) pdf_reading_progress 최댓값 갱신 (기존 서비스 재사용)
+                try {
+                    pdfService.updateOrInsertProgress(userId, groupId, page);
+                } catch (Exception e) {
+                    logger.log(Level.WARNING, "[PDF-SYNC] pdf_reading_progress upsert 실패", e);
+                }
+            }
+
 
         };
     }
