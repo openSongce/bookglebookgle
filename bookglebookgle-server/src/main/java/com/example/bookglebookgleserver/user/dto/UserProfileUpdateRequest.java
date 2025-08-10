@@ -9,4 +9,5 @@ import lombok.Setter;
 public class UserProfileUpdateRequest {
     private String nickname;
     private String profileImgUrl;
+    private String profileColor;
 }

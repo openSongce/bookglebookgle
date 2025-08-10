@@ -52,6 +52,7 @@ public class UserController {
                 .completedGroups(completed)
                 .incompleteGroups(incomplete)
                 .totalActiveHours(totalHours)
+                .profileColor(currentUser.getProfileColor())
                 .build();
     }
 
@@ -73,12 +74,17 @@ public class UserController {
         if (request.getProfileImgUrl() != null && !request.getProfileImgUrl().isBlank()) {
             currentUser.setProfileImageUrl(request.getProfileImgUrl());
         }
+
+        if (request.getProfileColor() != null && !request.getProfileColor().isBlank()) {
+            currentUser.setProfileColor(request.getProfileColor().trim().toUpperCase());
+        }
         userRepository.save(currentUser);
 
         return UserProfileResponse.builder()
                 .email(currentUser.getEmail())
                 .nickname(currentUser.getNickname())
                 .profileImgUrl(currentUser.getProfileImageUrl())
+                .profileColor(currentUser.getProfileColor())
                 .build();
     }
 
