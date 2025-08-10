@@ -71,9 +71,9 @@ public class AuthService {
         User user=userRepository.findByEmail(email)
                 .orElseThrow(()->new RuntimeException("존재하지않는 사용자입니다"));
 
-        if (!user.isActive()) {
-            throw new RuntimeException("탈퇴한 계정입니다.");
-        }
+//        if (!user.isActive()) {
+//            throw new RuntimeException("탈퇴한 계정입니다.");
+//        }
 
         if(!passwordEncoder.matches(password, user.getPassword())){
             throw new RuntimeException("비밀번호가 일치하지않습니다");
