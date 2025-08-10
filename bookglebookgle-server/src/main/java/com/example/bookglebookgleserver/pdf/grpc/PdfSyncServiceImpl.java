@@ -6,6 +6,7 @@ import com.example.bookglebookgleserver.comment.repository.CommentRepository;
 import com.example.bookglebookgleserver.group.entity.Group;
 import com.example.bookglebookgleserver.group.repository.GroupMemberRepository;
 import com.example.bookglebookgleserver.group.repository.GroupRepository;
+import com.example.bookglebookgleserver.group.service.PdfProgressTxService;
 import com.example.bookglebookgleserver.highlight.entity.Highlight;
 import com.example.bookglebookgleserver.highlight.repository.HighlightRepository;
 import com.example.bookglebookgleserver.pdf.repository.PdfReadingProgressRepository;
@@ -38,6 +39,8 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
     private final PdfService pdfService;
     private final ViewingSessionService viewingSessionService;
     private final UserRepository userRepository;
+
+    private final PdfProgressTxService progressTxService;
 
     private final GroupMemberRepository groupMemberRepository;
     private final PdfReadingProgressRepository pdfReadingProgressRepository;
@@ -259,7 +262,7 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
                 // ★ DB에도 최댓값으로 반영
                 Long uid = Long.valueOf(uidStr);
                 Long gid = req.getGroupId();
-                persistMaxRead(gid, uid, page);
+                persistProgress(uid, gid, page);
 
                 // PAGE_MOVE 브로드캐스트(에코 포함)
                 SyncMessage evt = SyncMessage.newBuilder()
@@ -344,7 +347,7 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
                     // DB 반영 (최댓값으로)
                     Long uid = Long.valueOf(req.getUserId());
                     Long gid = req.getGroupId();
-                    persistMaxRead(gid, uid, page);
+                    persistProgress(uid, gid, page);
 
                     // 1) 즉시 PROGRESS_UPDATE 이벤트 브로드캐스트 (클라 progressObserver가 받음)
                     SyncMessage evt = SyncMessage.newBuilder()
@@ -621,19 +624,22 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
             }
 
 
-            @Transactional
-            private void persistMaxRead(Long groupId, Long userId, int page) {
-                // 1) group_member.max_read_page 최댓값 갱신
-                int updated = groupMemberRepository.bumpMaxReadPage(groupId, userId, page);
-                if (updated == 0) {
-                    // 혹시 멤버 행이 없다면(이상 케이스) 스킵 or 생성 로직
-                    // 일반적으로는 이미 그룹 가입되어 있으므로 0이 나올 일이 없음.
-                }
 
-                // 2) pdf_reading_progress 최댓값 갱신 (기존 서비스 재사용)
+            private void persistProgress(Long userId, Long groupId, int page) {
+                int totalPages = groupRepository.findById(groupId)
+                        .map(Group::getTotalPages)
+                        .orElse(0);
+
+
+
+
+                progressTxService.bump(userId, groupId, page, totalPages);
+
+                // 2) pdf_reading_progress upsert (서비스에 @Transactional 있으면 OK)
                 try {
                     pdfService.updateOrInsertProgress(userId, groupId, page);
                 } catch (Exception e) {
+                    // 실패해도 주요 진행도는 group_member에 반영됐으니 경고만
                     logger.log(Level.WARNING, "[PDF-SYNC] pdf_reading_progress upsert 실패", e);
                 }
             }
