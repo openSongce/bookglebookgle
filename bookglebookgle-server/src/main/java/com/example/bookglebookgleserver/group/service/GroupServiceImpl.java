@@ -220,6 +220,9 @@ public class GroupServiceImpl implements GroupService {
                 .orElseThrow(() -> new NotFoundException("해당 모임이 존재하지 않습니다."));
 
         int pageCount = resolvePageCount(group);
+
+        log.info("📄 그룹 ID={} 의 PDF 총 페이지 수: {}", groupId, pageCount);
+
         boolean requesterIsHost = group.getHostUser().getId().equals(requester.getId());
 
         List<GroupMember> gmList = group.getGroupMembers(); // fetch join으로 이미 로드됨

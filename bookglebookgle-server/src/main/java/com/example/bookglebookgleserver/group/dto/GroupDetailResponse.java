@@ -23,6 +23,7 @@ public record GroupDetailResponse(
         boolean isHost,
         @Schema(description = "최소 요구 평점", example = "3")
         int minRequiredRating,
+
         // ✅ 추가
         @Schema(description = "PDF 총 페이지 수", example = "120")
         int pageCount,

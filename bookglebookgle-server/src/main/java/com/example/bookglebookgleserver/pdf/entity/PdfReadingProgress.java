@@ -29,7 +29,8 @@ public class PdfReadingProgress {
     @JoinColumn(name = "group_id")
     private Group group;
 
-    private int lastReadPage;
+    @Column(name="max_read_page")
+    private int maxReadPage;
 
     private LocalDateTime updatedAt;
 
