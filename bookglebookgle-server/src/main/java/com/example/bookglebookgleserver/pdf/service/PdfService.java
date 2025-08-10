@@ -104,7 +104,15 @@ public class PdfService {
         }
     }
 
+    @Transactional
+    public int bumpMaxRead(long userId, long groupId, int page) {
+        return pdfReadingProgressRepository.bumpMaxReadPage(userId, groupId, page);
+    }
 
+    @Transactional
+    public int setProgressPercent(long userId, long groupId, int percent) {
+        return pdfReadingProgressRepository.updateProgressPercent(userId, groupId, percent);
+    }
 
 
 }

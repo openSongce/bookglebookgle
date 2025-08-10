@@ -45,5 +45,5 @@ public class GroupMember {
     public void prePersist() {
         this.joinedAt = LocalDateTime.now();
     }
-    
+
 }
