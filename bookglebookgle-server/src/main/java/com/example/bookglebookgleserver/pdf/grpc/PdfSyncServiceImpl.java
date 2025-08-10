@@ -101,6 +101,7 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
                                 }
                             }
 
+                            ensureOnePageProgress100(Long.valueOf(userId), groupId, state);
                             // 최신 스냅샷 → 나에게
                             sendSnapshotTo(state, userId);
                             // (선택) 모두에게도 스냅샷
@@ -185,7 +186,7 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
                             state.currentLeaderId = next;
                         }
                     }
-
+                    ensureOnePageProgress100(Long.valueOf(req.getUserId()), req.getGroupId(), state);
                     sendSnapshotTo(state, req.getUserId());
                     broadcastSnapshot(state);
                 } finally {
@@ -643,6 +644,26 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
                     logger.log(Level.WARNING, "[PDF-SYNC] pdf_reading_progress upsert 실패", e);
                 }
             }
+
+
+
+            private void ensureOnePageProgress100(Long userId, Long groupId, GroupState state) {
+                int totalPages = groupRepository.findById(groupId).map(Group::getTotalPages).orElse(0);
+                if (totalPages != 1) return;
+
+                // 메모리 상태(해당 사용자 max) 보정
+                state.lock.lock();
+                try {
+                    state.progressByUser.merge(String.valueOf(userId), 1, Math::max);
+                } finally {
+                    state.lock.unlock();
+                }
+
+                // DB 반영 (GM.max_read_page=1, progress=100) + PRP upsert 포함
+                persistProgress(userId, groupId, 1);
+            }
+
+
 
 
         };
