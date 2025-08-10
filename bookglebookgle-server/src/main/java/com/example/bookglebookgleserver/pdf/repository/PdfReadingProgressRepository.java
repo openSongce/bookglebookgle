@@ -19,7 +19,7 @@ public interface PdfReadingProgressRepository extends JpaRepository<PdfReadingPr
         update PdfReadingProgress p
            set p.maxReadPage = 
              case when p.maxReadPage < :page then :page else p.maxReadPage end,
-               p.updatedAt = CURRENT_TIMEcSTAMP
+               p.updatedAt = CURRENT_TIMESTAMP
          where p.user = :user and p.group = :group
     """)
     int bumpMaxReadPage(@Param("user") User user,
