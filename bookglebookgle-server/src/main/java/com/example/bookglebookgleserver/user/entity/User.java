@@ -4,6 +4,8 @@ package com.example.bookglebookgleserver.user.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.LocalDateTime;
+
 @Entity
 @Table(name = "users")
 @Data
@@ -40,6 +42,12 @@ public class User {
     @Column(name = "rating_cnt")
     private Integer ratingCnt;
 
+    @Column(name = "is_active")
+    private boolean active = true;
+
+    @Column(name = "deactivated_at")
+    private LocalDateTime deactivatedAt;
+
     @PrePersist
     public void prePersist() {
         if (avgRating == null) {
@@ -48,6 +56,22 @@ public class User {
         if (ratingCnt == null) {
             ratingCnt = 0;
         }
+    }
+
+    public boolean isActive() {
+        return this.active;
+    }
+
+    public void setActive(boolean active) {
+        this.active = active;
+    }
+
+    public LocalDateTime getDeactivatedAt() {
+        return deactivatedAt;
+    }
+
+    public void setDeactivatedAt(LocalDateTime deactivatedAt) {
+        this.deactivatedAt = deactivatedAt;
     }
 
     public void setAvgRating(Float avgRating) {

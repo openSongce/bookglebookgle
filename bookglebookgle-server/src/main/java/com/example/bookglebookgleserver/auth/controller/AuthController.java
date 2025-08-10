@@ -256,4 +256,78 @@ public class AuthController {
             return ResponseEntity.status(500).body("로그아웃 처리 중 오류");
         }
     }
+
+
+    @Operation(
+            summary = "회원탈퇴",
+            description = """
+    <b>계정 비활성화를 통한 회원탈퇴</b><br>
+    - AccessToken을 Authorization 헤더로 전달합니다.<br>
+    - 계정을 즉시 삭제하지 않고 비활성화 상태로 변경합니다.<br>
+    - 탈퇴 처리 후 현재 토큰들은 무효화됩니다.<br><br>
+    """
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "회원탈퇴 성공, 계정이 비활성화됨"),
+            @ApiResponse(responseCode = "401", description = "인증 실패 또는 유효하지 않은 토큰"),
+            @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음"),
+            @ApiResponse(responseCode = "500", description = "서버 오류")
+    })
+    @DeleteMapping("/users/account")
+    public ResponseEntity<String> withdrawUser(
+            @RequestHeader("Authorization") String authHeader,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                    description = "탈퇴 시 RefreshToken도 함께 무효화하려면 전달 (선택사항)",
+                    required = false,
+                    content = @Content(
+                            schema = @Schema(
+                                    example = "{\"refreshToken\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\"}"
+                            )
+                    )
+            )
+            @RequestBody(required = false) Map<String, String> body
+    ) {
+        try {
+            // 1. AccessToken에서 Bearer 제거
+            String accessToken = authHeader.replace("Bearer ", "");
+
+            // 2. 토큰에서 사용자 이메일 추출
+            String email = authService.verifyToken(accessToken);
+
+            // 3. 사용자 계정 비활성화 처리
+            authService.deactivateUser(email);
+
+            // 4. AccessToken 블랙리스트 등록
+            long accessExpireSec = jwtService.getRemainingExpiration(accessToken, false);
+            jwtBlacklistService.blacklistToken(accessToken, accessExpireSec);
+
+            // 5. RefreshToken이 전달된 경우 함께 블랙리스트 등록
+            String refreshToken = (body != null) ? body.get("refreshToken") : null;
+            if (refreshToken != null && !refreshToken.isBlank()) {
+                long refreshExpireSec = jwtService.getRemainingExpiration(refreshToken, true);
+                jwtBlacklistService.blacklistToken(refreshToken, refreshExpireSec);
+            }
+
+            // 6. 사용자의 모든 RefreshToken 삭제
+            refreshTokenService.deleteAllRefreshTokensByEmail(email);
+
+            log.info("회원탈퇴 완료: {}", email);
+            return ResponseEntity.ok("회원탈퇴가 완료되었습니다. 그동안 이용해주셔서 감사합니다.");
+
+        } catch (Exception e) {
+            log.error("회원탈퇴 처리 중 오류 발생: ", e);
+
+            // 구체적인 에러 메시지 반환
+            if (e.getMessage().contains("유효하지 않은") || e.getMessage().contains("토큰")) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body("유효하지 않은 토큰입니다.");
+            } else if (e.getMessage().contains("사용자를 찾을 수 없")) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body("사용자를 찾을 수 없습니다.");
+            } else {
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .body("회원탈퇴 처리 중 오류가 발생했습니다.");
+            }
+        }
+    }
 }
