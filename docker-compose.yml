@@ -62,7 +62,7 @@ services:
     depends_on:
       - loki
     volumes:
-      - grafana-storage:/var/lib/grafana
+      - grafana-storage:/var/lib/grafana            # ← 외부 볼륨 재사용(아래 volumes:에서 external 지정)
       - ./grafana-provisioning:/etc/grafana/provisioning
     environment:
       - GF_SECURITY_ADMIN_USER=admin
@@ -80,7 +80,7 @@ services:
     ports:
       - "9090:9090"
     volumes:
-      - ./prometheus:/etc/prometheus 
+      - ./prometheus:/etc/prometheus
     networks:
       - test-net
 
@@ -97,6 +97,8 @@ services:
 
 volumes:
   grafana-storage:
+    external: true
+    name: springboot-deploy_grafana-storage     # ← 예전 데이터가 있는 실제 볼륨 이름
   redis-data:
 
 networks:
