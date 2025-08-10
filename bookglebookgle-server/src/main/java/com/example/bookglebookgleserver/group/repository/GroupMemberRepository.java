@@ -36,26 +36,26 @@ public interface GroupMemberRepository extends JpaRepository<GroupMember, Long> 
     int countIncompleteGroupsByUserId(@Param("userId") Long userId);
 
 
+
     @Query("""
 select new com.example.bookglebookgleserver.group.dto.GroupMemberDetailDto(
     u.id,
     u.nickname,
     u.profileColor,
-    coalesce(prp.maxReadPage, 0),
+    coalesce(gm.maxReadPage, 0),
     case 
-        when :pageCount > 0 then (coalesce(prp.maxReadPage, 0) * 100) / :pageCount
+        when :pageCount > 0 
+             then cast( (coalesce(gm.maxReadPage, 0) * 100.0) / :pageCount as integer )
         else 0
     end,
     gm.isHost,
     case 
-        when :pageCount > 0 and coalesce(prp.maxReadPage, 0) >= :pageCount then true 
+        when :pageCount > 0 and coalesce(gm.maxReadPage, 0) >= :pageCount then true 
         else false 
     end
 )
 from GroupMember gm
 join gm.user u
-left join PdfReadingProgress prp 
-    on prp.group = gm.group and prp.user = u
 where gm.group.id = :groupId
 """)
     List<GroupMemberDetailDto> findMemberDetailsByGroupId(@Param("groupId") Long groupId,
