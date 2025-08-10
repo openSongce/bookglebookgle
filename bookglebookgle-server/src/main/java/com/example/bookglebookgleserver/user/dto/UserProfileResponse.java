@@ -19,6 +19,6 @@ public class UserProfileResponse {
     private int completedGroups;
     private int incompleteGroups;
     private double progressPercent;
-
+    private String profileColor;   // "#RRGGBB" 또는 "#AARRGGBB"
     private int participatedGroups;
 }
