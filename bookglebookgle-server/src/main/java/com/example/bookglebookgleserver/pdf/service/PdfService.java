@@ -75,7 +75,7 @@ public class PdfService {
         // 최대 페이지 기준으로 progress 계산
         int maxReadPage = pdfReadingProgressRepository.findByUserAndGroup(user, group)
                 .map(PdfReadingProgress::getMaxReadPage) // 새 컬럼
-                .orElse(0);
+                .orElse(1);
 
 //        int lastReadPage = pdfReadingProgressRepository.findByUserAndGroup(user, group)
 //                .map(PdfReadingProgress::getLastReadPage)
