@@ -3,6 +3,8 @@ package com.example.bookglebookgleserver.pdf.service;
 import com.example.bookglebookgleserver.global.exception.AuthException;
 import com.example.bookglebookgleserver.global.exception.NotFoundException;
 import com.example.bookglebookgleserver.group.entity.Group;
+import com.example.bookglebookgleserver.group.entity.GroupMember;
+import com.example.bookglebookgleserver.group.repository.GroupMemberRepository;
 import com.example.bookglebookgleserver.group.repository.GroupRepository;
 import com.example.bookglebookgleserver.pdf.dto.PdfProgressResponse;
 import com.example.bookglebookgleserver.pdf.entity.PdfFile;
@@ -32,6 +34,7 @@ public class PdfService {
     private final UserRepository userRepository;
     private final GroupRepository groupRepository;
     private final PdfReadingProgressRepository pdfReadingProgressRepository;
+    private final GroupMemberRepository groupMemberRepository;
 
     public void handlePdfUpload(MultipartFile file) {
         Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
@@ -72,14 +75,38 @@ public class PdfService {
 
         int totalPages = group.getTotalPages();  // group에 페이지 수 저장되어 있어야 함
 
-        // 최대 페이지 기준으로 progress 계산
-        int maxReadPage = pdfReadingProgressRepository.findByUserAndGroup(user, group)
-                .map(PdfReadingProgress::getMaxReadPage) // 새 컬럼
-                .orElse(1);
-
-//        int lastReadPage = pdfReadingProgressRepository.findByUserAndGroup(user, group)
-//                .map(PdfReadingProgress::getLastReadPage)
+//        // 최대 페이지 기준으로 progress 계산
+//        int maxReadPage = pdfReadingProgressRepository.findByUserAndGroup(user, group)
+//                .map(PdfReadingProgress::getMaxReadPage) // 새 컬럼
 //                .orElse(0);
+// 1) PRP 기준 기본값은 0
+
+        
+        int prpMax = pdfReadingProgressRepository.findByUserAndGroup(user, group)
+                .map(PdfReadingProgress::getMaxReadPage)
+                .orElse(0);
+
+        // 2) GM 값도 받아와서 보조로 사용
+        int gmMax = groupMemberRepository.findByGroupAndUser(group, user)
+                .map(GroupMember::getMaxReadPage)
+                .orElse(0);
+
+        // 3) 두 테이블 중 더 큰 값 사용
+        int maxReadPage = Math.max(prpMax, gmMax);
+
+        // 4) 총 1페이지 문서면, 아직 0이라면 1로 보정 (정책)
+        if (totalPages == 1 && maxReadPage == 0) {
+            maxReadPage = 1;
+        }
+
+        // 5) 범위 보정
+        if (totalPages > 0) {
+            maxReadPage = Math.min(maxReadPage, totalPages);
+        }
+
+
+
+
 
         double progressRate = (totalPages == 0) ? 0 : (maxReadPage * 100.0) / totalPages;
 
