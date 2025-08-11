@@ -183,7 +183,7 @@ fun CustomTopAppBar(
                     fontSize = 20.sp,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = 16.dp)
+                        .padding(end = 16.dp)
                 )
             } else if (title == "my_group") {
                 Text(
@@ -298,17 +298,6 @@ fun CustomTopAppBar(
                         .size(20.dp)
                         .clickable {
                             isSearchMode = true
-                        }
-                )
-            } else if (title == "my_page") {
-                Icon(
-                    painter = painterResource(id = R.drawable.my_profile_setting),
-                    contentDescription = "설정",
-                    modifier = Modifier
-                        .padding(end = 16.dp)
-                        .size(20.dp)
-                        .clickable {
-
                         }
                 )
             } else if (title == "chat" || title == "my_group") {
