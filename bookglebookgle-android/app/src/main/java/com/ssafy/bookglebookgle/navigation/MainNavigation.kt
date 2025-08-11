@@ -1,11 +1,14 @@
 package com.ssafy.bookglebookgle.navigation
 
+import android.annotation.SuppressLint
+import android.content.Intent
 import android.util.Log
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -13,6 +16,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.pdfnotemate.ui.activity.home.PdfScreen
+import com.ssafy.bookglebookgle.MainActivity
 import com.ssafy.bookglebookgle.ui.screen.PdfReadScreen
 import com.ssafy.bookglebookgle.pdf.response.PdfNoteListModel
 import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.BookmarkModel
@@ -35,6 +39,7 @@ import com.ssafy.bookglebookgle.ui.screen.SplashScreen
 import com.ssafy.bookglebookgle.ui.screen.GroupDetailScreen
 import com.ssafy.bookglebookgle.viewmodel.ProfileViewModel
 
+@SuppressLint("ContextCastToActivity")
 @Composable
 fun MainNavigation(
     navController: NavHostController = rememberNavController()
@@ -44,6 +49,12 @@ fun MainNavigation(
 
     // 바텀 네비게이션을 표시할 화면들
     val screensWithBottomNav = BottomNavItem.items.map { it.route }
+
+    LaunchedEffect(Unit) {
+        MainActivity.deepLinkIntents.collect { intent ->
+            handleDeepLinkFromIntent(intent, navController)
+        }
+    }
 
     Scaffold(
         bottomBar = {
@@ -257,5 +268,41 @@ fun MainNavigation(
             }
 
         }
+    }
+}
+
+private fun handleDeepLinkFromIntent(
+    intent: Intent,
+    navController: NavHostController
+) {
+    val deeplinkType = intent.getStringExtra("deeplink_type")
+    val groupId = intent.getStringExtra("groupId")?.toLongOrNull()
+
+    Log.d("DeepLink", "handleDeepLinkFromIntent - type=$deeplinkType, groupId=$groupId")
+
+    if (groupId == null || groupId == -1L) return
+
+    try {
+        when (deeplinkType) {
+            "chat" -> {
+                navController.currentBackStackEntry?.savedStateHandle?.set("groupId", groupId)
+                navController.navigate(Screen.ChatRoomScreen.route) {
+                    launchSingleTop = true
+                }
+            }
+            "group_detail", null -> {
+                navController.currentBackStackEntry?.savedStateHandle?.set("groupId", groupId)
+                navController.currentBackStackEntry?.savedStateHandle?.set("isMyGroup", true)
+                navController.navigate(Screen.GroupDetailScreen.route) {
+                    launchSingleTop = true
+                }
+            }
+        }
+
+        // 한 번 처리 후 같은 인텐트로 재처리 방지
+        (navController.context as? MainActivity)?.intent?.removeExtra("deeplink_type")
+        (navController.context as? MainActivity)?.intent?.removeExtra("groupId")
+    } catch (e: Exception) {
+        Log.e("DeepLink", "navigate failed: ${e.message}", e)
     }
 }
