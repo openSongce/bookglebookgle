@@ -68,6 +68,7 @@ fun ChatRoomScreen(
     navController: NavHostController,
     groupId: Long,
     userId: Long,
+    embedded: Boolean = false,
     viewModel: ChatRoomViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -328,12 +329,13 @@ fun ChatRoomScreen(
                 .background(Color.White)
                 .imePadding()
         ) {
-            CustomTopAppBar(
-                title = uiState.groupTitle,
-                isChatScreen = true,
-                navController = navController,
-            )
-
+            if(!embedded){
+                CustomTopAppBar(
+                    title = uiState.groupTitle,
+                    isChatScreen = true,
+                    navController = navController,
+                )
+            }
             // 토론 컨트롤 패널 (READING 카테고리일 때만 표시)
             if (uiState.isReadingCategory) {
                 Surface(
