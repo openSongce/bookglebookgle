@@ -66,7 +66,7 @@ public class GroupNotificationScheduler {
                                     groupId,
                                     groupName,                  // title = 그룹 이름
                                     "",                         // body는 빈값 (클라에서 "모임 시작" 처리)
-                                    "group",                    // 채널 ID 예시
+                                    null,                    // 채널 ID 예시
                                     Map.of(
                                             "type", "MEETING_START",
                                             "groupId", String.valueOf(groupId)

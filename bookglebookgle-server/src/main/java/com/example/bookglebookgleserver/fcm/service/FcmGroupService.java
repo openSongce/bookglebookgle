@@ -35,7 +35,7 @@ public class FcmGroupService {
                 groupId,
                 groupName,
                 "",
-                "group",
+                null,
                 Map.of("type","MEETING_START","groupId", String.valueOf(groupId))
         );
     }
@@ -62,7 +62,7 @@ public class FcmGroupService {
                 null, null,
                 groupName,                         // title: 그룹 이름
                 senderName + ": " + chatText,      // body: "발신자: 내용"
-                "chat",
+                null,
                 Map.of("type","CHAT","groupId", String.valueOf(groupId)),
                 true                                // dataOnly
         ));
