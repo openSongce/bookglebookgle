@@ -16,7 +16,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
-import java.util.Map;
+import java.util.*;
 
 @RestController
 @RequiredArgsConstructor
@@ -29,15 +29,14 @@ public class FcmController {
     private final FcmGroupService fcmGroupService;
     private final GroupNotificationScheduler scheduler;
 
-    // (1) Android가 로그인 후 토큰 등록/업데이트
+    // (1) 로그인/앱 시작/onNewToken 이후: 토큰 등록/업데이트 + 중복 토큰 정리
     @PutMapping("/token")
     @Transactional
     public ResponseEntity<Void> registerToken(
-            @AuthenticationPrincipal CustomUserDetails userDetails, // ← 통째로 받기
+            @AuthenticationPrincipal CustomUserDetails userDetails,
             @RequestBody FcmTokenRegisterRequest req,
-            @RequestParam(required = false) Long uidFallback // Postman 무인증 테스트용(옵션)
+            @RequestParam(required = false) Long uidFallback // 테스트용
     ) {
-        // 인증 있으면 JWT의 사용자, 없으면 uidFallback 사용
         Long uid = (userDetails != null && userDetails.getUser() != null)
                 ? userDetails.getUser().getId()
                 : uidFallback;
@@ -49,7 +48,19 @@ public class FcmController {
         var user = userRepository.findById(uid).orElse(null);
         if (user == null) return ResponseEntity.badRequest().build();
 
-        var existed = userDeviceRepository.findByUser_IdAndToken(uid, req.token());
+        String token = req.token();
+
+        // ✅ 같은 토큰이 다른 유저에 묶여 있던 레코드 모두 비활성화(중복/계정전환 정리)
+        var duplicates = userDeviceRepository.findAllByToken(token);
+        for (var d : duplicates) {
+            if (!Objects.equals(d.getUser().getId(), uid) && d.isEnabled()) {
+                d.setEnabled(false);
+                userDeviceRepository.save(d);
+            }
+        }
+
+        // ✅ (userId, token) 업서트
+        var existed = userDeviceRepository.findByUser_IdAndToken(uid, token);
         if (existed.isPresent()) {
             var d = existed.get();
             d.setEnabled(true);
@@ -58,7 +69,7 @@ public class FcmController {
         } else {
             var d = UserDevice.builder()
                     .user(user)
-                    .token(req.token())
+                    .token(token)
                     .enabled(true)
                     .lastSeenAt(LocalDateTime.now())
                     .build();
@@ -67,6 +78,29 @@ public class FcmController {
         return ResponseEntity.ok().build();
     }
 
+    // (1-1) 로그아웃: 해당 토큰만 비활성화
+    @PostMapping("/unregister")
+    @Transactional
+    public ResponseEntity<Void> unregisterToken(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @RequestBody FcmTokenRegisterRequest req,
+            @RequestParam(required = false) Long uidFallback // 테스트용
+    ) {
+        Long uid = (userDetails != null && userDetails.getUser() != null)
+                ? userDetails.getUser().getId()
+                : uidFallback;
+
+        if (uid == null || req.token() == null || req.token().isBlank()) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        userDeviceRepository.findByUser_IdAndToken(uid, req.token()).ifPresent(d -> {
+            d.setEnabled(false);
+            d.setLastSeenAt(LocalDateTime.now());
+            userDeviceRepository.save(d);
+        });
+        return ResponseEntity.ok().build();
+    }
 
     // (2) 단건/유저 전체 발송 테스트
     @PostMapping("/send")
@@ -92,7 +126,7 @@ public class FcmController {
         return ResponseEntity.ok().build();
     }
 
-    // (4) 스케줄 등록/해제 (필요 시)
+    // (4) 스케줄 등록/해제
     @PostMapping("/group/{groupId}/schedule")
     public ResponseEntity<Void> registerSchedule(@PathVariable Long groupId, @RequestParam String cron) {
         scheduler.register(groupId, cron);
