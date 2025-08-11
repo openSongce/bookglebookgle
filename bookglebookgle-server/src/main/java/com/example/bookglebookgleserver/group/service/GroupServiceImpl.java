@@ -23,7 +23,6 @@ import com.example.bookglebookgleserver.pdf.repository.PdfFileRepository;
 import com.example.bookglebookgleserver.pdf.util.PdfUtils;
 import com.example.bookglebookgleserver.user.entity.User;
 import com.example.bookglebookgleserver.user.repository.UserRepository;
-import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.FileSystemResource;
@@ -32,16 +31,14 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.scheduling.support.CronTrigger;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 import java.io.File;
 import java.io.IOException;
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Objects;
-import java.util.TimeZone;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -225,7 +222,6 @@ public class GroupServiceImpl implements GroupService {
         List<GroupMemberDetailDto> members =
                 groupMemberRepository.findMemberDetailsByGroupId(groupId, pageCount);
 
-
         // 요청자 완독 여부
         boolean requesterCompleted = members.stream()
                 .filter(m -> Objects.equals(m.userId(), requester.getId()))
@@ -233,10 +229,12 @@ public class GroupServiceImpl implements GroupService {
                 .map(GroupMemberDetailDto::isCompleted)
                 .orElse(false);
 
+        String readableSchedule = cronToReadable(group.getSchedule());
+
         return new GroupDetailResponse(
                 group.getRoomTitle(),
                 group.getCategory().name(),
-                group.getSchedule(),
+                readableSchedule,
                 members.size(),
                 group.getGroupMaxNum(),
                 group.getDescription(),
@@ -647,8 +645,32 @@ public class GroupServiceImpl implements GroupService {
         try { return group.getTotalPages(); } catch (NullPointerException e) { return 0; }
     }
 
+    private static final Map<String, String> DAY_MAP = Map.of(
+            "MON", "월요일",
+            "TUE", "화요일",
+            "WED", "수요일",
+            "THU", "목요일",
+            "FRI", "금요일",
+            "SAT", "토요일",
+            "SUN", "일요일"
+    );
 
+    private String cronToReadable(String cron) {
+        String[] parts = cron.split("\\s+");
+        if (parts.length < 6) return cron;
 
+        int minute = Integer.parseInt(parts[1]); // 분
+        int hour = Integer.parseInt(parts[2]);   // 시
 
+        String ampm = (hour < 12) ? "오전" : "오후";
+        int displayHour = (hour == 0) ? 12 : (hour <= 12 ? hour : hour - 12);
+        String dayKorean = DAY_MAP.getOrDefault(parts[5], parts[5]);
 
+        if (minute == 0) {
+            return String.format("매주 %s %s %d시", dayKorean, ampm, displayHour);
+        } else {
+            return String.format("매주 %s %s %d시 %d분", dayKorean, ampm, displayHour, minute);
+        }
+    }
 }
+

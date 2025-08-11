@@ -490,23 +490,32 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
                 GroupState state = GroupStore.get(groupId);
                 state.lock.lock();
                 try {
-                    // 관찰자/참가자 제거
+                    // 관찰자 제거 + 오프라인 표시
                     state.observers.remove(userId);
                     state.onlineByUser.put(userId, false);
 
-                    // 리더였으면 재선정
-                    if (Objects.equals(userId, state.currentLeaderId)) {
+                    boolean wasLeader = Objects.equals(userId, state.currentLeaderId);
+
+                    if (wasLeader) {
+                        // 1) 온라인 + 원조호스트 우선
                         String next = state.participants.values().stream()
-                                .filter(pm -> pm.isOriginalHost)
+                            .filter(pm -> state.onlineByUser.getOrDefault(pm.userId, false))
+                            .filter(pm -> pm.isOriginalHost)
+                            .map(pm -> pm.userId)
+                            .findFirst()
+                            // 2) 없다면 온라인 중 첫번째
+                            .orElseGet(() -> state.participants.values().stream()
+                                .filter(pm -> state.onlineByUser.getOrDefault(pm.userId, false))
                                 .map(pm -> pm.userId)
                                 .findFirst()
-                                .orElseGet(() -> state.participants.keySet().stream().findFirst().orElse(null));
+                                .orElse(null));
+
                         state.currentLeaderId = next;
 
                         if (next != null) {
                             SyncMessage evt = SyncMessage.newBuilder()
                                     .setGroupId(groupId)
-                                    .setUserId(userId)
+                                    .setUserId(userId)              // 떠난 사람(이벤트 트리거)
                                     .setActionType(ActionType.LEADERSHIP_TRANSFER)
                                     .setAnnotationType(AnnotationType.NONE)
                                     .setTargetUserId(next)
@@ -516,12 +525,13 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
                         }
                     }
 
-                    // 최신 스냅샷 브로드캐스트
+                    // 최신 스냅샷(online/offline, leader 포함)
                     broadcastSnapshot(state);
                 } finally {
                     state.lock.unlock();
                 }
             }
+
 
             // ---------- helpers ----------
 
