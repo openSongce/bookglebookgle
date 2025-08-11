@@ -153,7 +153,7 @@ fun CustomTopAppBar(
                     fontSize = 20.sp,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = 68.dp)
+                        .padding(start = 24.dp)
                 )
             } else if (title == "create_group") {
                 Text(
@@ -183,7 +183,7 @@ fun CustomTopAppBar(
                     fontSize = 20.sp,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(end = 16.dp)
+                        .padding(start = 16.dp)
                 )
             } else if (title == "my_group") {
                 Text(
@@ -290,35 +290,31 @@ fun CustomTopAppBar(
                     )
                 }
             } else if (title == "main_home" && !isSearchMode) {
-                Row(
+                Icon(
+                    painter = painterResource(id = R.drawable.main_search),
+                    contentDescription = "검색",
                     modifier = Modifier
-                        .padding(end = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.main_meetingplus),
-                        contentDescription = "모임 추가",
-                        modifier = Modifier
-                            .size(20.dp)
-                            .clickable {
-                                navController.navigate(Screen.GroupRegisterScreen.route)
-                            },
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Icon(
-                        painter = painterResource(id = R.drawable.main_search),
-                        contentDescription = "검색",
-                        modifier = Modifier
-                            .size(20.dp)
-                            .clickable {
-                                isSearchMode = true
-                            }
-                    )
-                }
-            } else if (title == "my_page" || title == "chat" || title == "my_group") {
+                        .padding(end = 16.dp)
+                        .size(20.dp)
+                        .clickable {
+                            isSearchMode = true
+                        }
+                )
+            } else if (title == "my_page") {
                 Icon(
                     painter = painterResource(id = R.drawable.my_profile_setting),
                     contentDescription = "설정",
+                    modifier = Modifier
+                        .padding(end = 16.dp)
+                        .size(20.dp)
+                        .clickable {
+
+                        }
+                )
+            } else if (title == "chat" || title == "my_group") {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_filter),
+                    contentDescription = "필터",
                     modifier = Modifier
                         .padding(end = 16.dp)
                         .size(20.dp)
@@ -331,7 +327,7 @@ fun CustomTopAppBar(
 
                         }
                 )
-            } else if (title == "create_group") {
+            }else if (title == "create_group") {
                 Icon(
                     painter = painterResource(id = R.drawable.ic_cancel),
                     contentDescription = "취소",

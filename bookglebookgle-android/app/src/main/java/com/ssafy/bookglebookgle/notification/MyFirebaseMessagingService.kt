@@ -15,6 +15,7 @@ import com.ssafy.bookglebookgle.R
 import com.ssafy.bookglebookgle.MainActivity
 import com.ssafy.bookglebookgle.repository.fcm.FcmRepository
 import dagger.hilt.android.AndroidEntryPoint
+import okhttp3.internal.notify
 import javax.inject.Inject
 import kotlin.random.Random
 
@@ -46,7 +47,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         // 타입별 알림 제목과 내용 설정
         val (title, body) = when (type) {
             TYPE_CHAT -> {
-                val notificationTitle = "$groupName 채팅"
+                val notificationTitle = groupName
                 val notificationBody = if (messageBody.isNotEmpty()) messageBody else "새로운 메시지가 도착했습니다"
                 Pair(notificationTitle, notificationBody)
             }
@@ -82,7 +83,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
 
         // 알림 생성 및 표시
         val notification = NotificationCompat.Builder(this, NotificationChannels.DEFAULT)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.drawable.ic_noti)
             .setContentTitle(title)
             .setContentText(body)
             .setAutoCancel(true)

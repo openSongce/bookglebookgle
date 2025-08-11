@@ -108,7 +108,9 @@ fun RegisterScreen(navController: NavController, registerViewModel: RegisterView
                             focusedBorderColor = Color.Transparent,
                             focusedContainerColor = Color.Transparent,
                             unfocusedContainerColor = Color.Transparent,
-                            cursorColor = BaseColor
+                            cursorColor = BaseColor,
+                            unfocusedPlaceholderColor = Color.Gray.copy(alpha = 0.6f),
+                            focusedPlaceholderColor = Color.Gray.copy(alpha = 0.6f)
                         ),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                         keyboardActions = KeyboardActions(
