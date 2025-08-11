@@ -267,14 +267,7 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
                 persistProgress(uid, gid, page);
 
                 // PAGE_MOVE 브로드캐스트(에코 포함)
-                SyncMessage evt = SyncMessage.newBuilder()
-                        .setGroupId(state.groupId)
-                        .setUserId(uidStr)
-                        .setActionType(ActionType.PAGE_MOVE)
-                        .setAnnotationType(AnnotationType.PAGE)
-                        .setPayload(AnnotationPayload.newBuilder().setPage(page).build())
-                        .build();
-                broadcastToAll(state, evt);
+                broadcastToAll(state, req);
             }
 
             private void handleAnnotation(SyncMessage req) {
