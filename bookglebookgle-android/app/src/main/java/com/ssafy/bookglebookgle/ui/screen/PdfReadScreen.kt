@@ -645,6 +645,22 @@ fun PdfReadScreen(
                                             exception: java.lang.Exception?
                                         ) {
                                         }
+
+                                        override fun onViewportChanged(
+                                            pageIndex: Int,
+                                            fitWidthZoom: Float,
+                                            currentZoom: Float,
+                                            centerXNorm: Float,
+                                            centerYNorm: Float
+                                        ) {
+                                            viewModel.onViewportChangedFromUi(
+                                                pageIndex0 = pageIndex,
+                                                fitWidthZoom = fitWidthZoom,
+                                                currentZoom = currentZoom,
+                                                centerXNorm = centerXNorm,
+                                                centerYNorm = centerYNorm
+                                            )
+                                        }
                                     })
 
                                     // PDF 로드

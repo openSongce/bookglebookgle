@@ -11,6 +11,7 @@ import androidx.lifecycle.MutableLiveData
 import com.example.bookglebookgleserver.pdf.grpc.AnnotationPayload
 import com.example.bookglebookgleserver.pdf.grpc.AnnotationType
 import com.example.bookglebookgleserver.pdf.grpc.ActionType
+import com.example.bookglebookgleserver.pdf.grpc.Coordinates
 import com.example.bookglebookgleserver.pdf.grpc.Participant as ProtoParticipant
 import com.example.bookglebookgleserver.pdf.grpc.ParticipantsSnapshot
 import com.example.bookglebookgleserver.pdf.grpc.PdfSyncServiceGrpc
@@ -18,6 +19,7 @@ import com.example.bookglebookgleserver.pdf.grpc.ReadingMode as RpcReadingMode
 import com.example.bookglebookgleserver.pdf.grpc.SyncMessage
 import com.ssafy.bookglebookgle.entity.CommentSync
 import com.ssafy.bookglebookgle.entity.HighlightSync
+import com.ssafy.bookglebookgle.entity.PageViewportSync
 import com.ssafy.bookglebookgle.entity.Participant as GParticipant
 import com.ssafy.bookglebookgle.entity.PdfPageSync
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -51,8 +53,8 @@ class PdfGrpcRepositoryImpl @Inject constructor(
 ) : PdfGrpcRepository {
     private val TAG = "PdfSyncRepo"
 
-    private val _newPageUpdates = MutableLiveData<PdfPageSync>()
-    override val newPageUpdates: LiveData<PdfPageSync> = _newPageUpdates
+    private val _newPageUpdates = MutableLiveData<PageViewportSync>()
+    override val newPageUpdates: LiveData<PageViewportSync> = _newPageUpdates
 
     private val _newHighlights = MutableLiveData<HighlightSync>()
     override val newHighlights: LiveData<HighlightSync> = _newHighlights
@@ -153,8 +155,19 @@ class PdfGrpcRepositoryImpl @Inject constructor(
                             }
                         }
                         ActionType.PAGE_MOVE -> {
+                            val p = msg.payload
+                            val scale = p.scale.takeIf { it > 0.0 }?.toFloat()
+                            val cx = if (p.hasCoordinates()) p.coordinates.startX.toFloat() else null
+                            val cy = if (p.hasCoordinates()) p.coordinates.startY.toFloat() else null
+
                             Handler(Looper.getMainLooper()).post {
-                                _newPageUpdates.value = PdfPageSync(msg.payload.page, msg.userId)
+                                _newPageUpdates.value = PageViewportSync(
+                                    page = p.page,
+                                    userId = msg.userId,
+                                    scaleNorm = scale,
+                                    centerXNorm = cx,
+                                    centerYNorm = cy
+                                )
                             }
                         }
                         ActionType.ADD,
@@ -348,6 +361,30 @@ class PdfGrpcRepositoryImpl @Inject constructor(
             .build()
         obs.onNext(msg)
     }
+
+    override fun sendViewportFollow(groupId: Long, userId: String, page: Int, fitWidthZoom: Float, currentZoom: Float, cxNorm: Float, cyNorm: Float) {
+        val scaleNorm = currentZoom / fitWidthZoom // WIDTH-fit을 1.0으로 정규화
+        val msg = SyncMessage.newBuilder()
+            .setGroupId(groupId)
+            .setUserId(userId)
+            .setActionType(ActionType.PAGE_MOVE)         // ★ 그대로 PAGE_MOVE 사용
+            .setAnnotationType(AnnotationType.PAGE)
+            .setPayload(
+                AnnotationPayload.newBuilder()
+                    .setPage(page)
+                    .setScale(scaleNorm.toDouble())      // ★ 추가된 필드
+                    .setCoordinates(
+                        Coordinates.newBuilder()
+                            .setStartX(cxNorm.toDouble()) // centerX 0..1
+                            .setStartY(cyNorm.toDouble()) // centerY 0..1
+                            .build()
+                    )
+                    .build()
+            )
+            .build()
+        requestObserver?.onNext(msg)
+    }
+
 
 
     override fun reconnect() {

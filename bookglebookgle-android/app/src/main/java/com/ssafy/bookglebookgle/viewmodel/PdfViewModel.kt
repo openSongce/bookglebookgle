@@ -30,6 +30,7 @@ import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.Coordinates as UiCoor
 import com.example.bookglebookgleserver.pdf.grpc.Coordinates as GrpcCoordinates
 import com.ssafy.bookglebookgle.entity.CommentSync
 import com.ssafy.bookglebookgle.entity.HighlightSync
+import com.ssafy.bookglebookgle.entity.PageViewportSync
 import com.ssafy.bookglebookgle.entity.Participant
 import com.ssafy.bookglebookgle.entity.PdfPageSync
 import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.HighlightModel
@@ -836,6 +837,8 @@ class PdfViewModel @Inject constructor(
     private var myUserId: String = ""
     private var groupId: Long = 0
 
+    private var isRemoteViewportChange = false
+
     fun setUserInfo(userId: String, groupId: Long, isHostFromNav: Boolean) {
         this.myUserId = userId
         this.groupId = groupId
@@ -901,9 +904,151 @@ class PdfViewModel @Inject constructor(
 
 
     // Observer들 - Chat과 동일한 패턴
-    private val pdfPageObserver = Observer<PdfPageSync> { pageSync ->
-        handleRemotePageChange(pageSync.page)
+    private val pdfPageObserver = Observer<PageViewportSync> { evt ->
+        handleRemotePageOrViewport(evt)
     }
+
+    private fun handleRemotePageOrViewport(evt: PageViewportSync) {
+        // FREE면 무시
+        if (_readingMode.value == ReadingMode.FREE) return
+        // 내가 리더면 무시(팔로워만 따라감)
+        if (_isCurrentLeader.value) return
+
+        // 1) 페이지 먼저 맞추고
+        if (_currentPage.value != evt.page) {
+            isRemoteViewportChange = true
+            currentPdfView?.jumpTo(evt.page - 1, withAnimation = false, resetZoom = false, resetHorizontalScroll = false)
+            currentPdfView?.centerCurrentPage(withAnimation = false)
+            _currentPage.value = evt.page
+            _showPageInfo.value = true
+        }
+
+        // 2) 뷰포트(줌/중심)가 있으면 적용
+        if (evt.hasViewport) {
+            applyViewportSafely(
+                pageIndex = evt.page - 1,
+                scaleNorm = evt.scaleNorm!!,
+                cxNorm = evt.centerXNorm!!,
+                cyNorm = evt.centerYNorm!!
+            )
+        }
+
+        isRemoteViewportChange = false
+    }
+
+    private fun applyViewportSafely(pageIndex: Int, scaleNorm: Float, cxNorm: Float, cyNorm: Float) {
+        // 렌더 완료/페이지 배치가 끝나지 않았을 수 있으니 약간의 지연로 재시도
+        viewModelScope.launch(Dispatchers.Main) {
+            var tries = 0
+            while (tries < 5 && !_isPdfRenderingComplete.value) {
+                delay(60)
+                tries++
+            }
+
+            val pdf = currentPdfView ?: return@launch
+            val fit = pdf.fitWidthZoom(pageIndex) ?: return@launch          // ★ PDFView에 제공 필요
+            val pageSize = pdf.getPageSize(pageIndex) ?: return@launch      // ★ PDFView에 제공 필요
+
+            val targetZoom = fit * scaleNorm
+            val centerPx = PointF(
+                (cxNorm * pageSize.width).toFloat(),
+                (cyNorm * pageSize.height).toFloat()
+            )
+
+            // ★ PDFView에 아래 유틸이 있어야 함 (적용용)
+            pdf.applyViewport(pageIndex, targetZoom, centerPx)
+        }
+    }
+
+    // PdfViewModel.kt
+    private var viewportDebounceJob: Job? = null
+    private var lastSent: PageViewportSync? = null
+
+    fun onViewportChangedFromUi(
+        pageIndex0: Int,     // 0-based
+        fitWidthZoom: Float,
+        currentZoom: Float,
+        centerXNorm: Float,
+        centerYNorm: Float
+    ) {
+        // 팔로우 모드/리더/연결/에코 방지
+        if (_readingMode.value != ReadingMode.FOLLOW) return
+        if (!_isCurrentLeader.value) return
+        if (!_syncConnected.value) return
+        if (isRemoteViewportChange) return
+
+        val cur = PageViewportSync(
+            page = pageIndex0 + 1, // 서버 1-based
+            userId = myUserId,
+            scaleNorm = (currentZoom / fitWidthZoom),
+            centerXNorm = centerXNorm,
+            centerYNorm = centerYNorm
+        )
+
+        // 변화가 미미하면 무시 (줌/센터 임계치)
+        fun changedEnough(a: PageViewportSync?, b: PageViewportSync): Boolean {
+            if (a == null) return true
+            val dz = kotlin.math.abs((a.scaleNorm ?: 0f) - (b.scaleNorm ?: 0f))
+            val dx = kotlin.math.abs((a.centerXNorm ?: 0f) - (b.centerXNorm ?: 0f))
+            val dy = kotlin.math.abs((a.centerYNorm ?: 0f) - (b.centerYNorm ?: 0f))
+            return dz > 0.01f || dx > 0.01f || dy > 0.01f || a.page != b.page
+        }
+        if (!changedEnough(lastSent, cur)) return
+
+        // 가벼운 디바운스 (핀치 중 난사 방지)
+        viewportDebounceJob?.cancel()
+        viewportDebounceJob = viewModelScope.launch {
+            delay(70) // 50~100ms 선호
+            val gid = currentGroupId ?: return@launch
+            pdfGrpcRepository.sendViewportFollow(
+                groupId = gid,
+                userId = myUserId,
+                page = cur.page,
+                fitWidthZoom = fitWidthZoom,
+                currentZoom = currentZoom,
+                cxNorm = centerXNorm.coerceIn(0f, 1f),
+                cyNorm = centerYNorm.coerceIn(0f, 1f)
+            )
+            lastSent = cur
+        }
+    }
+
+
+    fun broadcastViewportIfLeader() {
+        if (_readingMode.value != ReadingMode.FOLLOW) return
+        if (!_isCurrentLeader.value) return
+        if (!_syncConnected.value) return
+
+        val gid = currentGroupId ?: return
+        val uid = myUserId
+        val pageIdx = _currentPage.value - 1
+        val pdf = currentPdfView ?: return
+
+        val fit = pdf.fitWidthZoom(pageIdx) ?: return
+        val zoom = pdf.currentZoom(pageIdx) ?: return                 // ★ PDFView에 제공
+        val pageSize = pdf.getPageSize(pageIdx)
+        val center = pdf.getViewportCenterOnPage(pageIdx) ?: return   // ★ PDFView에 제공 (페이지 기준 px)
+
+        // 0..1로 정규화
+        val cxNorm = (center.x / pageSize.width).coerceIn(0f, 1f)
+        val cyNorm = (center.y / pageSize.height).coerceIn(0f, 1f)
+        val scaleNorm = (zoom / fit).coerceAtLeast(0f)
+
+        // 원격 반향 방지
+        if (isRemoteViewportChange) return
+
+        pdfGrpcRepository.sendViewportFollow(
+            groupId = gid,
+            userId = uid,
+            page = _currentPage.value,
+            fitWidthZoom = fit,
+            currentZoom = zoom,
+            cxNorm = cxNorm,
+            cyNorm = cyNorm
+        )
+    }
+
+
 
     private val joinObserver = Observer<String> { joinerId ->
         if (_participants.value.none { it.userId == joinerId }) {
@@ -1012,6 +1157,7 @@ class PdfViewModel @Inject constructor(
 
                 if (readingMode.value == ReadingMode.FOLLOW && _isCurrentLeader.value) {
                     pdfGrpcRepository.sendPageUpdate(_currentPage.value)
+                    broadcastViewportIfLeader()
                 }
                 // FREE는 그냥 스냅샷만으로 충분 (원하면 아래 호출)
                 // if (readingMode.value == ReadingMode.FREE) sendProgressUpdateIfNeeded()
