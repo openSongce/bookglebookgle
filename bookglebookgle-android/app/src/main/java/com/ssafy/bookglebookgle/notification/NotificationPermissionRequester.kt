@@ -6,10 +6,18 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.google.accompanist.permissions.*
+import com.ssafy.bookglebookgle.ui.theme.BaseColor
+import com.ssafy.bookglebookgle.ui.theme.DeepMainColor
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
@@ -82,12 +90,61 @@ private fun PermissionRationaleDialog(
     onRequest: () -> Unit,
     onOpenSettings: () -> Unit
 ) {
+
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("알림 권한이 거부됨") },
-        text = { Text("그룹 스케줄 알림을 받으려면 알림 권한이 필요합니다.") },
-        confirmButton = { TextButton(onClick = onRequest) { Text("다시 요청") } },
-        dismissButton = { TextButton(onClick = onOpenSettings) { Text("설정 열기") } }
+        title = {
+            Text(
+                text = "알림 권한이 거부됨",
+                style = MaterialTheme.typography.headlineSmall,
+                color = DeepMainColor.copy(alpha = 0.9f),
+            )
+        },
+        text = {
+            Text(
+                text = "그룹 스케줄 알림을 받으려면 알림 권한이 필요합니다.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.Gray.copy(alpha = 0.8f),
+                lineHeight = 20.sp
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = onRequest,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = BaseColor,
+                    contentColor = Color.White
+                ),
+                shape = RoundedCornerShape(12.dp),
+                elevation = ButtonDefaults.buttonElevation(
+                    defaultElevation = 4.dp,
+                    pressedElevation = 2.dp
+                )
+            ) {
+                Text(
+                    text = "다시 요청",
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        },
+        dismissButton = {
+            OutlinedButton(
+                onClick = onOpenSettings,
+                border = BorderStroke(1.dp, BaseColor.copy(alpha = 0.6f)),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = BaseColor.copy(alpha = 0.8f)
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text(
+                    text = "설정 열기",
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        },
+        containerColor = Color.White,
+        tonalElevation = 8.dp,
+        shape = RoundedCornerShape(20.dp)
     )
 }
 
