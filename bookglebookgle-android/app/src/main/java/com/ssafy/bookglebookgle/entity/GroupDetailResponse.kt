@@ -11,14 +11,66 @@ data class GroupDetailResponse(
     val isHost: Boolean,
     val minRequiredRating: Int,
     val pageCount: Int,
-    val members: List<GroupMemberDetailDto>
+    val members: List<GroupMemberDetailDto>,
+    val isCompleted: Boolean
 )
 
 data class GroupMemberDetailDto(
     val userId: Long,
     val userNickName: String,
-    val profileColor: String,
+    val profileColor: String?,
     val lastPageRead: Int,   // 서버: 0-based
     val progressPercent: Int,
-    val isHost: Boolean
+    val isHost: Boolean,
+    val isCompleted: Boolean
+)
+
+data class GroupDetail(
+    val roomTitle: String,
+    val category: String,
+    val schedule: String,
+    val memberCount: Int,
+    val maxMemberCount: Int,
+    val description: String,
+    val photoUrl: String?,
+    val isHost: Boolean,
+    val isCompleted: Boolean,          // 모임 종료 여부
+    val minRequiredRating: Int,
+    val pageCount: Int,
+    val members: List<GroupMember>,
+)
+
+data class GroupMember(
+    val userId: Long,
+    val userNickName: String,
+    val profileColor: String?,
+    val lastPageRead: Int,     // 서버 0-based 유지
+    val progressPercent: Int,
+    val isHost: Boolean,
+    val hasRated: Boolean      // 내가 보기 좋게 이름 변경(서버: isCompleted)
+)
+
+fun GroupDetailResponse.toDomain(): GroupDetail = GroupDetail(
+    roomTitle = roomTitle,
+    category = category,
+    schedule = schedule,
+    memberCount = memberCount,
+    maxMemberCount = maxMemberCount,
+    description = description,
+    photoUrl = photoUrl,
+    isCompleted = isCompleted,
+    minRequiredRating = minRequiredRating,
+    isHost = isHost,
+    pageCount = pageCount,
+    members = members.map { it.toDomain() }
+)
+
+fun GroupMemberDetailDto.toDomain(): GroupMember = GroupMember(
+    userId = userId,
+    userNickName = userNickName,
+    profileColor = profileColor,
+    lastPageRead = lastPageRead,
+    progressPercent = progressPercent,
+    isHost = isHost,
+    hasRated = isCompleted   // ★ 서버 필드명은 isCompleted지만 의미는 "평가 완료"
 )

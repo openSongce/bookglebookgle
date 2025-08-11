@@ -31,17 +31,19 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import com.google.gson.Gson
 import com.ssafy.bookglebookgle.R
-import com.ssafy.bookglebookgle.entity.GroupDetailResponse
-import com.ssafy.bookglebookgle.entity.GroupMemberDetailDto
+import com.ssafy.bookglebookgle.entity.GroupDetail
+import com.ssafy.bookglebookgle.entity.GroupMember
 import com.ssafy.bookglebookgle.navigation.Screen
 import com.ssafy.bookglebookgle.ui.component.CustomTopAppBar
 import com.ssafy.bookglebookgle.ui.component.GroupEditDialog
 import com.ssafy.bookglebookgle.ui.theme.MainColor
 import com.ssafy.bookglebookgle.util.ScreenSize
+import com.ssafy.bookglebookgle.util.UserInfoManager
 import com.ssafy.bookglebookgle.viewmodel.EditGroupUiState
 import com.ssafy.bookglebookgle.viewmodel.GroupDetailUiState
 import com.ssafy.bookglebookgle.viewmodel.GroupDetailViewModel
 import com.ssafy.bookglebookgle.viewmodel.JoinGroupUiState
+import com.ssafy.bookglebookgle.viewmodel.RateMemberUiState
 
 @Composable
 fun GroupDetailScreen(
@@ -55,10 +57,49 @@ fun GroupDetailScreen(
     val editGroupState by viewModel.editGroupState.collectAsStateWithLifecycle()
     val currentIsMyGroup by viewModel.isMyGroup.collectAsStateWithLifecycle()
 
+    val hasRatedByMe by viewModel.hasRatedByMe.collectAsStateWithLifecycle()
+    val myUserId by viewModel.currentUserId.collectAsStateWithLifecycle()
+    val rateState by viewModel.rateMemberState.collectAsStateWithLifecycle()
+
+    var showRateDialog by remember { mutableStateOf(false) }
+    var pendingToId by remember { mutableStateOf<Long?>(null) }
+    var pendingScore by remember { mutableStateOf(5f) } // 기본 5점
+
+
     val context = LocalContext.current
 
     // 수정 다이얼로그 상태
     var showEditDialog by remember { mutableStateOf(false) }
+
+    if (showRateDialog) {
+        val detail = (uiState as? GroupDetailUiState.Success)?.groupDetail
+        RateMemberDialog(
+            members = detail?.members.orEmpty(),
+            myUserId = myUserId,
+            onDismiss = { showRateDialog = false },
+            onConfirm = { toId, score ->
+                viewModel.rateMember(groupId, toId, score)
+            }
+        )
+    }
+
+// 저장 결과 토스트/닫기
+    LaunchedEffect(rateState) {
+        when (rateState) {
+            is RateMemberUiState.Success -> {
+                Toast.makeText(context, "평가가 등록되었습니다.", Toast.LENGTH_SHORT).show()
+                showRateDialog = false
+                viewModel.resetRateMemberState()
+            }
+            is RateMemberUiState.Error -> {
+                Toast.makeText(context, (rateState as RateMemberUiState.Error).message, Toast.LENGTH_LONG).show()
+                viewModel.resetRateMemberState()
+            }
+            else -> Unit
+        }
+    }
+
+    val userInfoManager : UserInfoManager
 
     // 컴포넌트가 처음 생성될 때 그룹 상세 정보 조회
     LaunchedEffect(groupId, isMyGroup) {
@@ -176,7 +217,7 @@ fun GroupDetailScreen(
                 CustomTopAppBar(
                     title = title,
                     navController = navController,
-                    ismygroup = isMyGroup,
+                    ismygroup = currentIsMyGroup,
                     isHost = currentState.groupDetail.isHost,
                     isDetailScreen = true,
                     onEditClick = if (currentIsMyGroup) {
@@ -191,6 +232,8 @@ fun GroupDetailScreen(
                     navController = navController,
                     groupId = groupId,
                     viewModel = viewModel,
+                    hasRatedByMe = hasRatedByMe,                  // ★ 추가
+                    onOpenRateDialog = { showRateDialog = true },
                     onJoinClick = { viewModel.joinGroup(groupId) },
                     onDeleteClick = {
                         viewModel.deleteGroup(groupId)
@@ -226,12 +269,14 @@ fun GroupDetailScreen(
 @Composable
 private fun GroupDetailContent(
     context : Context,
-    groupDetail: GroupDetailResponse,
+    groupDetail: GroupDetail,
     isMyGroup: Boolean,
     isJoining: Boolean,
     navController: NavHostController,
     groupId: Long,
     viewModel: GroupDetailViewModel,
+    hasRatedByMe: Boolean,
+    onOpenRateDialog: () -> Unit,
     onJoinClick: () -> Unit,
     onDeleteClick: () -> Unit,
     onLeaveClick: () -> Unit
@@ -376,6 +421,31 @@ private fun GroupDetailContent(
                 }
             }
 
+            if (isMyGroup && groupDetail.isCompleted) {
+                Spacer(Modifier.height(ScreenSize.height * 0.02f))
+                val enabled = hasRatedByMe == false
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(ScreenSize.height * 0.065f)
+                        .clip(RoundedCornerShape(ScreenSize.width * 0.03f))
+                        .background(if (enabled) Color(0xFF4CAF50) else Color(0xFF9E9E9E))
+                        .clickable(enabled = enabled) {
+                            // 다이얼로그 열기
+                            onOpenRateDialog()
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = if (enabled) "팀원 평점 남기기" else "평가 완료됨",
+                        color = Color.White,
+                        fontSize = ScreenSize.width.value.times(0.04f).sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+
 
 
 
@@ -478,7 +548,7 @@ fun InfoRow(label: String, value: String) {
 @Composable
 fun ProgressStatusCard(
     pageCount: Int,
-    members: List<GroupMemberDetailDto>,
+    members: List<GroupMember>,
 ) {
     val barColor = Color(0xFFDDDDDD)
     val barWidth = ScreenSize.width * 0.15f
@@ -486,7 +556,7 @@ fun ProgressStatusCard(
     val fontSize = ScreenSize.width.value * 0.038f
 
     // 각 멤버 진도 % 계산: 서버 progressPercent 우선, 없으면 lastPageRead 기반 계산
-    fun percentOf(m: GroupMemberDetailDto): Int {
+    fun percentOf(m: GroupMember): Int {
         val server = m.progressPercent
         if (server in 0..100) return server
         if (pageCount <= 0) return 0
@@ -606,3 +676,66 @@ private fun MemberAvatar(
         }
     }
 }
+
+@Composable
+private fun RateMemberDialog(
+    members: List<GroupMember>,
+    myUserId: Long?,
+    onDismiss: () -> Unit,
+    onConfirm: (toId: Long, score: Float) -> Unit
+) {
+    if (myUserId == null) return
+
+    val candidates = remember(members, myUserId) {
+        members.filter { it.userId != myUserId } // 본인 제외
+    }
+    var selectedToId by remember { mutableStateOf<Long?>(candidates.firstOrNull()?.userId) }
+    var score by remember { mutableStateOf(5f) } // 기본 5점
+
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("팀원 평점 남기기", fontWeight = FontWeight.Bold) },
+        text = {
+            Column {
+                Text("대상 선택")
+                Spacer(Modifier.height(6.dp))
+                candidates.forEach { m ->
+                    val selected = selectedToId == m.userId
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (selected) Color(0xFFE8F5E9) else Color(0xFFF8FAFC))
+                            .border(1.dp, if (selected) Color(0xFF4CAF50) else Color(0xFFE2E8F0), RoundedCornerShape(8.dp))
+                            .clickable { selectedToId = m.userId }
+                            .padding(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(m.userNickName, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal)
+                    }
+                    Spacer(Modifier.height(8.dp))
+                }
+
+                Spacer(Modifier.height(6.dp))
+                Text("점수: ${"%.1f".format(score)}")
+                androidx.compose.material3.Slider(
+                    value = score,
+                    onValueChange = { score = it },
+                    valueRange = 1f..5f,
+                    steps = 8 // 0.5 단위로 주고 싶으면 8~; 아니면 steps=3(정수) 등
+                )
+            }
+        },
+        confirmButton = {
+            val enabled = selectedToId != null
+            androidx.compose.material3.TextButton(
+                enabled = enabled,
+                onClick = { selectedToId?.let { onConfirm(it, score) } }
+            ) { Text("저장") }
+        },
+        dismissButton = {
+            androidx.compose.material3.TextButton(onClick = onDismiss) { Text("취소") }
+        }
+    )
+}
+

@@ -1,9 +1,11 @@
 package com.ssafy.bookglebookgle.repository
 
 import android.util.Log
+import com.ssafy.bookglebookgle.entity.GroupDetail
 import com.ssafy.bookglebookgle.entity.GroupDetailResponse
 import com.ssafy.bookglebookgle.entity.GroupListResponse
 import com.ssafy.bookglebookgle.entity.MyGroupResponse
+import com.ssafy.bookglebookgle.entity.toDomain
 import com.ssafy.bookglebookgle.network.api.GroupApi
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
@@ -106,29 +108,39 @@ class GroupRepositoryImpl @Inject constructor(
      * @param groupId 그룹 ID
      * @return 그룹 상세 정보
      */
-    override suspend fun getGroupDetail(groupId: Long): Response<GroupDetailResponse> {
+    override suspend fun getGroupDetail(groupId: Long): GroupDetail {
         return try {
             Log.d(TAG, "모임 상세 조회 요청 시작 - groupId: $groupId")
 
-            val response = groupApi.getGroupDetail(groupId)
+            val resp = groupApi.getGroupDetail(groupId)
 
-            if (response.isSuccessful) {
-                Log.d(TAG, "모임 상세 조회 성공 - 응답코드: ${response.code()}")
-                response.body()?.let { groupDetail ->
-                    Log.d(TAG, "조회된 모임 정보 - 제목: ${groupDetail.roomTitle}, 카테고리: ${groupDetail.category}, ${groupDetail.members}")
-                }
-            } else {
-                val errorBody = response.errorBody()?.string()
-                Log.d(TAG, "모임 상세 조회 실패 - 응답코드: ${response.code()}, 메시지: ${response.message()}")
+            if (!resp.isSuccessful) {
+                val errorBody = resp.errorBody()?.string()
+                Log.d(TAG, "모임 상세 조회 실패 - code=${resp.code()}, msg=${resp.message()}")
                 Log.d(TAG, "서버 에러 메시지: $errorBody")
+                throw Exception("모임 상세 조회 실패(code=${resp.code()})")
             }
 
-            response
+            val body = resp.body()
+                ?: throw Exception("모임 상세 조회 실패: 응답 바디가 비어있음")
+
+            // 로깅은 너무 길지 않게 핵심만
+            Log.d(
+                TAG,
+                "모임 상세 조회 성공 - 제목=${body.roomTitle}, 카테고리=${body.category}, " +
+                        "isCompleted=${body.isCompleted}, 멤버수=${body.members.size}, " +
+                        "평점제출완료멤버=${body.members.count { it.isCompleted }}"
+            )
+
+            // ★ 도메인으로 매핑해서 반환
+            body.toDomain()
+
         } catch (e: Exception) {
-            Log.e(TAG, "모임 상세 조회 실패 - 네트워크 오류: ${e.message}")
+            Log.e(TAG, "모임 상세 조회 실패 - ${e.message}", e)
             throw Exception("모임 상세 조회 중 오류가 발생했습니다: ${e.message}", e)
         }
     }
+
 
     /**
      * 내 모임 조회
@@ -291,4 +303,22 @@ class GroupRepositoryImpl @Inject constructor(
             throw Exception("모임 탈퇴 중 오류가 발생했습니다: ${e.message}", e)
         }
     }
+
+    override suspend fun rateMember(groupId: Long, toId: Long, score: Float): Response<Unit> {
+        return try {
+            Log.d(TAG, "멤버 평점 등록 요청 - groupId=$groupId, toId=$toId, score=$score")
+            val resp = groupApi.rateMember(groupId, toId, score)
+            if (resp.isSuccessful) {
+                Log.d(TAG, "멤버 평점 등록 성공 - code=${resp.code()}")
+            } else {
+                val body = resp.errorBody()?.string()
+                Log.d(TAG, "멤버 평점 등록 실패 - code=${resp.code()}, msg=${resp.message()}, body=$body")
+            }
+            resp
+        } catch (e: Exception) {
+            Log.e(TAG, "멤버 평점 등록 예외 - ${e.message}", e)
+            throw Exception("멤버 평점 등록 중 오류가 발생했습니다: ${e.message}", e)
+        }
+    }
+
 }

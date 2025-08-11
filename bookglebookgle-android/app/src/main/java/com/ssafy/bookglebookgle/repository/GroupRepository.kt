@@ -1,5 +1,6 @@
 package com.ssafy.bookglebookgle.repository
 
+import com.ssafy.bookglebookgle.entity.GroupDetail
 import com.ssafy.bookglebookgle.entity.GroupDetailResponse
 import com.ssafy.bookglebookgle.entity.GroupListResponse
 import com.ssafy.bookglebookgle.entity.MyGroupResponse
@@ -21,7 +22,7 @@ interface GroupRepository {
 
     suspend fun getAllGroups(): Response<List<GroupListResponse>>
 
-    suspend fun getGroupDetail(groupId: Long): Response<GroupDetailResponse>
+    suspend fun getGroupDetail(groupId: Long): GroupDetail
 
     suspend fun getMyGroups(): Response<List<MyGroupResponse>>
 
@@ -37,4 +38,7 @@ interface GroupRepository {
     suspend fun searchGroups(roomTitle: String): Response<List<GroupListResponse>>
 
     suspend fun leaveGroup(groupId: Long): Response<ResponseBody>
+
+    suspend fun rateMember(groupId: Long, toId: Long, score: Float): Response<Unit>
+
 }

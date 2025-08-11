@@ -99,4 +99,11 @@ interface GroupApi {
     suspend fun leaveGroup(
         @Path("groupId") groupId: Long
     ): Response<ResponseBody>
+
+    @POST("/group/{groupId}/rating")
+    suspend fun rateMember(
+        @Path("groupId") groupId: Long,
+        @Query("toId") toId: Long,
+        @Query("score") score: Float
+    ): retrofit2.Response<Unit>
 }

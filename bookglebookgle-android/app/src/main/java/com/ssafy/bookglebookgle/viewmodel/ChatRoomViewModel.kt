@@ -107,9 +107,9 @@ class ChatRoomViewModel @Inject constructor(
 
             try {
                 val groupDetail = groupRepositoryImpl.getGroupDetail(groupId)
-                val groupTitle = groupDetail.body()?.roomTitle
-                val groupCategory = groupDetail.body()?.category
-                val isHost = groupDetail.body()?.isHost ?: false
+                val groupTitle = groupDetail.roomTitle
+                val groupCategory = groupDetail.category
+                val isHost = groupDetail.isHost ?: false
 
                 // 카테고리가 READING인지 확인
                 val isReadingCategory = groupCategory?.equals("READING", ignoreCase = true) == true

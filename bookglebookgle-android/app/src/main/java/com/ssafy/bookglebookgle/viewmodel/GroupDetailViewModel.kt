@@ -4,13 +4,16 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.gson.Gson
+import com.ssafy.bookglebookgle.entity.GroupDetail
 import com.ssafy.bookglebookgle.entity.GroupDetailResponse
 import com.ssafy.bookglebookgle.repository.GroupRepositoryImpl
 import com.ssafy.bookglebookgle.ui.component.GroupEditData
+import com.ssafy.bookglebookgle.util.UserInfoManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -22,8 +25,14 @@ private const val TAG = "싸피_GroupDetailViewModel"
 
 sealed class GroupDetailUiState {
     object Loading : GroupDetailUiState()
-    data class Success(val groupDetail: GroupDetailResponse) : GroupDetailUiState()
+    data class Success(val groupDetail: GroupDetail) : GroupDetailUiState() // ← 여기
     data class Error(val message: String) : GroupDetailUiState()
+}
+sealed class RateMemberUiState {
+    object Idle : RateMemberUiState()
+    object Loading : RateMemberUiState()
+    object Success : RateMemberUiState()
+    data class Error(val message: String) : RateMemberUiState()
 }
 
 sealed class JoinGroupUiState {
@@ -43,7 +52,8 @@ sealed class EditGroupUiState {
 
 @HiltViewModel
 class GroupDetailViewModel @Inject constructor(
-    private val groupRepositoryImpl: GroupRepositoryImpl
+    private val groupRepositoryImpl: GroupRepositoryImpl,
+    private val userInfoManager: UserInfoManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<GroupDetailUiState>(GroupDetailUiState.Loading)
@@ -60,6 +70,36 @@ class GroupDetailViewModel @Inject constructor(
     private val _editGroupState = MutableStateFlow<EditGroupUiState>(EditGroupUiState.Idle)
     val editGroupState: StateFlow<EditGroupUiState> = _editGroupState.asStateFlow()
 
+    // 내 userId 저장
+    private val _currentUserId = MutableStateFlow<Long?>(null)
+    fun setCurrentUserId(id: Long) {
+        _currentUserId.value = id
+        recomputeHasRatedByMe() // lastDetail이 있으면 즉시 재계산
+    }
+    val currentUserId: StateFlow<Long?> = _currentUserId.asStateFlow()
+
+    private val _rateMemberState = MutableStateFlow<RateMemberUiState>(RateMemberUiState.Idle)
+    val rateMemberState: StateFlow<RateMemberUiState> = _rateMemberState.asStateFlow()
+
+
+
+    // 모임 종료 여부 (상단 isCompleted)
+    private val _groupCompleted = MutableStateFlow(false)
+    val groupCompleted: StateFlow<Boolean> = _groupCompleted.asStateFlow()
+
+    // 내가 평점을 이미 제출했는지 (members[i].isCompleted)
+    private val _hasRatedByMe = MutableStateFlow(false)
+    val hasRatedByMe: StateFlow<Boolean> = _hasRatedByMe.asStateFlow()
+
+    // 종료됐고 + 나는 아직 제출 안했으면 평점 버튼 활성화
+    val canRate: StateFlow<Boolean> =
+        kotlinx.coroutines.flow.combine(_groupCompleted, _hasRatedByMe) { completed, rated ->
+            completed && !rated
+        }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, false)
+
+    // 편의: 마지막 응답 보관(유저id 나중에 들어와도 재계산)
+    private var lastDetail: GroupDetail? = null
+
     // 편의 변환: PDF 쪽에서 쓰기 쉽게 가공
     data class InitialMember(
         val userId: String,
@@ -69,19 +109,24 @@ class GroupDetailViewModel @Inject constructor(
         val maxReadPage1Based: Int // 0-based -> 1-based 변환
     )
 
-    fun GroupDetailResponse.toInitialMembers(): List<InitialMember> =
+    fun GroupDetail.toInitialMembers(): List<InitialMember> =
         members.map {
             InitialMember(
                 userId = it.userId.toString(),
-                nickname = it.userNickName,
+                nickname = it.userNickName,     // 도메인 필드명이 다르면 여기를 맞춰주세요
                 color = it.profileColor,
                 isHost = it.isHost,
                 maxReadPage1Based = (it.lastPageRead + 1).coerceAtLeast(0)
             )
         }
 
-    fun GroupDetailResponse.toInitialProgressMap(): Map<String, Int> =
+    fun GroupDetail.toInitialProgressMap(): Map<String, Int> =
         members.associate { it.userId.toString() to (it.lastPageRead + 1).coerceAtLeast(0) }
+
+    init {
+        userInfoManager.getUserId()?.let { setCurrentUserId(it) }
+    }
+
 
 
     /**
@@ -96,37 +141,36 @@ class GroupDetailViewModel @Inject constructor(
      * 그룹 상세 정보 조회
      */
     fun getGroupDetail(groupId: Long) {
-        Log.d(TAG, "그룹 상세 조회 시작 - groupId: $groupId")
-
         viewModelScope.launch {
             _uiState.value = GroupDetailUiState.Loading
-
             try {
-                val response = groupRepositoryImpl.getGroupDetail(groupId)
+                // repo는 바로 GroupDetail을 던짐 (실패시 예외 throw)
+                val detail: GroupDetail = groupRepositoryImpl.getGroupDetail(groupId)
 
-                Log.d(TAG, "그룹 상세 조회 응답 - 성공여부: ${response.isSuccessful}, 코드: ${response.code()}")
+                lastDetail = detail
+                _groupCompleted.value = detail.isCompleted
 
-                if (response.isSuccessful) {
-                    response.body()?.let { groupDetail ->
-                        Log.d(TAG, "그룹 상세 조회 성공 - 제목: ${groupDetail.roomTitle}, 카테고리: ${groupDetail.category}")
-                        Log.d(TAG, "pageCount(from API) = ${groupDetail.pageCount}")
-                        _uiState.value = GroupDetailUiState.Success(groupDetail)
-                    } ?: run {
-                        _uiState.value = GroupDetailUiState.Error("그룹 상세 정보를 가져올 수 없습니다.")
-                    }
+                val me = _currentUserId.value
+                _hasRatedByMe.value = if (me != null) {
+                    detail.members.firstOrNull { it.userId == me }?.hasRated == true
                 } else {
-                    Log.e(TAG, "그룹 상세 조회 실패 - 코드: ${response.code()}, 메시지: ${response.message()}")
-                    _uiState.value = GroupDetailUiState.Error(
-                        "그룹 상세 조회 실패: ${response.code()} ${response.message()}"
-                    )
+                    false
                 }
+
+                _uiState.value = GroupDetailUiState.Success(detail)
             } catch (e: Exception) {
-                Log.e(TAG, "그룹 상세 조회 중 예외 발생: ${e.message}", e)
                 _uiState.value = GroupDetailUiState.Error(
                     e.message ?: "알 수 없는 오류가 발생했습니다."
                 )
             }
         }
+    }
+
+
+    fun recomputeHasRatedByMe() {
+        val body = lastDetail ?: return
+        val me = _currentUserId.value ?: return
+        _hasRatedByMe.value = body.members.firstOrNull { it.userId == me }?.hasRated == true
     }
 
     /**
@@ -329,4 +373,37 @@ class GroupDetailViewModel @Inject constructor(
     fun resetJoinGroupState() {
         _joinGroupState.value = JoinGroupUiState.Idle
     }
+
+    fun rateMember(groupId: Long, toId: Long, score: Float) {
+        viewModelScope.launch {
+            _rateMemberState.value = RateMemberUiState.Loading
+            try {
+                val resp = groupRepositoryImpl.rateMember(groupId, toId, score)
+                if (resp.isSuccessful) {
+                    _rateMemberState.value = RateMemberUiState.Success
+                    // 최신화: 내 제출여부/멤버 상태 갱신
+                    getGroupDetail(groupId)
+                } else {
+                    val body = resp.errorBody()?.string().orEmpty()
+                    _rateMemberState.value = RateMemberUiState.Error(
+                        when (resp.code()) {
+                            400 -> when {
+                                body.contains("본인") || body.contains("자기") -> "본인은 평가할 수 없어요."
+                                body.contains("중복") -> "이미 해당 멤버를 평가했어요."
+                                else -> body.ifBlank { "잘못된 요청입니다." }
+                            }
+                            404 -> "그룹 또는 대상을 찾지 못했어요."
+                            500 -> "서버 오류가 발생했어요."
+                            else -> body.ifBlank { "평가 등록에 실패했어요." }
+                        }
+                    )
+                }
+            } catch (e: Exception) {
+                _rateMemberState.value = RateMemberUiState.Error(e.message ?: "네트워크 오류가 발생했어요.")
+            }
+        }
+    }
+
+    fun resetRateMemberState() { _rateMemberState.value = RateMemberUiState.Idle }
+
 }

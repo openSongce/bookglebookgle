@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.ssafy.bookglebookgle.R
+import com.ssafy.bookglebookgle.entity.GroupDetail
 import com.ssafy.bookglebookgle.entity.GroupDetailResponse
 import com.ssafy.bookglebookgle.ui.screen.DateTimePickerDialog
 import com.ssafy.bookglebookgle.ui.theme.BaseColor
@@ -45,7 +46,7 @@ data class GroupEditData(
 
 @Composable
 fun GroupEditDialog(
-    groupDetail: GroupDetailResponse,
+    groupDetail: GroupDetail,
     onDismiss: () -> Unit,
     onSave: (GroupEditData) -> Unit
 ) {
