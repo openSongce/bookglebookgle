@@ -88,22 +88,9 @@ class QuizService:
                     )
                     
                     if content_chunks:
-                        # progress 퍼센트에 따라 청크 단위로 내용 조정
-                        progress_percentage = quiz_data["progress_percentage"]
-                        if progress_percentage == 50:
-                            # 50%일 때: 청크의 절반만 사용
-                            chunks_to_use = max(1, len(content_chunks) // 2)
-                            selected_chunks = content_chunks[:chunks_to_use]
-                            combined_content = "\n\n".join(selected_chunks)
-                            logger.info(f"Retrieved {len(content_chunks)} chunks from VectorDB, using first {chunks_to_use} chunks for 50% progress")
-                        elif progress_percentage == 100:
-                            # 100%일 때: 모든 청크 사용
-                            combined_content = "\n\n".join(content_chunks)
-                            logger.info(f"Retrieved {len(content_chunks)} chunks from VectorDB, using all chunks for 100% progress")
-                        else:
-                            # 기본값: 모든 청크 사용
-                            combined_content = "\n\n".join(content_chunks)
-                            logger.info(f"Retrieved {len(content_chunks)} chunks from VectorDB for {progress_percentage}% progress")
+                        # VectorDB에서 이미 올바른 진도율 청크를 반환하므로 추가 필터링 불필요
+                        combined_content = "\n\n".join(content_chunks)
+                        logger.info(f"Retrieved {len(content_chunks)} chunks from VectorDB for {quiz_data['progress_percentage']}% progress")
                     else:
                         logger.warning(f"No content found in VectorDB for document {quiz_data['document_id']} at {quiz_data['progress_percentage']}% progress")
                 except Exception as e:

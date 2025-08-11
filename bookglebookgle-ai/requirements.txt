@@ -21,7 +21,6 @@ Deprecated==1.2.18
 deprecation==2.1.0
 distro==1.9.0
 durationpy==0.10
-fastapi==0.104.1
 filelock==3.18.0
 flatbuffers==25.2.10
 frozenlist==1.7.0
@@ -121,7 +120,6 @@ shellingham==1.5.4
 six==1.17.0
 sniffio==1.3.1
 SQLAlchemy==2.0.41
-starlette==0.27.0
 sympy==1.14.0
 tenacity==9.1.2
 tesseract==0.1.3
@@ -138,7 +136,6 @@ typing_extensions>=4.8.0
 tzdata==2025.2
 uritemplate==4.2.0
 urllib3==2.5.0
-uvicorn==0.24.0
 watchfiles==1.1.0
 websocket-client==1.8.0
 websockets==15.0.1
@@ -148,8 +145,6 @@ yarl==1.20.1
 zipp==3.23.0
 zstandard==0.23.0
 psutil==5.9.8
-paddlepaddle>=2.6.0
-paddleocr>=2.7.1
 opencv-python-headless>=4.8.0
 shapely>=2.0.0
 redis>=4.2
