@@ -169,18 +169,45 @@ class DiscussionService:
             
             discussion_info = self.active_discussions[session_id]
             
-            # 채팅 기록에서 최근 대화 컨텍스트 가져오기
+            # 채팅 기록에서 최근 대화 컨텍스트 가져오기 및 AI 응답 필요성 판단
             try:
                 recent_messages = await self.chat_history_manager.get_recent_messages(
                     session_id, limit=10
                 )
+                
+                # 최근 메시지에서 사용자 메시지만 카운트 (AI 메시지 제외)
+                user_messages_since_ai = []
+                for msg in reversed(recent_messages):
+                    if msg.message_type == MessageType.AI:
+                        break  # 마지막 AI 응답 이후부터 카운트
+                    if msg.message_type == MessageType.USER:
+                        user_messages_since_ai.append(msg)
+                
+                # 참여자 수에 따른 AI 응답 대기 채팅 수 계산
+                participants_count = len(discussion_info.get("participants", []))
+                if participants_count <= 1:
+                    required_messages = 1  # 1명 이하: 1개 메시지 후 응답
+                elif participants_count <= 3:
+                    required_messages = 2  # 2-3명: 2개 메시지 후 응답
+                else:
+                    required_messages = 3  # 4명 이상: 3개 메시지 후 응답 (최대)
+                
+                # AI 응답이 필요한지 판단
+                should_respond = len(user_messages_since_ai) >= required_messages
+                
+                logger.debug(f"Participants: {participants_count}, Required messages: {required_messages}, Current user messages: {len(user_messages_since_ai)}")
+                
                 chat_context = "\n".join([
                     f"{msg.nickname}: {msg.content}" 
-                    for msg in recent_messages[-7:]  # 최근 3개 메시지만 사용
+                    for msg in recent_messages[-7:]  # 최근 7개 메시지만 사용
                 ])
             except Exception as e:
                 logger.warning(f"Failed to get chat history context: {e}")
                 chat_context = f"{sender_nickname}: {message}"
+                # Redis 접근 실패 시 기본적으로 응답하지 않음
+                should_respond = False
+                user_messages_since_ai = []
+                required_messages = 0  # Redis 실패시 기본값
             
             # 벡터DB에서 독서 모임별 문서 내용 가져와서 맥락 제공
             document_id = discussion_info["document_id"]
@@ -197,13 +224,19 @@ class DiscussionService:
             else:
                 document_content = await self.vector_db.get_document_summary(document_id)
             
-            # LLM으로 토론 진행자 응답 생성 (채팅 기록 컨텍스트 포함)
-            ai_response = await self.generate_discussion_response_with_context(
-                message=message,
-                sender_nickname=sender_nickname,
-                document_content=document_content,
-                chat_context=chat_context
-            )
+            # AI 응답 생성 여부 결정
+            ai_response = None
+            if should_respond:
+                # LLM으로 토론 진행자 응답 생성 (채팅 기록 컨텍스트 포함)
+                ai_response = await self.generate_discussion_response_with_context(
+                    message=message,
+                    sender_nickname=sender_nickname,
+                    document_content=document_content,
+                    chat_context=chat_context
+                )
+                logger.debug(f"AI response generated after {len(user_messages_since_ai)} user messages (required: {required_messages})")
+            else:
+                logger.debug(f"AI response skipped - only {len(user_messages_since_ai)} user messages since last AI response (required: {required_messages})")
             
             # AI 응답도 채팅 기록에 저장
             if ai_response:
@@ -291,18 +324,45 @@ class DiscussionService:
                 yield "AI 토론 진행자가 비활성화되었습니다."
                 return
             
-            # 채팅 기록에서 최근 대화 컨텍스트 가져오기
+            # 채팅 기록에서 최근 대화 컨텍스트 가져오기 및 AI 응답 필요성 판단
             try:
                 recent_messages = await self.chat_history_manager.get_recent_messages(
-                    session_id, limit=5
+                    session_id, limit=10
                 )
+                
+                # 최근 메시지에서 사용자 메시지만 카운트 (AI 메시지 제외)
+                user_messages_since_ai = []
+                for msg in reversed(recent_messages):
+                    if msg.message_type == MessageType.AI:
+                        break  # 마지막 AI 응답 이후부터 카운트
+                    if msg.message_type == MessageType.USER:
+                        user_messages_since_ai.append(msg)
+                
+                # 참여자 수에 따른 AI 응답 대기 채팅 수 계산
+                participants_count = len(discussion_info.get("participants", []))
+                if participants_count <= 1:
+                    required_messages = 1  # 1명 이하: 1개 메시지 후 응답
+                elif participants_count <= 3:
+                    required_messages = 2  # 2-3명: 2개 메시지 후 응답
+                else:
+                    required_messages = 3  # 4명 이상: 3개 메시지 후 응답 (최대)
+                
+                # AI 응답이 필요한지 판단
+                should_respond = len(user_messages_since_ai) >= required_messages
+                
+                logger.debug(f"Streaming - Participants: {participants_count}, Required messages: {required_messages}, Current user messages: {len(user_messages_since_ai)}")
+                
                 chat_context_chunks = [
                     f"{msg.nickname}: {msg.content}" 
-                    for msg in recent_messages[-3:]  # 최근 3개 메시지만 사용
+                    for msg in recent_messages[-5:]  # 최근 5개 메시지만 사용
                 ]
             except Exception as e:
                 logger.warning(f"Failed to get chat history context for streaming: {e}")
                 chat_context_chunks = [f"{sender_nickname}: {message}"]
+                # Redis 접근 실패 시 기본적으로 응답하지 않음
+                should_respond = False
+                user_messages_since_ai = []
+                required_messages = 0  # Redis 실패시 기본값
             
             # Get book material context from VectorDB
             context_chunks = []
@@ -316,6 +376,13 @@ class DiscussionService:
                 except Exception as e:
                     logger.warning(f"Failed to get book context: {e}")
                     context_chunks = []
+            
+            # AI 응답이 필요한 경우에만 스트리밍 응답 생성
+            if not should_respond:
+                logger.debug(f"AI streaming response skipped - only {len(user_messages_since_ai)} user messages since last AI response (required: {required_messages})")
+                return
+            
+            logger.debug(f"AI streaming response generated after {len(user_messages_since_ai)} user messages (required: {required_messages})")
             
             # Generate streaming response with book context and chat history
             if self.settings.ai.MOCK_AI_RESPONSES:
@@ -428,7 +495,7 @@ class DiscussionService:
 5. 150자 내외로 간결하면서도 의미있게 작성
 6. 친근하고 격려하는 톤 유지
 7. 대화가 반복되지 않도록 새로운 각도에서 접근
-8. 토론의 대답을 너무 자주 하지 말고, 채팅 기록이 2~3개 이후에 토론 피드백
+8. **중요**: 매 메시지마다 응답하지 말고, 참여자들의 메시지가 2-3개 쌓인 후에만 의미있는 피드백 제공. 너무 적극적으로 개입하지 말 것
 9. 최근 대화가 2~3개 이하로 짧다면, 대화 시작을 돕는 배경/오픈 질문을 포함하고, 아직 참여하지 않은 분들을 부드럽게 초대
 10. 최근 10개 내 참여 빈도가 낮은 사람(메시지 1회 이하)이 있다면, 이름을 직접 거론하지 않고 모두에게 참여를 권유하는 일반 메시지를 덧붙이세요
 11. 위의 10개의 규칙을 절대로 위배하지 않기"""
@@ -479,7 +546,7 @@ class DiscussionService:
 5. 150자 내외로 간결하면서도 의미있게 작성
 6. 친근하고 격려하는 톤 유지
 7. 대화가 반복되지 않도록 새로운 각도에서 접근
-8. 토론의 대답을 너무 자주 하지 말고, 채팅 기록이 2~3개 이후에 토론 피드백
+8. **중요**: 매 메시지마다 응답하지 말고, 참여자들의 메시지가 2-3개 쌓인 후에만 의미있는 피드백 제공. 너무 적극적으로 개입하지 말 것
 9. 최근 대화가 2~3개 이하로 짧다면, 대화 시작을 돕는 배경/오픈 질문을 포함하고, 아직 참여하지 않은 분들을 부드럽게 초대
 10. 최근 10개 내 참여 빈도가 낮은 사람(메시지 1회 이하)이 있다면, 이름을 직접 거론하지 않고 모두에게 참여를 권유하는 일반 메시지를 덧붙이세요
 11. 위의 10개의 규칙을 절대로 위배하지 않기"""
@@ -554,7 +621,7 @@ class DiscussionService:
 5. 150자 내외로 간결하면서도 의미있게 작성
 6. 친근하고 격려하는 톤 유지
 7. 대화가 반복되지 않도록 새로운 각도에서 접근
-8. 토론의 대답을 너무 자주 하지 말고, 채팅 기록이 2~3개 이후에 토론 피드백
+8. **중요**: 매 메시지마다 응답하지 말고, 참여자들의 메시지가 2-3개 쌓인 후에만 의미있는 피드백 제공. 너무 적극적으로 개입하지 말 것
 9. 최근 대화가 2~3개 이하로 짧다면, 대화 시작을 돕는 배경/오픈 질문을 포함하고, 아직 참여하지 않은 분들을 부드럽게 초대
 10. 최근 10개 내 참여 빈도가 낮은 사람(메시지 1회 이하)이 있다면, 이름을 직접 거론하지 않고 모두에게 참여를 권유하는 일반 메시지를 덧붙이세요
 11. 위의 10개의 규칙을 절대로 위배하지 않기"""
