@@ -50,6 +50,7 @@ enum ActionType {
   PARTICIPANTS = 6;
   PROGRESS_UPDATE = 7;
   READING_MODE_CHANGE = 8;
+  LEAVE_ROOM = 9;
 }
 
 enum AnnotationType {

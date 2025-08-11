@@ -356,15 +356,64 @@ class PdfGrpcRepositoryImpl @Inject constructor(
         scheduleReconnect()
     }
 
+    // 1) 먼저 서버가 LEAVE_ROOM을 처리하도록 proto/서버가 준비됐다면 사용
+    private fun sendLeaveIfSupported() {
+        val gid = groupId ?: return
+        val uid = userId ?: return
+        runCatching {
+            requestObserver?.onNext(
+                SyncMessage.newBuilder()
+                    .setGroupId(gid)
+                    .setUserId(uid)
+                    .setActionType(ActionType.LEAVE_ROOM) // 서버 switch에 LEAVE_ROOM 추가되어 있어야 함
+                    .build()
+            )
+        }.onFailure { e -> Log.w(TAG, "sendLeaveIfSupported failed: ${e.message}") }
+    }
+
+    // 2) 채널을 점잖게 닫기 (shutdown → await → 필요 시 shutdownNow)
+    private fun disconnectGracefully(timeoutMs: Long = 500L) {
+        try {
+            channel?.shutdown()
+            // awaitTermination이 false면 아직 안 닫힌 것
+            val done = channel?.awaitTermination(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS) ?: true
+            if (!done) {
+                channel?.shutdownNow()
+                channel?.awaitTermination(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
+            }
+            Log.d(TAG, "gRPC graceful shutdown complete")
+        } catch (e: Exception) {
+            Log.e(TAG, "graceful shutdown error", e)
+        } finally {
+            channel = null
+            stub = null
+            requestObserver = null
+        }
+    }
+
+    // 3) leaveRoom()를 아래처럼 교체
     override fun leaveRoom() {
         shouldReconnect = false
         isActive = false
-        requestObserver?.onCompleted()
-        disconnect()
-        _connectionStatus.value = PdfSyncConnectionStatus.DISCONNECTED
+
+        // (선택) 서버가 LEAVE_ROOM 지원할 때만: 먼저 알리고
+        runCatching { sendLeaveIfSupported() }
+
+        // 스트림 half-close
+        runCatching { requestObserver?.onCompleted() }
+
+        // 약간의 여유 (네트워크 스레드로 flush)
+        try { Thread.sleep(120) } catch (_: InterruptedException) {}
+
+        // 채널은 점잖게 닫기
+        disconnectGracefully()
+
+        _connectionStatus.postValue(PdfSyncConnectionStatus.DISCONNECTED)
+
         runCatching { netCb?.let { cm.unregisterNetworkCallback(it) } }
         netCb = null
     }
+
 
     override fun isConnected(): Boolean =
         connectionStatus.value == PdfSyncConnectionStatus.CONNECTED && isActive
