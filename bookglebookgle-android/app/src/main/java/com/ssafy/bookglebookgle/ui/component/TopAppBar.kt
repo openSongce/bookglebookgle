@@ -306,12 +306,6 @@ fun CustomTopAppBar(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Icon(
-                        painter = painterResource(id = R.drawable.main_alram),
-                        contentDescription = "알람",
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Icon(
                         painter = painterResource(id = R.drawable.main_search),
                         contentDescription = "검색",
                         modifier = Modifier
