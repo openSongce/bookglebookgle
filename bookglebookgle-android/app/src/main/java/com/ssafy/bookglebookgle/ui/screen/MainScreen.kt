@@ -11,6 +11,8 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -31,6 +33,7 @@ import com.ssafy.bookglebookgle.entity.GroupListResponse
 import com.ssafy.bookglebookgle.navigation.Screen
 import com.ssafy.bookglebookgle.ui.component.CustomTopAppBar
 import com.ssafy.bookglebookgle.ui.theme.BaseColor
+import com.ssafy.bookglebookgle.ui.theme.DeepMainColor
 import com.ssafy.bookglebookgle.ui.theme.MainColor
 import com.ssafy.bookglebookgle.util.ScreenSize
 import com.ssafy.bookglebookgle.viewmodel.MainViewModel
@@ -205,12 +208,32 @@ fun MainScreen(navController: NavHostController, viewModel: MainViewModel = hilt
                             .padding(vertical = verticalPadding)
 
                     ) {
-                        Text(
-                            text = if (isInSearchMode) "검색 결과" else "카테고리별 모임",
-                            fontSize = ScreenSize.width.value.times(0.06f).sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = horizontalPadding)
-                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = horizontalPadding),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = if (isInSearchMode) "검색 결과" else "카테고리별 모임",
+                                fontSize = ScreenSize.width.value.times(0.06f).sp,
+                                fontWeight = FontWeight.Bold
+                            )
+
+                            if(!isInSearchMode){
+                                Icon(
+                                    imageVector = Icons.Default.Add,
+                                    contentDescription = "모임생성",
+                                    modifier = Modifier
+                                        .size(ScreenSize.width.value.times(0.06f).dp)
+                                        .clickable {
+                                            navController.navigate(Screen.GroupRegisterScreen.route)
+                                        },
+                                    tint = Color.Black
+                                )
+                            }
+                        }
 
                         Row(
                             modifier = Modifier
