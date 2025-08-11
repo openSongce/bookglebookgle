@@ -156,14 +156,19 @@ public class GroupServiceImpl implements GroupService {
         }
 
         ChatRoom chatRoom = ChatRoom.builder()
+                .groupId(group.getId())
                 .group(group)
-                .category(group.getCategory().name())
                 .groupTitle(group.getRoomTitle())
                 .imageUrl(null)
+                .category(String.valueOf(group.getCategory()))
+                // 변경된 필드명에 맞게 ↓↓↓
                 .lastMessage(null)
-                .lastMessageTime(null)
-                .memberCount(1)
+                .lastMessageAt(null)
+                .lastMessageId(null)
+                .pinned(false) // 있으면 명시
+                .memberCount(0) // 필요 시
                 .build();
+
         chatRoomRepository.save(chatRoom);
 
         ChatRoomMember chatRoomMember = ChatRoomMember.builder()
