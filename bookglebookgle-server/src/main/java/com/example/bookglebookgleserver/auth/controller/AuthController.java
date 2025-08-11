@@ -1,10 +1,7 @@
 package com.example.bookglebookgleserver.auth.controller;
 
 
-import com.example.bookglebookgleserver.auth.dto.JwtResponse;
-import com.example.bookglebookgleserver.auth.dto.LoginRequest;
-import com.example.bookglebookgleserver.auth.dto.RefreshRequest;
-import com.example.bookglebookgleserver.auth.dto.SignupRequest;
+import com.example.bookglebookgleserver.auth.dto.*;
 import com.example.bookglebookgleserver.auth.service.*;
 import com.example.bookglebookgleserver.user.entity.User;
 import com.example.bookglebookgleserver.user.repository.UserRepository;
@@ -46,15 +43,15 @@ public class AuthController {
             @ApiResponse(responseCode = "401", description = "인증 실패")
     })
     @PostMapping("/login")
-    public ResponseEntity<JwtResponse> login(@RequestBody LoginRequest request){
+    public ResponseEntity<?> login(@RequestBody LoginRequest request){
 
         try {
             JwtResponse response = authService.login(request.getEmail(), request.getPassword());
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             System.out.println("예외 발생: " + e.getMessage());
-            e.printStackTrace();
-            return ResponseEntity.status(401).body(null);
+            return ResponseEntity.status(401)
+                    .body(new ErrorResponse("LOGIN_FAILED", e.getMessage()));
         }
     }
 
@@ -68,15 +65,30 @@ public class AuthController {
             @ApiResponse(responseCode = "401", description = "유효하지 않은 Refresh Token")
     })
     @PostMapping("/refresh")
-    public ResponseEntity<JwtResponse> refresh(@RequestBody RefreshRequest request){
+    public ResponseEntity<?> refresh(@RequestBody RefreshRequest request){
         try {
             JwtResponse response = authService.refreshToken(request.getRefreshToken());
             return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            System.out.println("큰 갱신 실패: " + e.getMessage());
-            return ResponseEntity.status(401).body(null);
+        } catch (IllegalArgumentException e) {
+            // 형식/검증 실패
+            return ResponseEntity.status(401)
+                    .body(new ErrorResponse("REFRESH_TOKEN_INVALID", e.getMessage()));
+        } catch (SecurityException e) {
+            // 재사용 탐지(탈취 의심) 등 보안성 이슈
+            return ResponseEntity.status(401)
+                    .body(new ErrorResponse("REFRESH_TOKEN_REUSED", e.getMessage()));
+        } catch (RuntimeException e) {
+            // 만료/미등록 등 일반 실패
+            return ResponseEntity.status(401)
+                    .body(new ErrorResponse("REFRESH_TOKEN_EXPIRED", e.getMessage()));
         }
     }
+
+
+
+
+
+
 
     @Operation(
             summary = "토큰 검증 테스트",

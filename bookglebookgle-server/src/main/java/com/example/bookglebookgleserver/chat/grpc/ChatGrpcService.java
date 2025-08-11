@@ -304,10 +304,10 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
         private volatile int idx = 0;                 // 현재 문제 index
         private ScheduledFuture<?> future;
 
-        // ✅ 정답 집계: userId -> 맞춘 개수
+        // 정답 집계: userId -> 맞춘 개수
         private final ConcurrentHashMap<Long, Integer> correctCounts = new ConcurrentHashMap<>();
 
-        // ✅ 현재 문제에서 중복 제출 방지
+        //  현재 문제에서 중복 제출 방지
         private final Set<Long> answeredThisQuestion = ConcurrentHashMap.newKeySet();
 
         QuizRunner(String quizId, long groupId, List<AiServiceClient.QuizItem> items, int total,

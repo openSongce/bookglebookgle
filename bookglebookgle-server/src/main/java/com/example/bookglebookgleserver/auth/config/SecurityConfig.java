@@ -1,9 +1,10 @@
 package com.example.bookglebookgleserver.auth.config;
 
 import com.example.bookglebookgleserver.auth.filter.JwtAuthenticationFilter;
+import com.example.bookglebookgleserver.auth.handler.JsonAuthEntryPoint;
+import com.example.bookglebookgleserver.auth.handler.JsonAccessDeniedHandler;
 import com.example.bookglebookgleserver.auth.service.CustomUserDetailsService;
 import jakarta.servlet.DispatcherType;
-import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -27,6 +28,9 @@ import java.util.List;
 public class SecurityConfig {
 
     private final CustomUserDetailsService customUserDetailsService;
+    private final JsonAuthEntryPoint jsonAuthEntryPoint;
+    private final JsonAccessDeniedHandler jsonAccessDeniedHandler;
+
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -59,8 +63,8 @@ public class SecurityConfig {
                 )
                 // (선택) 이미 커밋된 응답이면 추가로 에러 쓰지 않도록 방어
                 .exceptionHandling(ex -> ex
-                        .accessDeniedHandler((req, res, e) -> { if (!res.isCommitted()) res.sendError(HttpServletResponse.SC_FORBIDDEN); })
-                        .authenticationEntryPoint((req, res, e) -> { if (!res.isCommitted()) res.sendError(HttpServletResponse.SC_UNAUTHORIZED); })
+                        .authenticationEntryPoint(jsonAuthEntryPoint)     // 401 JSON
+                        .accessDeniedHandler(jsonAccessDeniedHandler)     // 403 JSON
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 

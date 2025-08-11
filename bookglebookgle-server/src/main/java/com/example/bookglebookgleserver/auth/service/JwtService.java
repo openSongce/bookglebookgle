@@ -1,11 +1,18 @@
 package com.example.bookglebookgleserver.auth.service;
 
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
+import com.example.bookglebookgleserver.auth.dto.ErrorResponse;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.web.AuthenticationEntryPoint;
+import org.springframework.security.web.access.AccessDeniedHandler;
+import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
 
@@ -17,6 +24,7 @@ public class JwtService {
 
     private final long ACCESS_TOKEN_EXPIRATION = 1000 * 60 * 60; // 1시간
     private final long REFRESH_TOKEN_EXPIRATION = 1000 * 60 * 60 * 24 * 7; // 7일
+
 
 
     // Access Token 생성
@@ -98,6 +106,20 @@ public class JwtService {
         long exp = claims.getExpiration().getTime();
         long now = System.currentTimeMillis();
         return Math.max((exp - now) / 1000, 0);
+    }
+
+    /** 만료/서명 오류를 명확히 구분해 던지는 검증 메서드 */
+    public void validateAccessTokenOrThrow(String token) {
+        try {
+            Jwts.parserBuilder()
+                    .setSigningKey(ACCESS_SECRET.getBytes(StandardCharsets.UTF_8))
+                    .build()
+                    .parseClaimsJws(token);
+        } catch (ExpiredJwtException e) {
+            throw new com.example.bookglebookgleserver.auth.exception.TokenExpiredException("Access token expired", e);
+        } catch (JwtException e) {
+            throw new com.example.bookglebookgleserver.auth.exception.InvalidTokenException("Invalid access token", e);
+        }
     }
 
 }
