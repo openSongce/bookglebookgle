@@ -3,23 +3,16 @@ package com.example.bookglebookgleserver.fcm.service;
 import com.example.bookglebookgleserver.fcm.dto.FcmSendRequest;
 import com.example.bookglebookgleserver.user.entity.UserDevice;
 import com.example.bookglebookgleserver.user.repository.UserDeviceRepository;
-import com.google.firebase.messaging.AndroidConfig;
-import com.google.firebase.messaging.AndroidNotification;
-import com.google.firebase.messaging.BatchResponse;
-import com.google.firebase.messaging.FirebaseMessaging;
-import com.google.firebase.messaging.FirebaseMessagingException;
-import com.google.firebase.messaging.Message;
-import com.google.firebase.messaging.MessagingErrorCode;
-import com.google.firebase.messaging.MulticastMessage;
-import com.google.firebase.messaging.Notification;
-import com.google.firebase.messaging.SendResponse;
+import com.google.firebase.messaging.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -81,74 +74,83 @@ public class FcmService {
         }
     }
 
+    private static String get(Map<String, String> m, String k) {
+        return (m != null) ? m.get(k) : null;
+    }
+
     private Message buildMessage(String token, FcmSendRequest req) {
-        boolean dataOnly = Boolean.TRUE.equals(req.dataOnly());
-
-        AndroidConfig.Builder ab = AndroidConfig.builder()
+        // ✅ 항상 data-only
+        AndroidConfig android = AndroidConfig.builder()
                 .setPriority(AndroidConfig.Priority.HIGH)
-                .setTtl(Duration.ofMinutes(10).toMillis());
-
-        if (!dataOnly && req.channelId() != null) {
-            ab.setNotification(AndroidNotification.builder()
-                    .setTitle(req.title())
-                    .setBody(req.body())
-                    .setChannelId(req.channelId())
-                    .build());
-        }
+                .setTtl(Duration.ofMinutes(10).toMillis())
+                .build();
 
         Message.Builder mb = Message.builder()
-                .setAndroidConfig(ab.build())
+                .setAndroidConfig(android)
                 .setToken(token);
 
-        if (dataOnly) {
-            // 🔹 제목/본문도 data로 내려보내기(클라이언트에서 통일 처리)
-            mb.putData("title", Optional.ofNullable(req.title()).orElse(""))
-                    .putData("body", Optional.ofNullable(req.body()).orElse(""));
-            if (req.data() != null) mb.putAllData(req.data());
-        } else {
-            // 🔹 혼합(기존): 시스템 표시 + data 부가
-            mb.setNotification(Notification.builder()
-                    .setTitle(req.title())
-                    .setBody(req.body())
-                    .build());
-            if (req.data() != null) mb.putAllData(req.data());
+        // ---- 표준 데이터 채우기 ----
+        // 호출측이 req.data()에 "type","groupId"를 넣어주면 여기서 보정/보호
+        String type    = Optional.ofNullable(get(req.data(), "type")).orElse("");       // CHAT | MEETING_START
+        String groupId = Optional.ofNullable(get(req.data(), "groupId")).orElse("");    // 예: "group123"
+
+        String title = Optional.ofNullable(req.title()).orElse(""); // 그룹 이름 기대
+        String body  = "MEETING_START".equals(type)
+                ? "" // 모임 시작은 바디 비움(클라에서 "모임이 시작됐어요!"로 처리)
+                : Optional.ofNullable(req.body()).orElse(""); // 채팅: "닉네임: 메시지"
+
+        // 먼저 extra data를 넣고(있으면), 그 위에 표준 키를 덮어써서 일관성 보장
+        if (req.data() != null && !req.data().isEmpty()) mb.putAllData(req.data());
+        mb.putData("type", type)
+                .putData("groupId", groupId)
+                .putData("title", title)    // 그룹 이름
+                .putData("body", body);     // 채팅 내용(발신자 포함) 또는 빈값
+
+        // 채널을 클라에서 만들 수 있게 data로도 넣어줌(선택)
+        if (req.channelId() != null) {
+            mb.putData("channelId", req.channelId());
         }
+
+        // 타임스탬프/메시지ID 같은 메타도 실무에서 유용
+        mb.putData("createdAt", String.valueOf(System.currentTimeMillis()))
+                .putData("messageId", UUID.randomUUID().toString());
+
         return mb.build();
     }
 
     private MulticastMessage buildMulticastMessage(List<String> tokens, FcmSendRequest req) {
-        boolean dataOnly = Boolean.TRUE.equals(req.dataOnly());
-
-        AndroidConfig.Builder ab = AndroidConfig.builder()
+        // ✅ 항상 data-only
+        AndroidConfig android = AndroidConfig.builder()
                 .setPriority(AndroidConfig.Priority.HIGH)
-                .setTtl(Duration.ofMinutes(10).toMillis());
-
-        if (!dataOnly && req.channelId() != null) {
-            ab.setNotification(AndroidNotification.builder()
-                    .setTitle(req.title())
-                    .setBody(req.body())
-                    .setChannelId(req.channelId())
-                    .build());
-        }
+                .setTtl(Duration.ofMinutes(10).toMillis())
+                .build();
 
         MulticastMessage.Builder mb = MulticastMessage.builder()
-                .setAndroidConfig(ab.build())
+                .setAndroidConfig(android)
                 .addAllTokens(tokens);
 
-        if (dataOnly) {
-            mb.putData("title", Optional.ofNullable(req.title()).orElse(""))
-                    .putData("body",  Optional.ofNullable(req.body()).orElse(""));
-            if (req.data() != null && !req.data().isEmpty()) mb.putAllData(req.data());
-        } else {
-            mb.setNotification(Notification.builder()
-                    .setTitle(req.title())
-                    .setBody(req.body())
-                    .build());
-            if (req.data() != null && !req.data().isEmpty()) mb.putAllData(req.data());
+        String type    = Optional.ofNullable(get(req.data(), "type")).orElse("");
+        String groupId = Optional.ofNullable(get(req.data(), "groupId")).orElse("");
+
+        String title = Optional.ofNullable(req.title()).orElse("");
+        String body  = "MEETING_START".equals(type) ? "" : Optional.ofNullable(req.body()).orElse("");
+
+        if (req.data() != null && !req.data().isEmpty()) mb.putAllData(req.data());
+        mb.putData("type", type)
+                .putData("groupId", groupId)
+                .putData("title", title)
+                .putData("body", body);
+
+        if (req.channelId() != null) {
+            mb.putData("channelId", req.channelId());
         }
+
+        mb.putData("createdAt", String.valueOf(System.currentTimeMillis()))
+                .putData("messageId", UUID.randomUUID().toString());
 
         return mb.build();
     }
+
 
     /** 실패 토큰 비활성화(UNREGISTERED) */
     private void cleanupInvalidTokens(List<String> tokens, BatchResponse resp) {

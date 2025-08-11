@@ -56,12 +56,21 @@ public class GroupNotificationScheduler {
                     () -> {
                         try {
                             log.info("⏰ 스케줄 실행: groupId={}", groupId);
+
+                            // 🔹 그룹명 조회 (roomTitle 사용)
+                            var groupOpt = groupRepository.findById(groupId);
+                            String groupName = groupOpt.map(g -> g.getRoomTitle()).orElse("모임");
+
+                            // 🔹 MEETING_START 타입 + groupId 포함
                             fcmGroupService.sendGroupNow(
                                     groupId,
-                                    "북글북글 리마인드",
-                                    "함께 읽을 시간이에요 📚",
-                                    "default",
-                                    java.util.Map.of("groupId", String.valueOf(groupId))
+                                    groupName,                  // title = 그룹 이름
+                                    "",                         // body는 빈값 (클라에서 "모임 시작" 처리)
+                                    "group",                    // 채널 ID 예시
+                                    Map.of(
+                                            "type", "MEETING_START",
+                                            "groupId", String.valueOf(groupId)
+                                    )
                             );
                         } catch (Exception e) {
                             log.error("❌ 스케줄 실행 실패: groupId={}, error={}", groupId, e.getMessage(), e);
@@ -75,6 +84,7 @@ public class GroupNotificationScheduler {
             log.warn("⚠️ 잘못된 CRON 표현식: groupId={}, value='{}' (예: 월요일 9시 0분 → 0 0 9 * * MON)", groupId, cron);
         }
     }
+
 
     public void unregister(Long groupId) {
         ScheduledFuture<?> f = jobs.remove(groupId);
