@@ -70,14 +70,16 @@ import com.google.gson.reflect.TypeToken
 import com.ssafy.bookglebookgle.entity.Participant
 import com.ssafy.bookglebookgle.viewmodel.GroupDetailViewModel
 import androidx.compose.ui.semantics.disabled
+import com.ssafy.bookglebookgle.viewmodel.ChatRoomViewModel
 
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PdfReadScreen(
     groupId: Long? = null,
     userId: String,
     navController: NavHostController,
-    viewModel: PdfViewModel = hiltViewModel()
+    viewModel: PdfViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
 
@@ -143,6 +145,8 @@ fun PdfReadScreen(
     val selectedHighlights by viewModel.selectedHighlights.collectAsState()
     val highlightPopupPoint by viewModel.highlightPopupPoint.collectAsState()
     val showHighlightPopup by viewModel.showHighlightPopup.collectAsState()
+
+    var showChatSheet by remember { mutableStateOf(false) }
 
 
 
@@ -214,7 +218,8 @@ fun PdfReadScreen(
 
 // 네비 스택에서 화면이 완전히 사라질 때만 해제
     DisposableEffect(Unit) {
-        onDispose { viewModel.leaveSyncRoom() }
+        onDispose { viewModel.leaveSyncRoom()
+        }
     }
 
 
@@ -430,7 +435,12 @@ fun PdfReadScreen(
                 title = pdfTitle,
                 navController = navController,
                 isPdfView = true,
-                onParticipantsClick = { showParticipantsSheet = true }
+                onParticipantsClick = { showParticipantsSheet = true },
+                onChatClick = {
+                    // 동시에 두 시트가 겹치지 않도록 처리
+                    showParticipantsSheet = false
+                    showChatSheet = !showChatSheet
+                }
             )
         }
     ) { paddingValues ->
@@ -917,6 +927,30 @@ fun PdfReadScreen(
                     },
                     onDismiss = { viewModel.hideHighlightPopup() }
                 )
+            }
+
+            if (showChatSheet && groupId != null) {
+                val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+                ModalBottomSheet(
+                    onDismissRequest = { showChatSheet = false },
+                    sheetState = sheetState
+                ) {
+                    // 시트 높이를 정확히 "화면 절반"으로
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .fillMaxHeight(0.5f)  // 반 높이
+                    ) {
+                        // ChatRoomScreen 안에 자체 TopBar가 있으니 그대로 써도 되고,
+                        // 필요하면 'embedded' 플래그를 만들어 상단바를 숨겨도 됨.
+                        ChatRoomScreen(
+                            navController = navController,
+                            groupId = groupId,
+                            userId = userId.toLongOrNull() ?: -1L,
+                            embedded = true
+                        )
+                    }
+                }
             }
 
 

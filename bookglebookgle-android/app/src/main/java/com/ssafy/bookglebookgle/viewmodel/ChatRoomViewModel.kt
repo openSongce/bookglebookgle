@@ -530,7 +530,7 @@ class ChatRoomViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(error = null)
     }
 
-    override fun onCleared() {
+    public override fun onCleared() {
         super.onCleared()
         chatGrpcRepository.newMessages.removeObserver(grpcMessageObserver)
         chatGrpcRepository.aiResponses.removeObserver(aiResponseObserver)

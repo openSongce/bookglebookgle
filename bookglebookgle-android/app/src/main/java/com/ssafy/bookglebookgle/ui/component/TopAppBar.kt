@@ -19,6 +19,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.LocalTextSelectionColors
 import androidx.compose.foundation.text.selection.TextSelectionColors
+import androidx.compose.material.icons.Icons
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -65,7 +66,8 @@ fun CustomTopAppBar(
     onSearchCancelled: (() -> Unit)? = null, // 검색 취소 콜백 추가
     onChatSettingsClick: (() -> Unit)? = null, // 채팅 설정 콜백 추가
     onMyGroupFilterClick: (() -> Unit)? = null, // 내 모임 필터 콜백 추가
-    onParticipantsClick: (() -> Unit)? = null
+    onParticipantsClick: (() -> Unit)? = null,
+    onChatClick: (() -> Unit)? = null
 ) {
     var isSearchMode by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
@@ -345,6 +347,16 @@ fun CustomTopAppBar(
                         .clickable { onBackPressed?.invoke() }
                 )
             } else if (isPdfView) {
+
+                Icon(
+                    painter = painterResource(id = R.drawable.main_selected_chat),
+                    contentDescription = "채팅 열기",
+                    modifier = Modifier
+                        .padding(end = 8.dp)
+                        .size(24.dp)
+                        .clickable { onChatClick?.invoke() }
+                )
+
                 Icon(
                     painter = painterResource(id = R.drawable.profile_image),
                     contentDescription = "접속인원",
