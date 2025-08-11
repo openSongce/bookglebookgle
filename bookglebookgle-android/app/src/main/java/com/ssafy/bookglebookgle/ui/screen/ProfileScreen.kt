@@ -257,8 +257,8 @@ fun ProfileScreen(navController: NavHostController, viewModel: ProfileViewModel 
                                 rating = data.avgRating
                             )
                             SimpleStatisticItem(
-                                label = "총 모임 시간",
-                                value = "${data.totalActiveHours}시간"
+                                label = "총 활동 시간",
+                                value = "${data.prettyActiveTime}"
                             )
                         }
                     }

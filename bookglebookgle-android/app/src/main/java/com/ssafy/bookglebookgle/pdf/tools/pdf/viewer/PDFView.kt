@@ -1435,6 +1435,7 @@ class PDFView(context: Context?, set: AttributeSet?) :
         callbacks.callOnPageScroll(currentPage, positionOffset)
         if (!maxScrollReached && fromScrolling) {
             listener?.onScrolling()
+            notifyViewportChanged()
         }
         redraw()
     }
@@ -1594,6 +1595,7 @@ class PDFView(context: Context?, set: AttributeSet?) :
      */
     fun zoomTo(zoom: Float) {
         this.zoom = zoom
+        notifyViewportChanged()
     }
 
     /**
@@ -1612,6 +1614,7 @@ class PDFView(context: Context?, set: AttributeSet?) :
         baseX += pivot.x - pivot.x * dZoom
         baseY += pivot.y - pivot.y * dZoom
         moveTo(baseX, baseY)
+        notifyViewportChanged()
     }
 
     /**
@@ -2398,6 +2401,75 @@ class PDFView(context: Context?, set: AttributeSet?) :
         return out.sortedBy { it.second }.map { it.first }
     }
 
+    // 현재 페이지를 화면 가로폭에 딱 맞출 때의 줌값
+    fun fitWidthZoom(pageIndex: Int): Float? {
+        val file = pdfFile ?: return null
+        if (width == 0) return null
+        val pageW = file.getPageSize(pageIndex).width
+        if (pageW <= 0f) return null
+        return (width / pageW).coerceIn(minZoom, maxZoom)
+    }
+
+    // 전역 줌을 그대로 반환(현재 구현에선 페이지별이 아니라 공용 줌)
+    fun currentZoom(@Suppress("UNUSED_PARAMETER") pageIndex: Int): Float? = zoom
+
+    // 화면 중앙이 '해당 페이지 좌표계'에서 어디인지(px) 계산
+    fun getViewportCenterOnPage(pageIndex: Int): PointF? {
+        val file = pdfFile ?: return null
+        val z = zoom
+        val size = file.getPageSize(pageIndex)
+        val maxW = file.maxPageWidth
+
+        val localX = toCurrentScale((maxW - size.width) / 2f)       // 수평 센터링 보정
+        val localY = file.getPageOffsetWithZoom(pageIndex, z)       // 세로 오프셋(줌 반영)
+
+        val cx = (width / 2f - currentXOffset - localX) / z
+        val cy = (height / 2f - currentYOffset - localY) / z
+        return PointF(cx, cy)
+    }
+
+    // 특정 페이지의 좌표(centerOnPagePx)를 화면 중앙에 두도록 줌/스크롤 적용
+    fun applyViewport(pageIndex: Int, targetZoom: Float, centerOnPagePx: PointF) {
+        val file = pdfFile ?: return
+        val clampedZoom = targetZoom.coerceIn(minZoom, maxZoom)
+
+        // 먼저 줌 변경
+        zoomTo(clampedZoom)
+
+        val size = file.getPageSize(pageIndex)
+        val maxW = file.maxPageWidth
+        val localX = toCurrentScale((maxW - size.width) / 2f)           // 새 줌 기준
+        val localY = file.getPageOffsetWithZoom(pageIndex, clampedZoom)
+
+        // 화면 중앙이 centerOnPagePx로 오도록 오프셋 계산
+        val wantX = width / 2f - (clampedZoom * centerOnPagePx.x + localX)
+        val wantY = height / 2f - (clampedZoom * centerOnPagePx.y + localY)
+
+        moveTo(wantX, wantY)    // 내부에서 clamp됨
+        showPage(pageIndex)     // 표시 페이지 보장
+    }
+
+    private fun notifyViewportChanged() {
+        val file = pdfFile ?: return
+        val page = currentPage
+        val fit = fitWidthZoom(page) ?: return
+        val center = getViewportCenterOnPage(page) ?: return
+        val size = file.getPageSize(page)
+
+        val cxNorm = (center.x / size.width).coerceIn(0f, 1f)
+        val cyNorm = (center.y / size.height).coerceIn(0f, 1f)
+
+        listener?.onViewportChanged(
+            pageIndex = page,
+            fitWidthZoom = fit,
+            currentZoom = zoom,
+            centerXNorm = cxNorm,
+            centerYNorm = cyNorm
+        )
+    }
+
+
+
 
 
     interface Listener {
@@ -2419,5 +2491,12 @@ class PDFView(context: Context?, set: AttributeSet?) :
         fun onMergeEnd(mergeId: Int, mergeType: PdfFile.MergeType)
         fun onMergeFailed(mergeId: Int, mergeType: PdfFile.MergeType, message: String, exception: java.lang.Exception?)
         fun onHighlightClicked(highlights: List<HighlightModel>, pointOfHighlight: PointF)
+        fun onViewportChanged(
+            pageIndex: Int,
+            fitWidthZoom: Float,
+            currentZoom: Float,
+            centerXNorm: Float,
+            centerYNorm: Float
+        )
     }
 }

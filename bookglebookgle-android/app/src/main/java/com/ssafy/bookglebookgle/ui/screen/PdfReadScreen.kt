@@ -3,6 +3,7 @@ package com.ssafy.bookglebookgle.ui.screen
 import android.graphics.Bitmap
 import android.graphics.PointF
 import android.util.Log
+import android.view.MotionEvent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
@@ -27,6 +28,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
@@ -58,6 +60,7 @@ import com.ssafy.bookglebookgle.viewmodel.PdfViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
@@ -73,7 +76,7 @@ import androidx.compose.ui.semantics.disabled
 import com.ssafy.bookglebookgle.viewmodel.ChatRoomViewModel
 
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalComposeUiApi::class)
 @Composable
 fun PdfReadScreen(
     groupId: Long? = null,
@@ -147,6 +150,7 @@ fun PdfReadScreen(
     val showHighlightPopup by viewModel.showHighlightPopup.collectAsState()
 
     var showChatSheet by remember { mutableStateOf(false) }
+
 
 
 
@@ -233,6 +237,15 @@ fun PdfReadScreen(
     val allowSwipe = remember(isCurrentLeader, readingMode) {
         readingMode == PdfViewModel.ReadingMode.FREE || isCurrentLeader
     }
+    val isFollower = remember(isCurrentLeader, readingMode) {
+        readingMode == PdfViewModel.ReadingMode.FOLLOW && !isCurrentLeader
+    }
+
+    LaunchedEffect(isFollower) {
+        pdfView?.enableDoubleTap(!isFollower) // 팔로워면 false
+    }
+
+
 
 
     //thumbnail
@@ -365,6 +378,7 @@ fun PdfReadScreen(
         pdfView?.setPageFling(allowSwipe)
         pdfView?.centerCurrentPage(withAnimation = false)
     }
+
 
 
 
@@ -645,6 +659,22 @@ fun PdfReadScreen(
                                             exception: java.lang.Exception?
                                         ) {
                                         }
+
+                                        override fun onViewportChanged(
+                                            pageIndex: Int,
+                                            fitWidthZoom: Float,
+                                            currentZoom: Float,
+                                            centerXNorm: Float,
+                                            centerYNorm: Float
+                                        ) {
+                                            viewModel.onViewportChangedFromUi(
+                                                pageIndex0 = pageIndex,
+                                                fitWidthZoom = fitWidthZoom,
+                                                currentZoom = currentZoom,
+                                                centerXNorm = centerXNorm,
+                                                centerYNorm = centerYNorm
+                                            )
+                                        }
                                     })
 
                                     // PDF 로드
@@ -680,7 +710,17 @@ fun PdfReadScreen(
                                 update = { view ->
                                     textSelectionOptionsWindow.attachToPdfView(view)
                                 },
-                                modifier = Modifier.fillMaxSize()
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .pointerInteropFilter { ev ->
+                                        if (!isFollower) return@pointerInteropFilter false
+                                        when (ev.actionMasked) {
+                                            MotionEvent.ACTION_POINTER_DOWN, // 핀치 시작
+                                            MotionEvent.ACTION_POINTER_UP,   // 핀치 종료(여유)
+                                            MotionEvent.ACTION_MOVE -> true  // 드래그/패닝 막기
+                                            else -> false                    // 탭/클릭은 통과
+                                        }
+                                    }
                             )
                         }
 

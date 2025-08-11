@@ -8,6 +8,7 @@ import com.example.bookglebookgleserver.pdf.grpc.ParticipantsSnapshot
 import com.example.bookglebookgleserver.pdf.grpc.ReadingMode as RpcReadingMode
 import com.ssafy.bookglebookgle.entity.CommentSync
 import com.ssafy.bookglebookgle.entity.HighlightSync
+import com.ssafy.bookglebookgle.entity.PageViewportSync
 import com.ssafy.bookglebookgle.entity.Participant
 import com.ssafy.bookglebookgle.entity.PdfPageSync
 import com.example.bookglebookgleserver.pdf.grpc.Participant as ProtoParticipant
@@ -15,7 +16,7 @@ import com.example.bookglebookgleserver.pdf.grpc.Participant as ProtoParticipant
 
 interface PdfGrpcRepository {
 
-    val newPageUpdates: LiveData<PdfPageSync>
+    val newPageUpdates: LiveData<PageViewportSync>
     val newHighlights: LiveData<HighlightSync>
     val newComments: LiveData<CommentSync>
     val updatedHighlights: LiveData<HighlightSync>
@@ -62,4 +63,6 @@ interface PdfGrpcRepository {
     fun sendProgressUpdate(groupId: Long, userId: String, page: Int)
 
     fun sendReadingMode(groupId: Long, userId: String, mode: RpcReadingMode)
+
+    fun sendViewportFollow(groupId: Long, userId: String, page: Int, fitWidthZoom: Float, currentZoom: Float, cxNorm: Float, cyNorm: Float)
 }
