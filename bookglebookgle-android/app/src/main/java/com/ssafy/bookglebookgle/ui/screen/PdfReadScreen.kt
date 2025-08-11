@@ -242,7 +242,13 @@ fun PdfReadScreen(
     }
 
     LaunchedEffect(isFollower) {
-        pdfView?.enableDoubleTap(!isFollower) // 팔로워면 false
+        pdfView?.apply {
+            setUserTransformLocked(isFollower)
+            enableDoubleTap(!isFollower)
+            isSwipeEnabled = allowSwipe
+            setPageFling(allowSwipe)
+            if (isFollower) stopFling()
+        }
     }
 
 
@@ -693,7 +699,7 @@ fun PdfReadScreen(
                                             .pageSnap(true)                 // 페이지 스냅 활성화
                                             .pageFitPolicy(FitPolicy.WIDTH) // 페이지를 화면 너비에 맞춤
                                             .fitEachPage(true)              // 각 페이지를 개별적으로 맞춤
-                                            .enableDoubleTap(true)          // 더블탭 줌 활성화
+                                            .enableDoubleTap(!isFollower)          // 더블탭 줌 활성화
                                             .autoSpacing(true)
                                             .pageFling(allowSwipe)
                                             .load()
@@ -709,6 +715,12 @@ fun PdfReadScreen(
                                 factory = { rememberedPdfView.also { viewModel.setPdfView(it) } },
                                 update = { view ->
                                     textSelectionOptionsWindow.attachToPdfView(view)
+                                    view.setUserTransformLocked(isFollower)
+                                    view.enableDoubleTap(!isFollower)
+                                    view.isSwipeEnabled = allowSwipe
+                                    view.setPageFling(allowSwipe)
+                                    if (isFollower) view.stopFling()
+
                                 },
                                 modifier = Modifier
                                     .fillMaxSize()

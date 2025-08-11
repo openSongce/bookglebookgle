@@ -283,6 +283,9 @@ class PDFView(context: Context?, set: AttributeSet?) :
     private var scope: CoroutineScope? = null
     private val annotationHandler = PdfAnnotationHandler(context, resources)
 
+    private var userTransformLocked = false
+    fun setUserTransformLocked(locked: Boolean) { userTransformLocked = locked }
+
     /** To draw lines between pages*/
     private val pageDivisionPaint = Paint().apply {
         this.color = Color.GRAY
@@ -1587,6 +1590,7 @@ class PDFView(context: Context?, set: AttributeSet?) :
      * @see .moveTo
      */
     fun moveRelativeTo(dx: Float, dy: Float) {
+        if (userTransformLocked) return
         moveTo(currentXOffset + dx, currentYOffset + dy, fromScrolling = true)
     }
 
@@ -1621,6 +1625,7 @@ class PDFView(context: Context?, set: AttributeSet?) :
      * @see .zoomCenteredTo
      */
     fun zoomCenteredRelativeTo(dZoom: Float, pivot: PointF) {
+        if (userTransformLocked) return
         zoomCenteredTo(zoom * dZoom, pivot)
     }
 
@@ -1686,6 +1691,7 @@ class PDFView(context: Context?, set: AttributeSet?) :
     }
 
     fun zoomWithAnimation(centerX: Float, centerY: Float, scale: Float) {
+        if (userTransformLocked) return
         animationManager?.startZoomAnimation(centerX, centerY, zoom, scale)
     }
 
