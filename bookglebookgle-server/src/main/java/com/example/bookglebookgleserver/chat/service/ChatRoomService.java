@@ -17,40 +17,35 @@ import org.springframework.stereotype.Service;
 
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class ChatRoomService {
 
-    private final ChatRoomRepository chatRoomRepository;
     private final ChatRoomMemberRepository chatRoomMemberRepository;
     private final ChatMessageRepository chatMessageRepository;
+    private final ChatRoomRepository chatRoomRepository;
 
-    private static final DateTimeFormatter LAST_TIME_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
-
-    /**
-     * 내가 참여 중인 채팅방 목록을 서버에서 정렬(pinned DESC → lastMessageAt DESC, null은 아래)해서 반환.
-     * unreadCount는 NORMAL 메시지만 대상으로 계산.
-     */
-    @Transactional
     public List<ChatRoomSummaryDto> getChatRoomsForUser(User user) {
-        var rooms = chatRoomRepository.findRoomsForUserSorted(user);
+        // 1. 내가 속한 모든 채팅방 멤버 row 조회
+        List<ChatRoomMember> myRooms = chatRoomMemberRepository.findByUser(user);
 
-        return rooms.stream().map(room -> {
-            long unread = 0L;
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
-            // 내 멤버십 조회
-            var memberOpt = chatRoomMemberRepository.findByUserAndChatRoom(user, room);
-            if (memberOpt.isPresent()) {
-                Long lastReadId = memberOpt.get().getLastReadMessageId();
-                if (lastReadId == null) lastReadId = 0L;
+        // 2. 각 채팅방마다 정보 구성
+        return myRooms.stream().map(roomMember -> {
+            ChatRoom room = roomMember.getChatRoom();
 
-                // NORMAL 기준 unread 계산
-                unread = chatMessageRepository.countUnreadAfter(
-                        room.getGroupId(),
-                        lastReadId,
-                        ChatMessage.Type.NORMAL
-                );
+            // 최신 메시지
+            ChatMessage lastMessage = chatMessageRepository.findFirstByChatRoomOrderByCreatedAtDesc(room);
+
+            // 아직 읽지 않은 메시지 개수 (내 lastReadMessageId보다 큰 id의 메시지 개수)
+            int unreadCount;
+            if (roomMember.getLastReadMessageId() == null) {
+                unreadCount = chatMessageRepository.countByChatRoom(room);
+            } else {
+                unreadCount = chatMessageRepository.countByChatRoomAndIdGreaterThan(room, roomMember.getLastReadMessageId());
             }
 
             return ChatRoomSummaryDto.builder()
@@ -58,68 +53,42 @@ public class ChatRoomService {
                     .groupTitle(room.getGroupTitle())
                     .imageUrl(room.getImageUrl())
                     .category(room.getCategory())
-                    .lastMessage(room.getLastMessage())
-                    .lastMessageTime(room.getLastMessageAt() != null
-                            ? room.getLastMessageAt().format(LAST_TIME_FMT)
-                            : null)
-                    .memberCount(room.getMemberCount())
-                    .unreadCount(safeToInt(unread))
+                    .lastMessage(lastMessage != null ? lastMessage.getContent() : null)
+                    .lastMessageTime(lastMessage != null && lastMessage.getCreatedAt() != null ? lastMessage.getCreatedAt().format(formatter) : null)
+                    .memberCount(chatRoomMemberRepository.countByChatRoom(room))
+                    .unreadCount(unreadCount)
                     .build();
-        }).toList();
+        }).collect(Collectors.toList());
     }
 
-    /**
-     * 메시지 커서 기반 조회(최신순). beforeId 없으면 최신부터 size개, 있으면 그 이전에서 size개.
-     */
-    @Transactional
     public List<ChatMessageDto> getMessagesByRoomIdAndBeforeId(Long roomId, Long beforeId, int size) {
-        // room 존재 검증(권한 체크는 컨트롤러/필터에서 했다고 가정)
-        chatRoomRepository.findById(roomId)
+        ChatRoom chatRoom = chatRoomRepository.findById(roomId)
                 .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
 
-        var page = PageRequest.of(0, size);
-        var list = chatMessageRepository.findByRoomIdWithCursor(roomId, beforeId, page);
+        List<ChatMessage> messages;
+        PageRequest pageRequest = PageRequest.of(0, size); // 첫 페이지, size개
 
-        // 기존 팩토리 사용
-        return list.stream().map(ChatMessageDto::from).toList();
+        if (beforeId == null) {
+            messages = chatMessageRepository.findByChatRoomOrderByIdDesc(chatRoom, pageRequest);
+        } else {
+            messages = chatMessageRepository.findByChatRoomAndIdLessThanOrderByIdDesc(chatRoom, beforeId, pageRequest);
+        }
+
+        return messages.stream()
+                .map(ChatMessageDto::from)
+                .collect(Collectors.toList());
     }
 
-    /**
-     * 읽음 처리: 사용자의 lastReadMessageId를 방의 lastMessageId로 맞춘다.
-     */
     @Transactional
     public void markAllMessagesAsRead(User user, Long roomId) {
-        ChatRoom room = chatRoomRepository.findById(roomId)
+        ChatRoom chatRoom = chatRoomRepository.findById(roomId)
                 .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
-        ChatRoomMember member = chatRoomMemberRepository.findByUserAndRoomId(user, roomId)
+        ChatRoomMember member = chatRoomMemberRepository.findByChatRoomAndUser(chatRoom, user)
                 .orElseThrow(() -> new NotFoundException("채팅방 멤버 정보가 없습니다."));
-
-        Long lastMsgId = room.getLastMessageId();
-        if (lastMsgId == null) lastMsgId = 0L;
-
-        member.setLastReadMessageId(lastMsgId);
-        chatRoomMemberRepository.save(member);
-    }
-
-    /**
-     * (헬퍼) 일반 채팅 저장 직후 방의 정렬/미리보기 필드를 갱신한다.
-     * 토론/퀴즈 방송 이벤트는 저장 자체가 없으므로 호출하지 말 것.
-     */
-    @Transactional
-    public void bumpRoomAfterNormalMessage(ChatMessage saved) {
-        ChatRoom room = saved.getChatRoom();
-        room.setLastMessageId(saved.getId());
-        room.setLastMessageAt(saved.getCreatedAt());
-        room.setLastMessage(trimPreview(saved.getContent(), 50));
-        chatRoomRepository.save(room);
-    }
-
-    private static String trimPreview(String s, int max) {
-        if (s == null) return null;
-        return s.length() <= max ? s : s.substring(0, max);
-    }
-
-    private static int safeToInt(long v) {
-        return (v > Integer.MAX_VALUE) ? Integer.MAX_VALUE : (int) v;
+        ChatMessage lastMsg = chatMessageRepository.findFirstByChatRoomOrderByCreatedAtDesc(chatRoom);
+        if (lastMsg != null) {
+            member.setLastReadMessageId(lastMsg.getId());
+            chatRoomMemberRepository.save(member);
+        }
     }
 }

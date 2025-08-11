@@ -12,43 +12,29 @@ import java.util.List;
 @Getter
 @Setter
 @Builder
-@NoArgsConstructor @AllArgsConstructor
-@Table(name = "chat_room",
-        indexes = {
-                @Index(name = "ix_room_last_msg_at", columnList = "pinned,last_message_at")
-        }
-)
+@NoArgsConstructor
+@AllArgsConstructor
 public class ChatRoom {
 
     @Id
-    @Column(name = "group_id")
-    private Long groupId;  // Group PK를 그대로 사용
+    private Long groupId;  // PK
 
     @OneToOne
     @MapsId
-    @JoinColumn(name = "group_id")
-    private Group group;
+    @JoinColumn(name = "groupId")
+    private Group group;  // Group 엔티티와 1:1 매핑
 
     private String groupTitle;
     private String imageUrl;
     private String category;
 
-    // === 정렬/표시용 필드 ===
-    @Column(name = "last_message_id")
-    private Long lastMessageId; // 마지막 NORMAL 메시지 PK
-
-    @Column(name = "last_message_at")
-    private LocalDateTime lastMessageAt; // 정렬 기준
-
-    @Column(name = "last_message", length = 300)
-    private String lastMessage; // 미리보기(선택)
-
-    @Column(name = "pinned", nullable = false)
-    private boolean pinned = false; // 상단 고정
-
-    private int memberCount; // 유지할 계획이면 그대로 사용, 아니면 조회 쿼리에서 COUNT로 대체 권장
+    private String lastMessage;
+    private LocalDateTime lastMessageTime;
+    private int memberCount;
 
     @Builder.Default
     @OneToMany(mappedBy = "chatRoom", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ChatRoomMember> chatRoomMembers = new ArrayList<>();
 }
+
+

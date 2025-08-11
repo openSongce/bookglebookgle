@@ -9,7 +9,6 @@ import com.example.bookglebookgleserver.fcm.service.GroupNotificationScheduler;
 import com.example.bookglebookgleserver.user.entity.UserDevice;
 import com.example.bookglebookgleserver.user.repository.UserDeviceRepository;
 import com.example.bookglebookgleserver.user.repository.UserRepository;
-import io.swagger.v3.oas.annotations.Operation;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -17,8 +16,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 
 @RestController
 @RequiredArgsConstructor
@@ -32,14 +30,6 @@ public class FcmController {
     private final GroupNotificationScheduler scheduler;
 
     // (1) 로그인/앱 시작/onNewToken 이후: 토큰 등록/업데이트 + 중복 토큰 정리
-    @Operation(
-            summary = "FCM 토큰 등록/갱신",
-            description = """
-        로그인/앱 시작/onNewToken 이후 호출.
-        - 동일 토큰이 다른 유저에 묶여있으면 해당 레코드 모두 비활성화.
-        - (userId, token) 조합이 없으면 신규 생성, 있으면 enabled=true로 갱신.
-        """
-    )
     @PutMapping("/token")
     @Transactional
     public ResponseEntity<Void> registerToken(
@@ -89,14 +79,6 @@ public class FcmController {
     }
 
     // (1-1) 로그아웃: 해당 토큰만 비활성화
-    @Operation(
-            summary = "FCM 토큰 비활성화(로그아웃)",
-            description = """
-        로그아웃 시 호출.
-        - 해당 (userId, token)만 enabled=false로 비활성화.
-        - 이후 이 기기는 푸시 발송 대상에서 제외됨.
-        """
-    )
     @PostMapping("/unregister")
     @Transactional
     public ResponseEntity<Void> unregisterToken(
@@ -121,10 +103,6 @@ public class FcmController {
     }
 
     // (2) 단건/유저 전체 발송 테스트
-    @Operation(
-            summary = "단일 토큰/유저 전체 발송 테스트",
-            description = "토큰 또는 유저 ID를 지정하여 FCM 발송 테스트"
-    )
     @PostMapping("/send")
     public ResponseEntity<Map<String, String>> send(@RequestBody FcmSendRequest req) {
         if (req.token() != null && !req.token().isBlank()) {
@@ -139,10 +117,6 @@ public class FcmController {
     }
 
     // (3) 그룹 즉시 발송
-    @Operation(
-            summary = "그룹 즉시 발송",
-            description = "그룹 ID로 FCM을 즉시 발송"
-    )
     @PostMapping("/group/{groupId}/send")
     public ResponseEntity<Void> sendGroupNow(@PathVariable Long groupId,
                                              @RequestParam(defaultValue = "북글북글 알림") String title,
