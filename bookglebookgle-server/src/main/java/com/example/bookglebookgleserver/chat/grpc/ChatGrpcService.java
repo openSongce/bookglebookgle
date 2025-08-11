@@ -1,13 +1,14 @@
 package com.example.bookglebookgleserver.chat.grpc;
 
+import com.bgbg.ai.grpc.AIServiceProto.ChatMessageResponse;
 import com.example.bookglebookgleserver.chat.ChatMessage;
-import com.bgbg.ai.grpc.AIServiceProto.ChatMessageResponse;// (AI 응답용 proto 메시지 import)
 import com.example.bookglebookgleserver.chat.ChatServiceGrpc;
 import com.example.bookglebookgleserver.chat.QuizEnd;
 import com.example.bookglebookgleserver.chat.QuizQuestion;
 import com.example.bookglebookgleserver.chat.entity.ChatRoom;
 import com.example.bookglebookgleserver.chat.repository.ChatMessageRepository;
 import com.example.bookglebookgleserver.chat.repository.ChatRoomRepository;
+import com.example.bookglebookgleserver.fcm.service.FcmGroupService;
 import com.example.bookglebookgleserver.user.entity.User;
 import com.example.bookglebookgleserver.user.repository.UserRepository;
 import io.grpc.stub.StreamObserver;
@@ -18,17 +19,11 @@ import net.devh.boot.grpc.server.service.GrpcService;
 
 import java.time.Instant;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArraySet;
-
-import java.util.List;
-import java.util.ArrayList;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 @Slf4j
 @GrpcService
@@ -39,6 +34,7 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
     private final ChatRoomRepository chatRoomRepository;
     private final UserRepository userRepository;
     private final AiServiceClient aiServiceClient;
+    private final FcmGroupService fcmGroupService;
 
     // 채팅방별로 클라이언트 목록 관리
     private final ConcurrentHashMap<Long, Set<StreamObserver<ChatMessage>>> roomObservers = new ConcurrentHashMap<>();
@@ -187,6 +183,14 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
                 // 브로드캐스트
                 //broadcastToRoom(groupId, message);
                 ChatGrpcService.this.broadcastToRoom(groupId, message);
+                try {
+                    String groupName = chatRoom.getGroupTitle(); // 또는 getGroupTitle() - 프로젝트 필드에 맞추세요
+                    String senderName = sender.getNickname();
+                    String chatText = message.getContent();
+                    fcmGroupService.sendChat(groupId, sender.getId(), groupName, senderName, chatText);
+                } catch (Exception e) {
+                    log.warn("[gRPC-Chat] 채팅 FCM 알림 실패: {}", e.getMessage());
+                }
             }
 
 
