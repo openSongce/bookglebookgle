@@ -3,13 +3,23 @@ package com.example.bookglebookgleserver.fcm.service;
 import com.example.bookglebookgleserver.fcm.dto.FcmSendRequest;
 import com.example.bookglebookgleserver.user.entity.UserDevice;
 import com.example.bookglebookgleserver.user.repository.UserDeviceRepository;
-import com.google.firebase.messaging.*;
+import com.google.firebase.messaging.AndroidConfig;
+import com.google.firebase.messaging.AndroidNotification;
+import com.google.firebase.messaging.BatchResponse;
+import com.google.firebase.messaging.FirebaseMessaging;
+import com.google.firebase.messaging.FirebaseMessagingException;
+import com.google.firebase.messaging.Message;
+import com.google.firebase.messaging.MessagingErrorCode;
+import com.google.firebase.messaging.MulticastMessage;
+import com.google.firebase.messaging.Notification;
+import com.google.firebase.messaging.SendResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
-import java.util.*;
+import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -25,7 +35,9 @@ public class FcmService {
     /** 특정 유저의 모든 활성 기기에 발송 */
     public void sendToUser(Long userId, FcmSendRequest req) {
         List<String> tokens = userDeviceRepository.findAllByUser_IdAndEnabledTrue(userId)
-                .stream().map(UserDevice::getToken).collect(Collectors.toList());
+                .stream()
+                .map(UserDevice::getToken)
+                .collect(Collectors.toList());
         log.info("📨 유저 전체 기기 발송 준비: userId={}, 대상토큰수={}", userId, tokens.size());
         sendToTokens(tokens, req);
     }
@@ -54,11 +66,13 @@ public class FcmService {
             return;
         }
         log.info("📦 멀티캐스트 발송 시작: 총토큰수={}", tokens.size());
+
         for (int i = 0; i < tokens.size(); i += CHUNK) {
             List<String> slice = tokens.subList(i, Math.min(i + CHUNK, tokens.size()));
             MulticastMessage mm = buildMulticastMessage(slice, req);
             try {
-                BatchResponse resp = firebaseMessaging.sendMulticast(mm);
+                // ✅ 변경 포인트: 배치 엔드포인트를 사용하지 않는 공식 대체 API
+                BatchResponse resp = firebaseMessaging.sendEachForMulticast(mm);
                 log.info("✅ 멀티캐스트 발송 결과: 성공={} 실패={}", resp.getSuccessCount(), resp.getFailureCount());
                 cleanupInvalidTokens(slice, resp);
             } catch (FirebaseMessagingException e) {
@@ -136,15 +150,13 @@ public class FcmService {
         return mb.build();
     }
 
-
     /** 실패 토큰 비활성화(UNREGISTERED) */
     private void cleanupInvalidTokens(List<String> tokens, BatchResponse resp) {
         for (int i = 0; i < resp.getResponses().size(); i++) {
             SendResponse r = resp.getResponses().get(i);
             if (!r.isSuccessful()) {
                 Exception ex = r.getException();
-                if (ex instanceof FirebaseMessagingException) {
-                    FirebaseMessagingException fme = (FirebaseMessagingException) ex;
+                if (ex instanceof FirebaseMessagingException fme) {
                     if (fme.getMessagingErrorCode() == MessagingErrorCode.UNREGISTERED) {
                         String t = tokens.get(i);
                         userDeviceRepository.findByToken(t).ifPresent(d -> {
