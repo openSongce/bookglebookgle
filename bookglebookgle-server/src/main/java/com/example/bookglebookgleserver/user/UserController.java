@@ -10,6 +10,7 @@ import com.example.bookglebookgleserver.user.entity.User;
 import com.example.bookglebookgleserver.user.repository.PdfViewingSessionRepository;
 import com.example.bookglebookgleserver.user.repository.UserRepository;
 import com.example.bookglebookgleserver.user.service.UserService;
+import com.example.bookglebookgleserver.user.service.ViewingSessionService;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
 
@@ -28,6 +29,8 @@ public class UserController {
     private final UserService userService;
     private final AuthService authService;
 
+    private final ViewingSessionService viewingSessionService;
+
     @Operation(summary = "사용자 프로필 조회", description = "이메일, 닉네임, 프로필 사진, 평점, 참여/완료/미완료 모임 수, 총 활동 시간 반환")
     @GetMapping("/profile")
     public UserProfileResponse getProfile(
@@ -40,24 +43,27 @@ public class UserController {
 
         Long userId = currentUser.getId();
 
-        double avgRating = currentUser.getAvgRating() != null ? currentUser.getAvgRating() : 0.0;
-        int participated = groupMemberRepository.countJoinedGroupsByUserId(userId);
-        int completed    = groupMemberRepository.countCompletedGroupsByUserId(userId);
-        int incomplete   = groupMemberRepository.countIncompleteGroupsByUserId(userId);
-        Long totalSeconds = pdfViewingSessionRepository.sumTotalViewingTimeByUserId(userId);
-        int totalHours = totalSeconds == null ? 0 : (int)(totalSeconds / 3600);
+        // ✅ 모든 계산을 서비스로 위임 (prettyActiveTime/seconds 포함)
+        return viewingSessionService.getProfile(currentUser.getId());
 
-        return UserProfileResponse.builder()
-                .email(currentUser.getEmail())
-                .nickname(currentUser.getNickname())
-                .profileImgUrl(currentUser.getProfileImageUrl())
-                .avgRating(avgRating)
-                .participatedGroups(participated)
-                .completedGroups(completed)
-                .incompleteGroups(incomplete)
-                .totalActiveHours(totalHours)
-                .profileColor(currentUser.getProfileColor())
-                .build();
+//        double avgRating = currentUser.getAvgRating() != null ? currentUser.getAvgRating() : 0.0;
+//        int participated = groupMemberRepository.countJoinedGroupsByUserId(userId);
+//        int completed    = groupMemberRepository.countCompletedGroupsByUserId(userId);
+//        int incomplete   = groupMemberRepository.countIncompleteGroupsByUserId(userId);
+//        Long totalSeconds = pdfViewingSessionRepository.sumTotalViewingTimeByUserId(userId);
+//        int totalHours = totalSeconds == null ? 0 : (int)(totalSeconds / 3600);
+//
+//        return UserProfileResponse.builder()
+//                .email(currentUser.getEmail())
+//                .nickname(currentUser.getNickname())
+//                .profileImgUrl(currentUser.getProfileImageUrl())
+//                .avgRating(avgRating)
+//                .participatedGroups(participated)
+//                .completedGroups(completed)
+//                .incompleteGroups(incomplete)
+//                .totalActiveHours(totalHours)
+//                .profileColor(currentUser.getProfileColor())
+//                .build();
     }
 
 

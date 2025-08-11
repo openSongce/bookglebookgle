@@ -11,11 +11,11 @@ public interface PdfViewingSessionRepository extends JpaRepository<PdfViewingSes
 
 
     @Query("""
-        select coalesce(sum(p.durationSeconds), 0)
+        select coalesce(sum(p.durationSeconds), 0L)
           from PdfViewingSession p
          where p.user.id = :userId
     """)
-    Long sumTotalViewingTimeByUserId(@Param("userId") Long userId);
+    long sumTotalViewingTimeByUserId(@Param("userId") Long userId);
 
 
 }

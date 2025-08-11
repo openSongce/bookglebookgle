@@ -14,29 +14,17 @@ import java.util.Optional;
 public interface PdfReadingProgressRepository extends JpaRepository<PdfReadingProgress, Long> {
     Optional<PdfReadingProgress> findByUserAndGroup(User user, Group group);
 
-    @Modifying
-    @Query("""
-        update PdfReadingProgress p
-           set p.maxReadPage = 
-             case when p.maxReadPage < :page then :page else p.maxReadPage end,
-               p.updatedAt = CURRENT_TIMESTAMP
-         where p.user = :user and p.group = :group
-    """)
-    int bumpMaxReadPage(@Param("user") User user,
-                        @Param("group") Group group,
-                        @Param("page") int page);
-
-
     @Modifying(clearAutomatically = true)
     @Query(value = """
         UPDATE pdf_reading_progress
-           SET max_read_page = GREATEST(max_read_page, :page)
+           SET max_read_page = GREATEST(max_read_page, :page),
+               updated_at = NOW()
          WHERE user_id = :userId
            AND group_id = :groupId
         """, nativeQuery = true)
-    int bumpMaxReadPage(@Param("userId") long userId,
-                        @Param("groupId") long groupId,
-                        @Param("page") int page);
+    int bumpMaxReadPageById(@Param("userId") long userId,
+                            @Param("groupId") long groupId,
+                            @Param("page") int page);
 
     @Modifying(clearAutomatically = true)
     @Query(value = """

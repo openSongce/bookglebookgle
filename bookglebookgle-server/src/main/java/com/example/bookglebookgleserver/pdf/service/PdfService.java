@@ -90,13 +90,12 @@ public class PdfService {
 
     @Transactional
     public void updateOrInsertProgress(Long userId, Long groupId, int page) {
-        User user = userRepository.findById(userId).orElseThrow();
-        Group group = groupRepository.findById(groupId).orElseThrow();
-
-        // 있으면 한 방에 MAX 갱신
-        int updated = pdfReadingProgressRepository.bumpMaxReadPage(user, group, page);
+        // UPDATE 시도
+        int updated = pdfReadingProgressRepository.bumpMaxReadPageById(userId, groupId, page);
         if (updated == 0) {
-            // 없으면 생성
+            // 없으면 INSERT
+            User user = userRepository.findById(userId).orElseThrow();
+            Group group = groupRepository.findById(groupId).orElseThrow();
             PdfReadingProgress progress = PdfReadingProgress.builder()
                     .user(user)
                     .group(group)
@@ -106,9 +105,10 @@ public class PdfService {
         }
     }
 
+
     @Transactional
     public int bumpMaxRead(long userId, long groupId, int page) {
-        return pdfReadingProgressRepository.bumpMaxReadPage(userId, groupId, page);
+        return pdfReadingProgressRepository.bumpMaxReadPageById(userId, groupId, page);
     }
 
     @Transactional

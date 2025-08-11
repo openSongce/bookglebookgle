@@ -21,4 +21,7 @@ public class UserProfileResponse {
     private double progressPercent;
     private String profileColor;   // "#RRGGBB" 또는 "#AARRGGBB"
     private int participatedGroups;
+
+    private String prettyActiveTime;  // 예: "12h 05m" 또는 "12시간 05분"
+    private long totalActiveSeconds;  // (옵션) 프론트 포맷용 원본 초
 }
