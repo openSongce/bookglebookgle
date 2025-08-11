@@ -74,12 +74,14 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
                         // 실제로는 proto에 QuizStart payload가 있다면 그걸 쓰면 더 좋음.
                         QuizStartParam p = parseQuizStart(message);
                         startQuiz(groupId, message.getSenderId(), p);
+                        ChatGrpcService.this.broadcastToRoom(groupId, message);
                         return;
                     }
 
                     // ==== ✅ 퀴즈 강제 종료 ====
                     if ("QUIZ_CANCEL".equals(msgType)) {
                         stopQuiz(groupId, "CANCELLED");
+                        ChatGrpcService.this.broadcastToRoom(groupId, message);
                         return;
                     }
 
@@ -94,6 +96,7 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
                                     qa.getSelectedIndex()
                             );
                         }
+                        ChatGrpcService.this.broadcastToRoom(groupId, message);
                         return; // 다른 처리 안 함
                     }
 
@@ -121,6 +124,7 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
                     }
                     // === 2. 토론 중 AI Moderation (피드백/알림) 요청 ===
                     else if (isDiscussionActive(groupId)) {
+                        ChatGrpcService.this.broadcastToRoom(groupId, message);
                         aiServiceClient.streamChatModeration(
                                 groupId, message.getSenderId(), message.getSenderName(), message.getContent(),
                                 new StreamObserver<ChatMessageResponse>() {
