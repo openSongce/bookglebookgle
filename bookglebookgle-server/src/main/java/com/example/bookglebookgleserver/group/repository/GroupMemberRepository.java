@@ -36,43 +36,51 @@ public interface GroupMemberRepository extends JpaRepository<GroupMember, Long> 
     int countIncompleteGroupsByUserId(@Param("userId") Long userId);
 
 
+
     @Query("""
 select new com.example.bookglebookgleserver.group.dto.GroupMemberDetailDto(
     u.id,
     u.nickname,
     u.profileColor,
-    coalesce(prp.maxReadPage, 0),
+    coalesce(gm.maxReadPage, 0),
     case 
-        when :pageCount > 0 then (coalesce(prp.maxReadPage, 0) * 100) / :pageCount
+        when :pageCount > 0 
+             then cast( (coalesce(gm.maxReadPage, 0) * 100.0) / :pageCount as integer )
         else 0
     end,
     gm.isHost,
     case 
-        when :pageCount > 0 and coalesce(prp.maxReadPage, 0) >= :pageCount then true 
+        when :pageCount > 0 and coalesce(gm.maxReadPage, 0) >= :pageCount then true 
         else false 
     end
 )
 from GroupMember gm
 join gm.user u
-left join PdfReadingProgress prp 
-    on prp.group = gm.group and prp.user = u
 where gm.group.id = :groupId
 """)
     List<GroupMemberDetailDto> findMemberDetailsByGroupId(@Param("groupId") Long groupId,
                                                           @Param("pageCount") int pageCount);
 
-      @Modifying(clearAutomatically = true, flushAutomatically = true)
-        @Query("""
-        update GroupMember gm
-           set gm.maxReadPage = case 
-             when gm.maxReadPage < :page then :page 
-             else gm.maxReadPage 
-             end
-         where gm.group.id = :groupId and gm.user.id = :userId
-    """)
-        int bumpMaxReadPage(@Param("groupId") Long groupId,
-                            @Param("userId") Long userId,
-                            @Param("page") int page);
+    @Modifying
+    @Query("""
+    update GroupMember gm
+       set gm.maxReadPage = case
+           when :page > coalesce(gm.maxReadPage, 0) then :page
+           else coalesce(gm.maxReadPage, 0)
+         end,
+           gm.progressPercent = case
+           when :totalPages <= 0 then 0
+           when (:page * 100) / :totalPages >= 100 then 100
+           when (:page * 100) / :totalPages <= 0 then 0
+           else (:page * 100) / :totalPages
+         end
+     where gm.user.id = :userId
+       and gm.group.id = :groupId
+""")
+    int bumpProgress(@Param("userId") Long userId,
+                     @Param("groupId") Long groupId,
+                     @Param("page") int page,
+                     @Param("totalPages") int totalPages);
 
 
 

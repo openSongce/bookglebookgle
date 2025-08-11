@@ -6,6 +6,7 @@ import com.example.bookglebookgleserver.comment.repository.CommentRepository;
 import com.example.bookglebookgleserver.group.entity.Group;
 import com.example.bookglebookgleserver.group.repository.GroupMemberRepository;
 import com.example.bookglebookgleserver.group.repository.GroupRepository;
+import com.example.bookglebookgleserver.group.service.PdfProgressTxService;
 import com.example.bookglebookgleserver.highlight.entity.Highlight;
 import com.example.bookglebookgleserver.highlight.repository.HighlightRepository;
 import com.example.bookglebookgleserver.pdf.repository.PdfReadingProgressRepository;
@@ -38,6 +39,8 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
     private final PdfService pdfService;
     private final ViewingSessionService viewingSessionService;
     private final UserRepository userRepository;
+
+    private final PdfProgressTxService progressTxService;
 
     private final GroupMemberRepository groupMemberRepository;
     private final PdfReadingProgressRepository pdfReadingProgressRepository;
@@ -98,6 +101,7 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
                                 }
                             }
 
+                            ensureOnePageProgress100(Long.valueOf(userId), groupId, state);
                             // 최신 스냅샷 → 나에게
                             sendSnapshotTo(state, userId);
                             // (선택) 모두에게도 스냅샷
@@ -134,6 +138,7 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
             @Override
             public void onError(Throwable t) {
                 logger.warning("[PDF-SYNC] channel error: " + t.getMessage());
+                recordViewingDuration();
                 handleLeave();
             }
 
@@ -182,7 +187,7 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
                             state.currentLeaderId = next;
                         }
                     }
-
+                    ensureOnePageProgress100(Long.valueOf(req.getUserId()), req.getGroupId(), state);
                     sendSnapshotTo(state, req.getUserId());
                     broadcastSnapshot(state);
                 } finally {
@@ -259,7 +264,7 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
                 // ★ DB에도 최댓값으로 반영
                 Long uid = Long.valueOf(uidStr);
                 Long gid = req.getGroupId();
-                persistMaxRead(gid, uid, page);
+                persistProgress(uid, gid, page);
 
                 // PAGE_MOVE 브로드캐스트(에코 포함)
                 SyncMessage evt = SyncMessage.newBuilder()
@@ -344,7 +349,7 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
                     // DB 반영 (최댓값으로)
                     Long uid = Long.valueOf(req.getUserId());
                     Long gid = req.getGroupId();
-                    persistMaxRead(gid, uid, page);
+                    persistProgress(uid, gid, page);
 
                     // 1) 즉시 PROGRESS_UPDATE 이벤트 브로드캐스트 (클라 progressObserver가 받음)
                     SyncMessage evt = SyncMessage.newBuilder()
@@ -485,23 +490,32 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
                 GroupState state = GroupStore.get(groupId);
                 state.lock.lock();
                 try {
-                    // 관찰자/참가자 제거
+                    // 관찰자 제거 + 오프라인 표시
                     state.observers.remove(userId);
                     state.onlineByUser.put(userId, false);
 
-                    // 리더였으면 재선정
-                    if (Objects.equals(userId, state.currentLeaderId)) {
+                    boolean wasLeader = Objects.equals(userId, state.currentLeaderId);
+
+                    if (wasLeader) {
+                        // 1) 온라인 + 원조호스트 우선
                         String next = state.participants.values().stream()
-                                .filter(pm -> pm.isOriginalHost)
+                            .filter(pm -> state.onlineByUser.getOrDefault(pm.userId, false))
+                            .filter(pm -> pm.isOriginalHost)
+                            .map(pm -> pm.userId)
+                            .findFirst()
+                            // 2) 없다면 온라인 중 첫번째
+                            .orElseGet(() -> state.participants.values().stream()
+                                .filter(pm -> state.onlineByUser.getOrDefault(pm.userId, false))
                                 .map(pm -> pm.userId)
                                 .findFirst()
-                                .orElseGet(() -> state.participants.keySet().stream().findFirst().orElse(null));
+                                .orElse(null));
+
                         state.currentLeaderId = next;
 
                         if (next != null) {
                             SyncMessage evt = SyncMessage.newBuilder()
                                     .setGroupId(groupId)
-                                    .setUserId(userId)
+                                    .setUserId(userId)              // 떠난 사람(이벤트 트리거)
                                     .setActionType(ActionType.LEADERSHIP_TRANSFER)
                                     .setAnnotationType(AnnotationType.NONE)
                                     .setTargetUserId(next)
@@ -511,12 +525,13 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
                         }
                     }
 
-                    // 최신 스냅샷 브로드캐스트
+                    // 최신 스냅샷(online/offline, leader 포함)
                     broadcastSnapshot(state);
                 } finally {
                     state.lock.unlock();
                 }
             }
+
 
             // ---------- helpers ----------
 
@@ -621,22 +636,45 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
             }
 
 
-            @Transactional
-            private void persistMaxRead(Long groupId, Long userId, int page) {
-                // 1) group_member.max_read_page 최댓값 갱신
-                int updated = groupMemberRepository.bumpMaxReadPage(groupId, userId, page);
-                if (updated == 0) {
-                    // 혹시 멤버 행이 없다면(이상 케이스) 스킵 or 생성 로직
-                    // 일반적으로는 이미 그룹 가입되어 있으므로 0이 나올 일이 없음.
-                }
 
-                // 2) pdf_reading_progress 최댓값 갱신 (기존 서비스 재사용)
+            private void persistProgress(Long userId, Long groupId, int page) {
+                int totalPages = groupRepository.findById(groupId)
+                        .map(Group::getTotalPages)
+                        .orElse(0);
+
+
+
+
+                progressTxService.bump(userId, groupId, page, totalPages);
+
+                // 2) pdf_reading_progress upsert (서비스에 @Transactional 있으면 OK)
                 try {
                     pdfService.updateOrInsertProgress(userId, groupId, page);
                 } catch (Exception e) {
+                    // 실패해도 주요 진행도는 group_member에 반영됐으니 경고만
                     logger.log(Level.WARNING, "[PDF-SYNC] pdf_reading_progress upsert 실패", e);
                 }
             }
+
+
+
+            private void ensureOnePageProgress100(Long userId, Long groupId, GroupState state) {
+                int totalPages = groupRepository.findById(groupId).map(Group::getTotalPages).orElse(0);
+                if (totalPages != 1) return;
+
+                // 메모리 상태(해당 사용자 max) 보정
+                state.lock.lock();
+                try {
+                    state.progressByUser.merge(String.valueOf(userId), 1, Math::max);
+                } finally {
+                    state.lock.unlock();
+                }
+
+                // DB 반영 (GM.max_read_page=1, progress=100) + PRP upsert 포함
+                persistProgress(userId, groupId, 1);
+            }
+
+
 
 
         };

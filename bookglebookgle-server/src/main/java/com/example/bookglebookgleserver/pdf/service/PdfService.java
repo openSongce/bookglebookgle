@@ -3,6 +3,8 @@ package com.example.bookglebookgleserver.pdf.service;
 import com.example.bookglebookgleserver.global.exception.AuthException;
 import com.example.bookglebookgleserver.global.exception.NotFoundException;
 import com.example.bookglebookgleserver.group.entity.Group;
+import com.example.bookglebookgleserver.group.entity.GroupMember;
+import com.example.bookglebookgleserver.group.repository.GroupMemberRepository;
 import com.example.bookglebookgleserver.group.repository.GroupRepository;
 import com.example.bookglebookgleserver.pdf.dto.PdfProgressResponse;
 import com.example.bookglebookgleserver.pdf.entity.PdfFile;
@@ -32,6 +34,7 @@ public class PdfService {
     private final UserRepository userRepository;
     private final GroupRepository groupRepository;
     private final PdfReadingProgressRepository pdfReadingProgressRepository;
+    private final GroupMemberRepository groupMemberRepository;
 
     public void handlePdfUpload(MultipartFile file) {
         Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
@@ -77,9 +80,8 @@ public class PdfService {
                 .map(PdfReadingProgress::getMaxReadPage) // 새 컬럼
                 .orElse(0);
 
-//        int lastReadPage = pdfReadingProgressRepository.findByUserAndGroup(user, group)
-//                .map(PdfReadingProgress::getLastReadPage)
-//                .orElse(0);
+
+
 
         double progressRate = (totalPages == 0) ? 0 : (maxReadPage * 100.0) / totalPages;
 
