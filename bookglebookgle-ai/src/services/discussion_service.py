@@ -87,7 +87,7 @@ class DiscussionService:
                 "success": True,
                 "message": "Discussion started and topics generated.",
                 "discussion_topics": topics_result["topics"],
-                "recommended_topic": topics_result["topics"][0] if topics_result["topics"] else ""
+                "recommended_topic": topics_result["topics"].pop(0) if topics_result["topics"] else ""
             }
         except Exception as e:
             logger.error(f"Failed to start discussion: {e}")
@@ -446,7 +446,7 @@ class DiscussionService:
             response = await self.llm_client.generate_completion(
                 prompt=prompt,
                 system_message=system_message,
-                max_tokens=500,
+                max_tokens=800,
                 temperature=0.7,
                 provider=LLMProvider.GMS
             )
@@ -511,7 +511,7 @@ class DiscussionService:
             response = await self.llm_client.generate_completion(
                 prompt=prompt,
                 system_message=system_message,
-                max_tokens=500,
+                max_tokens=800,
                 temperature=0.8,
                 provider=LLMProvider.GMS
             )
@@ -567,7 +567,7 @@ class DiscussionService:
             response = await self.llm_client.generate_completion(
                 prompt=prompt,
                 system_message=system_message,
-                max_tokens=500,
+                max_tokens=800,
                 temperature=0.8,
                 provider=LLMProvider.GMS
             )
@@ -646,7 +646,7 @@ class DiscussionService:
             async for chunk in self.llm_client.generate_completion_stream(
                 prompt=prompt,
                 system_message=system_message,
-                max_tokens=500,
+                max_tokens=800,
                 temperature=0.8,
                 provider=LLMProvider.GMS
             ):

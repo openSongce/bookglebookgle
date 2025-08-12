@@ -529,18 +529,22 @@ class AIServicer(ai_service_pb2_grpc.AIServiceServicer):
                 if result["success"]:
                     questions = []
                     for q in result["questions"]:
+                        # QuizService에서 오는 데이터 구조를 gRPC 구조로 변환
                         questions.append(ai_service_pb2.Question(
-                            question_text=q["question_text"],
-                            options=q["options"],
-                            correct_answer_index=q["correct_answer_index"]
+                            question_text=q.get("question", q.get("question_text", "")),
+                            options=q.get("options", []),
+                            correct_answer_index=q.get("correct_answer", q.get("correct_answer_index", 0))
                         ))
                     quiz_id = result["quiz_id"]
+                    logger.info(f"✅ Successfully generated quiz with {len(questions)} questions")
                 else:
+                    logger.error(f"Quiz generation failed: {result.get('error')}")
                     return ai_service_pb2.QuizResponse(
                         success=False,
                         message=result.get("error", "Quiz generation failed")
                     )
             
+            logger.info(f"🎯 Returning quiz response with {len(questions)} questions")
             return ai_service_pb2.QuizResponse(
                 success=True,
                 message="Quiz generated successfully",
@@ -752,7 +756,7 @@ class AIServicer(ai_service_pb2_grpc.AIServiceServicer):
             async for request in request_iterator:
                 if request.HasField("info"):
                     # First message should contain PdfInfo
-                    document_id = request.info.document_id or str(uuid.uuid4())
+                    document_id = request.info.document_id
                     file_name = request.info.file_name
                     meeting_id = request.info.meeting_id
                     metadata = dict(request.info.metadata)

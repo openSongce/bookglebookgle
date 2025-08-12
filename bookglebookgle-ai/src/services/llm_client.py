@@ -153,15 +153,25 @@ class LLMClient:
                 data["system"] = system_message
             
             logger.debug(f"📝 Request data: model={model}, max_tokens={max_tokens}, temperature={temperature}")
+            logger.info(f"🔗 Sending request to: {self.settings.ai.GMS_BASE_URL}/messages")
+            logger.info(f"🔑 API Key: {self.settings.ai.GMS_API_KEY[:20]}...{self.settings.ai.GMS_API_KEY[-4:] if len(self.settings.ai.GMS_API_KEY) > 24 else 'SHORT_KEY'}")
+            logger.info(f"📦 Payload size: {len(str(data))} characters")
             
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            # 보다 공격적인 네트워크 타임아웃으로 행걸림 방지 (연결/읽기 분리)
+            timeout = httpx.Timeout(connect=5.0, read=20.0, write=10.0, pool=5.0)
+            limits = httpx.Limits(max_connections=10, max_keepalive_connections=5)
+            async with httpx.AsyncClient(timeout=timeout, limits=limits, follow_redirects=True) as client:
+                logger.info("⏳ Waiting for GMS API response (connect<=5s, read<=20s)...")
                 response = await client.post(
                     f"{self.settings.ai.GMS_BASE_URL}/messages",
                     headers=headers,
-                    json=data
+                    json=data,
+                    timeout=timeout
                 )
+                logger.info(f"📡 Received response: status={response.status_code}")
                 response.raise_for_status()
                 result = response.json()
+                logger.info("✅ Response parsing successful")
                 
                 # Anthropic API 응답 파싱
                 if "content" in result and len(result["content"]) > 0:

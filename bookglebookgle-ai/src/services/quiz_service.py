@@ -107,29 +107,56 @@ class QuizService:
                     combined_content = f"문서 전체(100% 진도) 내용: 기본 개념부터 심화 내용까지 포괄적으로 다룹니다. 이론적 배경, 실무 적용 사례, 결론 및 요약이 포함되어 있습니다."
                 logger.info(f"Using fallback content for {progress}% progress")
             
+            logger.info(f"📝 Content prepared, length: {len(combined_content)} characters")
+            
+            # 진도율별 컨텐츠 품질 확인
+            progress = quiz_data["progress_percentage"]
+            if combined_content and len(combined_content) > 50:
+                logger.info(f"✅ Using VectorDB content for {progress}% progress quiz")
+                content_source = "vectordb"
+            else:
+                logger.info(f"⚠️ VectorDB content insufficient, using fallback for {progress}% progress")
+                content_source = "fallback"
+            
             quiz_data_with_content = {
                 **quiz_data,
                 "content": combined_content,
+                "content_source": content_source,
                 "language": "ko",
-                "question_count": 4,
+                "question_count": 2,  # 2개로 조정
                 "difficulty_level": "medium"
             }
             
+            logger.info(f"🎯 Starting question generation process...")
+            logger.info(f"🔍 DEBUG - MOCK_AI_RESPONSES: {self.settings.ai.MOCK_AI_RESPONSES}")
+            logger.info(f"🔍 DEBUG - quiz_llm_client available: {'Yes' if self.quiz_llm_client else 'No'}")
+            
             # 실제 LLM 연동 또는 Mock 선택
             if not self.settings.ai.MOCK_AI_RESPONSES and self.quiz_llm_client:
+                logger.info("🤖 Using real LLM for quiz generation...")
                 # 실제 LLM을 사용한 퀴즈 생성
-                llm_questions = await self._generate_llm_questions(quiz_data_with_content)
-                if llm_questions:
-                    mock_questions = llm_questions
-                else:
-                    logger.warning("LLM quiz generation failed, falling back to mock")
+                try:
+                    llm_questions = await self._generate_llm_questions(quiz_data_with_content)
+                    logger.info(f"🎯 LLM generation completed, result: {'Success' if llm_questions else 'Failed'}")
+                    if llm_questions:
+                        mock_questions = llm_questions
+                    else:
+                        logger.warning("LLM quiz generation failed, falling back to mock")
+                        mock_questions = self._generate_mock_questions(quiz_data_with_content)
+                except Exception as e:
+                    logger.error(f"LLM generation error: {e}")
+                    logger.info("🔄 Falling back to mock questions...")
                     mock_questions = self._generate_mock_questions(quiz_data_with_content)
             else:
+                logger.info("🎭 Using mock questions...")
                 # Mock 응답 사용
                 mock_questions = self._generate_mock_questions(quiz_data_with_content)
             
+            logger.info(f"✅ Questions generated: {len(mock_questions) if mock_questions else 0}")
+            
             # Validate generated questions
             validated_questions = self._validate_questions(mock_questions)
+            logger.info(f"✅ Questions validated: {len(validated_questions) if validated_questions else 0}")
             
             if not validated_questions:
                 return {"success": False, "error": "Failed to generate valid questions"}
@@ -277,8 +304,9 @@ class QuizService:
                 }
             ]
         
-        # Return fixed 4 questions
-        return mock_questions[:4]
+        logger.info(f"🎯 Generated {len(mock_questions)} mock questions for {progress}% progress")
+        # Return fixed 2 questions (간소화)
+        return mock_questions[:2]
     
     def _clean_json_response(self, response: str) -> str:
         """LLM 응답에서 JSON을 정리하고 수정"""
@@ -347,6 +375,7 @@ class QuizService:
     async def _generate_llm_questions(self, quiz_data: Dict[str, Any]) -> Optional[List[Dict[str, Any]]]:
         """LLM을 사용하여 실제 퀴즈 생성"""
         try:
+            logger.info("🤖 Starting LLM quiz generation...")
             content = quiz_data.get("content", "")
             language = quiz_data.get("language", "ko")
             question_count = quiz_data.get("question_count", 5)
@@ -357,80 +386,88 @@ class QuizService:
                 logger.error("No content provided for LLM quiz generation")
                 return None
             
-            # 시스템 메시지와 프롬프트 구성
-            system_message = """당신은 교육 전문가입니다. 주어진 문서 내용을 바탕으로 객관식 퀴즈를 생성해주세요.
-
-CRITICAL: 반드시 유효한 JSON 배열 형식으로만 응답하세요. 다른 텍스트는 포함하지 마세요.
-
-정확한 형식:
-[
-  {
-    "question": "질문 내용",
-    "options": ["선택지1", "선택지2", "선택지3", "선택지4"],
-    "correct_answer": 0,
-    "explanation": "정답 설명"
-  }
-]
-
-주의사항:
-- 모든 문자열은 쌍따옴표로 감싸세요
-- 배열 요소 간 쉼표를 빠뜨리지 마세요
-- 마지막 요소 뒤에는 쉼표를 붙이지 마세요
-- 모든 질문과 선택지는 한국어로 작성하세요"""
+            logger.info(f"📊 Quiz parameters: {question_count} questions, {difficulty} difficulty, {progress}% progress")
+            logger.info(f"📝 Content length: {len(content)} characters")
             
-            prompt = f"""다음 문서 내용을 바탕으로 4개의 객관식 퀴즈를 생성해주세요.
+            # 시스템 메시지와 프롬프트 구성 (간소화)
+            system_message = """문서 기반 객관식 퀴즈를 JSON으로 생성하세요.
 
-문서 내용:
-{content[:2000]}  # 토큰 제한을 위해 내용 제한
+형식: [{"question":"질문","options":["A","B","C","D"],"correct_answer":0,"explanation":"설명"}]
 
-진도율: {progress}%
-난이도: {difficulty}
-언어: {language}
-
-각 문제는 4개의 선택지를 가져야 하며, 정답은 0-3 중 하나의 인덱스여야 합니다.
-반드시 JSON 배열 형태로만 응답하세요."""
+JSON만 응답하세요."""
             
-            # LLM 클라이언트를 통한 퀴즈 생성
+            # 진도율별 컨텐츠 처리 (차별화)
+            if progress == 50:
+                # 50% 진도: 앞부분 위주 + 진도율 명시
+                content_preview = content[:600] if len(content) > 600 else content
+                progress_context = "문서 전반부(50% 진도)의 기본 개념과 도입부 내용"
+            else:  # 100%
+                # 100% 진도: 뒷부분 포함 + 전체 맥락
+                if len(content) > 600:
+                    # 앞부분 300자 + 뒷부분 300자로 전체 맥락 포함
+                    front_part = content[:300]
+                    back_part = content[-300:]
+                    content_preview = f"{front_part}...[중간 생략]...{back_part}"
+                else:
+                    content_preview = content
+                progress_context = "문서 전체(100% 완독)의 종합적 내용과 결론"
+            
+            prompt = f"""내용: {content_preview}
+
+맥락: {progress_context}
+진도: {progress}%
+2개 문제 생성"""
+            
+            logger.info("🔗 Calling LLM client...")
+            
+            # LLM 클라이언트를 통한 퀴즈 생성 (최적화된 파라미터)
             response = await self.llm_client.generate_completion(
                 prompt=prompt,
                 system_message=system_message,
-                max_tokens=2000,
-                temperature=0.7,
+                max_tokens=1200,  # 토큰 수 줄임 (토론과 비슷한 수준)
+                temperature=0.5,  # 온도 낮춤 (더 일관된 응답)
                 provider=LLMProvider.GMS
             )
             
-            logger.debug(f"LLM Response: {response[:500]}...")  # 디버깅용 로그
+            logger.info(f"✅ LLM response received, length: {len(response) if response else 0} characters")
+            logger.debug(f"LLM Response preview: {response[:500] if response else 'None'}...")  # 디버깅용 로그
+            
+            if not response:
+                logger.error("Empty response from LLM")
+                return None
             
             # 강화된 JSON 파싱
+            logger.info("🔄 Starting JSON parsing...")
             
             try:
                 # 1단계: 응답 정리
                 cleaned_response = self._clean_json_response(response)
-                logger.debug(f"Cleaned response: {cleaned_response[:300]}...")
+                logger.debug(f"Cleaned response preview: {cleaned_response[:300] if cleaned_response else 'None'}...")
                 
                 # 2단계: 직접 JSON 파싱 시도
                 try:
                     questions = json.loads(cleaned_response)
                     if isinstance(questions, list):
-                        logger.info("Successfully parsed JSON array directly")
+                        logger.info("✅ Successfully parsed JSON array directly")
                         return self._process_llm_questions(questions)
                 except json.JSONDecodeError as e:
                     logger.debug(f"Direct JSON parsing failed: {e}")
                 
                 # 3단계: 배열 추출 시도
+                logger.info("🔍 Attempting array extraction...")
                 array_match = re.search(r'\[.*?\]', cleaned_response, re.DOTALL)
                 if array_match:
                     try:
                         json_str = array_match.group()
                         questions = json.loads(json_str)
                         if isinstance(questions, list):
-                            logger.info("Successfully parsed JSON array from match")
+                            logger.info("✅ Successfully parsed JSON array from match")
                             return self._process_llm_questions(questions)
                     except json.JSONDecodeError as e:
                         logger.debug(f"Array extraction parsing failed: {e}")
                 
                 # 4단계: 개별 객체 추출 및 배열 구성
-                logger.debug("Attempting individual object parsing")
+                logger.info("🔧 Attempting individual object parsing...")
                 questions = []
                 # 중괄호 균형 맞추기 - 더 정확한 정규식
                 objects = re.findall(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', cleaned_response)
@@ -441,17 +478,17 @@ CRITICAL: 반드시 유효한 JSON 배열 형식으로만 응답하세요. 다�
                         fixed_obj = self._fix_json_object(obj_str)
                         question = json.loads(fixed_obj)
                         questions.append(question)
-                        logger.debug(f"Successfully parsed object {i+1}")
+                        logger.debug(f"✅ Successfully parsed object {i+1}")
                     except json.JSONDecodeError as e:
                         logger.warning(f"Failed to parse individual JSON object {i+1}: {e}")
                         logger.debug(f"Failed object: {obj_str}")
                         continue
                 
                 if questions:
-                    logger.info(f"Successfully parsed {len(questions)} questions from individual objects")
+                    logger.info(f"✅ Successfully parsed {len(questions)} questions from individual objects")
                     return self._process_llm_questions(questions)
                 else:
-                    logger.warning("No valid questions found after all parsing attempts")
+                    logger.warning("❌ No valid questions found after all parsing attempts")
                     return None
                     
             except Exception as e:
@@ -461,6 +498,8 @@ CRITICAL: 반드시 유효한 JSON 배열 형식으로만 응답하세요. 다�
                 
         except Exception as e:
             logger.error(f"LLM quiz generation failed: {e}")
+            import traceback
+            logger.debug(f"Traceback: {traceback.format_exc()}")
             return None
     
     def _validate_questions(self, questions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
