@@ -5,6 +5,7 @@ import com.example.bookglebookgleserver.global.exception.ForbiddenException;
 import com.example.bookglebookgleserver.group.dto.*;
 import com.example.bookglebookgleserver.group.service.GroupService;
 import com.example.bookglebookgleserver.user.entity.User;
+import com.example.bookglebookgleserver.user.repository.UserRepository;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.headers.Header;
@@ -13,11 +14,13 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 import java.util.List;
@@ -30,6 +33,8 @@ import java.util.List;
 public class GroupController {
 
     private final GroupService groupService;
+    private final UserRepository userRepository;
+
 
     @Operation(
             summary = "스터디 그룹 생성",
@@ -171,13 +176,22 @@ public class GroupController {
     }
 
     @GetMapping("/{groupId}/members/progress")
-    public ResponseEntity<List<GroupMemberProgressDto>> getAllMemberProgress(
+    public List<GroupMemberProgressDto> getAllMemberProgress(
             @PathVariable Long groupId,
-            @AuthenticationPrincipal com.example.bookglebookgleserver.user.entity.User currentUser
-    ){
-        return ResponseEntity.ok(
-                groupService.getGroupAllProgress(groupId, currentUser.getId())
-        );
+            @AuthenticationPrincipal(expression = "username") String email
+    ) {
+        if (email == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "로그인이 필요합니다.");
+        }
+
+        Long currentUserId = userRepository.findByEmail(email)
+                .map(User::getId)
+                .orElseThrow(() ->
+                        new ResponseStatusException(HttpStatus.UNAUTHORIZED, "사용자를 찾을 수 없습니다."));
+
+        // 서비스 시그니처: getGroupAllProgress(Long groupId, Long requesterId)
+        return groupService.getGroupAllProgress(groupId, currentUserId);
     }
+
 
 }
