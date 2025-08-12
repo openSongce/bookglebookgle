@@ -128,8 +128,8 @@ class GroupRepositoryImpl @Inject constructor(
             Log.d(
                 TAG,
                 "모임 상세 조회 성공 - 제목=${body.roomTitle}, 카테고리=${body.category}, " +
-                        "isCompleted=${body.isCompleted}, 멤버수=${body.members.size}, " +
-                        "평점제출완료멤버=${body.members.count { it.isCompleted }}"
+                        "isCompleted=${body.allMembersCompleted}, 멤버수=${body.members.size}, " +
+                        "평점제출완료멤버=${body.members.count { it.ratingSubmitted }}"
             )
 
             // ★ 도메인으로 매핑해서 반환

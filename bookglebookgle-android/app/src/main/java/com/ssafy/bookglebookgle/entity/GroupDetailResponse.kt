@@ -12,7 +12,7 @@ data class GroupDetailResponse(
     val minRequiredRating: Int,
     val pageCount: Int,
     val members: List<GroupMemberDetailDto>,
-    val isCompleted: Boolean
+    val allMembersCompleted: Boolean
 )
 
 data class GroupMemberDetailDto(
@@ -22,7 +22,7 @@ data class GroupMemberDetailDto(
     val lastPageRead: Int,   // 서버: 0-based
     val progressPercent: Int,
     val isHost: Boolean,
-    val isCompleted: Boolean
+    val ratingSubmitted: Boolean
 )
 
 data class GroupDetail(
@@ -58,7 +58,7 @@ fun GroupDetailResponse.toDomain(): GroupDetail = GroupDetail(
     maxMemberCount = maxMemberCount,
     description = description,
     photoUrl = photoUrl,
-    isCompleted = isCompleted,
+    isCompleted = allMembersCompleted,
     minRequiredRating = minRequiredRating,
     isHost = isHost,
     pageCount = pageCount,
@@ -72,5 +72,5 @@ fun GroupMemberDetailDto.toDomain(): GroupMember = GroupMember(
     lastPageRead = lastPageRead,
     progressPercent = progressPercent,
     isHost = isHost,
-    hasRated = isCompleted   // ★ 서버 필드명은 isCompleted지만 의미는 "평가 완료"
+    hasRated = ratingSubmitted   // ★ 서버 필드명은 isCompleted지만 의미는 "평가 완료"
 )

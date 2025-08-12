@@ -38,7 +38,9 @@ import android.os.Vibrator
 import android.os.VibratorManager
 import android.util.AttributeSet
 import android.util.Log
+import android.util.TypedValue
 import android.view.MotionEvent
+import android.view.ViewConfiguration
 import android.widget.RelativeLayout
 import com.shockwave.pdfium.PdfDocument
 import com.shockwave.pdfium.PdfDocument.Bookmark
@@ -293,10 +295,10 @@ class PDFView(context: Context?, set: AttributeSet?) :
         this.style = Style.STROKE
     }
 
-    // 전역 변수로 선언 (클래스 멤버로)
     private var currentPagesPaginationIndexes: List<Int> = emptyList()
     private var currentPageOffsets: List<Float> = emptyList()
     private var currentZoom: Float = 1.0f
+
 
     /** Construct the initial view  */
     init {
@@ -716,6 +718,7 @@ class PDFView(context: Context?, set: AttributeSet?) :
                         )
                         textSelectionHelper.touchState = PdfTextSelectionHelper.TouchState.IDLE
                         touchConsumed = true
+                        post { onTextSelected() }
                     }
 
                     PdfTextSelectionHelper.TouchState.EndHandlePressed -> {
@@ -725,11 +728,14 @@ class PDFView(context: Context?, set: AttributeSet?) :
                         )
                         textSelectionHelper.touchState = PdfTextSelectionHelper.TouchState.IDLE
                         touchConsumed = true
+                        post { onTextSelected() }
                     }
 
                     else -> {
                         if (touchInPoint != null) {
-                            if (CanvasUtils.isCircleCollided(touchInPoint!!, 10f, point, 10f)) {
+                            val slopPx = ViewConfiguration.get(context).scaledTouchSlop.toFloat()
+                            val slopInPage = pxToPageUnits(slopPx) // 화면 픽셀 슬롭 → 페이지 단위로
+                            if (CanvasUtils.isCircleCollided(touchInPoint!!, slopInPage, point, slopInPage)) {
                                 val paginationPageIndex = pdfFile!!.getPaginationIndexFromPageIndex(pageIndex)
                                 val index = currentPagesPaginationIndexes.indexOf(paginationPageIndex)
                                 if (index != -1) {
@@ -2473,6 +2479,31 @@ class PDFView(context: Context?, set: AttributeSet?) :
             centerYNorm = cyNorm
         )
     }
+
+    private fun dpToPx(dp: Float) =
+        TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, dp, resources.displayMetrics)
+
+    private fun pxToPageUnits(px: Float) = px / zoom
+    private fun hitRadiusForPageDp(dp: Float) = pxToPageUnits(dpToPx(dp))
+
+    fun dismissSelection() {
+        textSelection.clearAllSelection(true)
+        textSelectionHelper.touchState = PdfTextSelectionHelper.TouchState.IDLE
+
+        // 좌표/핸들 초기화
+        textSelectionHelper.startSelectionPosition.set(0f, 0f)
+        textSelectionHelper.endSelectionPosition.set(0f, 0f)
+        textSelectionHelper.startHandlePosition.set(0f, 0f)
+        textSelectionHelper.endHandlePosition.set(0f, 0f)
+
+        // (필요하면 페이지 인덱스도 함께 초기화)
+        // textSelection.currentSelectionPageIndex = -1
+        // textSelection.currentSelectionPaginationIndex = -1
+
+        listener?.onTextSelectionCleared()
+        redraw()
+    }
+    
 
 
 
