@@ -149,10 +149,11 @@ public class AiServiceClient {
 
 
     // 퀴즈 세트 요청 (문제+정답 포함)
-    public GenerateQuizResult generateQuiz(String documentId, String meetingId, int progressPercentage) {
+    public GenerateQuizResult generateQuiz(Long groupId, int progressPercentage) {
+        String groupIdStr = String.valueOf(groupId);
         QuizRequest req = QuizRequest.newBuilder()
-                .setDocumentId(documentId)
-                .setMeetingId(meetingId)
+                .setDocumentId(groupIdStr)
+                .setMeetingId(groupIdStr)
                 .setProgressPercentage(progressPercentage) // 50 or 100
                 .build();
 

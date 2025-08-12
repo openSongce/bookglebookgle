@@ -279,8 +279,8 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
         }
 
         // AI에서 문제 세트 수신
-        var result = aiServiceClient.generateQuiz(String.valueOf(groupId)
-                , String.valueOf(groupId)
+        var result = aiServiceClient.generateQuiz(
+                groupId
                 , p.progressPercentage());
         var items = result.items();
         int total = Math.min(p.totalQuestions(), items.size());
