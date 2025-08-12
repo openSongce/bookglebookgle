@@ -39,7 +39,7 @@ class GroupRepositoryImpl @Inject constructor(
                 Log.d(TAG, "그룹 생성(OCR 포함) 성공 - 응답코드: ${response.code()}")
             } else {
                 val errorBody = response.errorBody()?.string()
-                Log.d(TAG, "그룹 생성(OCR 포함) 실패 - 응답코드: ${response.code()}, 메시지: ${response.message()}")
+                Log.d(TAG, "그룹 생성(OCR 포함) 실패 - 응답코드: ${response.code()}, 메시지: $errorBody")
                 Log.d(TAG, "서버 에러 메시지: $errorBody")
             }
 
