@@ -126,8 +126,6 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
                                 return;
                             }
 
-                            // 1) 원본 시작 시그널 그대로 방송 (클라이언트 UI 상태 전환용)
-                            ChatGrpcService.this.broadcastToRoom(groupId, message);
 
                             // 2) ★ 토론 토픽/추천 토픽 방송
                             ChatMessage topicsMsg = ChatMessage.newBuilder()
