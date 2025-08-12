@@ -9,6 +9,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -23,8 +24,9 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.selection.LocalTextSelectionColors
 import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.PlayArrow
@@ -42,6 +44,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -51,13 +54,17 @@ import coil.compose.AsyncImage
 import com.ssafy.bookglebookgle.R
 import com.ssafy.bookglebookgle.entity.ChatMessage
 import com.ssafy.bookglebookgle.entity.MessageType
+import com.ssafy.bookglebookgle.entity.PerUserAnswer
+import com.ssafy.bookglebookgle.entity.QuizQuestion
+import com.ssafy.bookglebookgle.entity.QuizReveal
+import com.ssafy.bookglebookgle.entity.QuizSummary
+import com.ssafy.bookglebookgle.entity.UserScore
 import com.ssafy.bookglebookgle.ui.component.CustomTopAppBar
 import com.ssafy.bookglebookgle.ui.theme.BaseColor
 import com.ssafy.bookglebookgle.ui.theme.DeepMainColor
 import com.ssafy.bookglebookgle.ui.theme.MainColor
 import com.ssafy.bookglebookgle.viewmodel.ChatRoomViewModel
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 private const val TAG = "싸피_ChatRoomScreen"
@@ -207,7 +214,6 @@ fun ChatRoomScreen(
     // 이전 메시지 로드 완료 시 스크롤 위치 조정
     LaunchedEffect(uiState.isLoadingMore) {
         if (uiState.isLoadingMore && scrollPositionBeforeLoad == null) {
-//            previousMessageCount = uiState.chatMessages.size
             scrollPositionBeforeLoad = Pair(0, 0)
         }
 
@@ -329,7 +335,7 @@ fun ChatRoomScreen(
                 .background(Color.White)
                 .imePadding()
         ) {
-            if(!embedded){
+            if (!embedded) {
                 CustomTopAppBar(
                     title = uiState.groupTitle,
                     isChatScreen = true,
@@ -398,7 +404,9 @@ fun ChatRoomScreen(
                                 },
                                 modifier = Modifier.height(32.dp),
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (uiState.isDiscussionActive) Color(0xFFE74C3C) else Color(0xFF2ECC71)
+                                    containerColor = if (uiState.isDiscussionActive) Color(
+                                        0xFFE74C3C
+                                    ) else Color(0xFF2ECC71)
                                 ),
                                 contentPadding = PaddingValues(horizontal = 12.dp),
                                 enabled = !uiState.isDiscussionConnecting
@@ -421,90 +429,15 @@ fun ChatRoomScreen(
                 }
             }
 
-//            // 토론 컨트롤 패널 (READING 카테고리일 때만 표시)
-//            if (uiState.isReadingCategory) {
-//                Surface(
-//                    modifier = Modifier.fillMaxWidth(),
-//                    shadowElevation = 2.dp,
-//                    color = Color.White
-//                ) {
-//                    Row(
-//                        modifier = Modifier
-//                            .fillMaxWidth()
-//                            .padding(horizontal = 16.dp, vertical = 8.dp),
-//                        horizontalArrangement = Arrangement.SpaceBetween,
-//                        verticalAlignment = Alignment.CenterVertically
-//                    ) {
-//                        // 왼쪽: 토론 상태 표시
-//                        Row(
-//                            verticalAlignment = Alignment.CenterVertically
-//                        ) {
-//                            if (uiState.isDiscussionActive) {
-//                                Box(
-//                                    modifier = Modifier
-//                                        .size(8.dp)
-//                                        .background(MainColor, CircleShape)
-//                                )
-//                                Spacer(modifier = Modifier.width(6.dp))
-//                                Text(
-//                                    text = "AI 토론 진행 중",
-//                                    fontSize = 12.sp,
-//                                    color = DeepMainColor,
-//                                    fontWeight = FontWeight.Medium
-//                                )
-//                            } else {
-//                                Box(
-//                                    modifier = Modifier
-//                                        .size(8.dp)
-//                                        .background(Color.Gray, CircleShape)
-//                                )
-//                                Spacer(modifier = Modifier.width(6.dp))
-//                                Text(
-//                                    text = "일반 채팅",
-//                                    fontSize = 12.sp,
-//                                    color = Color.Gray,
-//                                    fontWeight = FontWeight.Medium
-//                                )
-//                            }
-//                        }
-//
-//                        // 오른쪽: 토론 시작/종료 버튼
-//                        Button(
-//                            onClick = {
-//                                Log.d(TAG, "토론 버튼 클릭됨! 현재 상태: ${uiState.isDiscussionActive}")
-//                                if (uiState.isDiscussionActive) {
-//                                    Log.d(TAG, "토론 종료 호출")
-//                                    viewModel.endDiscussion()
-//                                } else {
-//                                    Log.d(TAG, "토론 시작 호출")
-//                                    viewModel.startDiscussion()
-//                                }
-//                            },
-//                            modifier = Modifier.height(32.dp),
-//                            colors = ButtonDefaults.buttonColors(
-//                                containerColor = if (uiState.isDiscussionActive) Color(0xFFE74C3C) else Color(
-//                                    0xFF2ECC71
-//                                )
-//                            ),
-//                            contentPadding = PaddingValues(horizontal = 12.dp),
-//                            enabled = !uiState.isDiscussionConnecting // 연결 중일 때 버튼 비활성화
-//                        ) {
-//                            Icon(
-//                                imageVector = if (uiState.isDiscussionActive) Icons.Default.Close else Icons.Default.PlayArrow,
-//                                contentDescription = null,
-//                                modifier = Modifier.size(16.dp),
-//                                tint = Color.White
-//                            )
-//                            Spacer(modifier = Modifier.width(4.dp))
-//                            Text(
-//                                text = if (uiState.isDiscussionActive) "토론 종료" else "토론 시작",
-//                                fontSize = 12.sp,
-//                                color = Color.White
-//                            )
-//                        }
-//                    }
-//                }
-//            }
+            // 퀴즈 컨트롤 패널 (STUDY 카테고리일 때만 표시) - 새로 추가
+            QuizControlPanel(
+                isStudyCategory = uiState.isStudyCategory,
+                isHost = uiState.isHost,
+                isQuizActive = uiState.isQuizActive,
+                isQuizConnecting = uiState.isQuizConnecting,
+                onStartQuiz = { viewModel.startQuiz() },
+                onEndQuiz = { viewModel.endQuiz() }
+            )
 
             Box(
                 modifier = Modifier
@@ -595,45 +528,31 @@ fun ChatRoomScreen(
                         }
                     }
 
-                    // 에러 메시지
-                    if (uiState.error != null) {
-                        item {
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(8.dp),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = Color.Red.copy(alpha = 0.1f)
-                                )
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(16.dp)
-                                ) {
-                                    Text(
-                                        text = uiState.error!!,
-                                        color = Color.Red,
-                                        fontSize = 14.sp
-                                    )
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    TextButton(
-                                        onClick = { viewModel.clearError() }
-                                    ) {
-                                        Text("확인", color = Color.Red)
-                                    }
-                                }
-                            }
-                        }
-                    }
-
                     // 채팅 메시지들
                     items(
                         items = uiState.chatMessages,
                         key = { message -> message.messageId }
                     ) { message ->
-                        ChatMessageItem(
-                            message = message,
-                            isMyMessage = viewModel.isMyMessage(message, userId)
-                        )
+                        when (message.type) {
+                            MessageType.QUIZ_START, MessageType.QUIZ_END -> {
+                                QuizSystemMessageItem(message = message)
+                            }
+
+                            MessageType.AI_RESPONSE -> {
+                                AiResponseMessageItem(message = message)
+                            }
+
+                            MessageType.DISCUSSION_START, MessageType.DISCUSSION_END -> {
+                                SystemMessageItem(message = message)
+                            }
+
+                            else -> {
+                                ChatMessageItem(
+                                    message = message,
+                                    isMyMessage = viewModel.isMyMessage(message, userId)
+                                )
+                            }
+                        }
                     }
 
                     // AI 타이핑 인디케이터
@@ -642,8 +561,6 @@ fun ChatRoomScreen(
                             AiTypingIndicator()
                         }
                     }
-
-
                 }
                 // 새 메시지 알림 버튼 추가
                 if (showNewMessageButton) {
@@ -738,7 +655,7 @@ fun ChatRoomScreen(
                                     Text(
                                         text = uiState.currentAiResponse!!,
                                         fontSize = 14.sp,
-                                        color = Color.Gray,
+                                        color = Color.Black,
                                         modifier = Modifier.padding(bottom = 12.dp)
                                     )
                                 }
@@ -756,7 +673,7 @@ fun ChatRoomScreen(
                                                     viewModel.selectSuggestedTopic(topic)
                                                 },
                                             colors = CardDefaults.cardColors(
-                                                containerColor = MainColor.copy(alpha = 0.1f)
+                                                containerColor = MainColor.copy(alpha = 0.06f)
                                             )
                                         ) {
                                             Text(
@@ -772,7 +689,7 @@ fun ChatRoomScreen(
                     }
                 }
 
-                // 빈 상태 메시지 (토론 테스트 버튼 추가)
+                // 빈 상태 메시지
                 if (!uiState.isLoading && uiState.chatMessages.isEmpty() && uiState.error == null) {
                     Box(
                         modifier = Modifier.fillMaxSize(),
@@ -822,6 +739,32 @@ fun ChatRoomScreen(
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
                                     text = "AI 토론이 진행 중입니다. AI가 대화를 분석하고 피드백을 제공합니다.",
+                                    fontSize = 12.sp,
+                                    color = DeepMainColor
+                                )
+                            }
+                        }
+                    }
+
+                    // 퀴즈 진행 중일 때 상태 표시바
+                    if (uiState.isStudyCategory && uiState.isQuizActive) {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = BaseColor.copy(alpha = 0.1f)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    painterResource(id = R.drawable.ic_quiz),
+                                    contentDescription = null,
+                                    tint = DeepMainColor,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "퀴즈가 진행 중입니다. 문제가 나오면 답을 선택해주세요.",
                                     fontSize = 12.sp,
                                     color = DeepMainColor
                                 )
@@ -918,6 +861,36 @@ fun ChatRoomScreen(
             }
         }
 
+        // 퀴즈 문제 오버레이
+        if (uiState.currentQuestion != null && uiState.isQuizActive) {
+            QuizQuestionOverlay(
+                question = uiState.currentQuestion!!,
+                selectedAnswerIndex = uiState.selectedAnswerIndex,
+                isAnswerSubmitted = uiState.isAnswerSubmitted,
+                timeRemaining = uiState.quizTimeRemaining,
+                onAnswerSelected = { index -> viewModel.selectQuizAnswer(index) },
+                onSubmitAnswer = { viewModel.submitQuizAnswer() }
+            )
+        }
+
+        // 퀴즈 결과 오버레이
+//        if (uiState.showQuizResult && uiState.currentQuizReveal != null) {
+//            QuizResultOverlay(
+//                quizReveal = uiState.currentQuizReveal!!,
+//                currentUserId = userId,
+//                onDismiss = { viewModel.dismissQuizResult() }
+//            )
+//        }
+
+        // 퀴즈 요약 오버레이 - 새로 추가
+        if (uiState.quizSummary != null) {
+            QuizSummaryOverlay(
+                quizSummary = uiState.quizSummary!!,
+                currentUserId = userId,
+                onDismiss = { viewModel.dismissQuizSummary() }
+            )
+        }
+
         // 토론 연결 중 로딩 오버레이
         if (uiState.isReadingCategory && uiState.isDiscussionConnecting) {
             Box(
@@ -952,6 +925,47 @@ fun ChatRoomScreen(
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             text = "AI가 토론을 준비하고 있어요",
+                            fontSize = 14.sp,
+                            color = Color.Gray
+                        )
+                    }
+                }
+            }
+        }
+
+        // 퀴즈 연결 중 로딩 오버레이 - 새로 추가
+        if (uiState.isStudyCategory && uiState.isQuizConnecting) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.5f))
+                    .clickable { },
+                contentAlignment = Alignment.Center
+            ) {
+                Card(
+                    modifier = Modifier.padding(32.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(32.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        CircularProgressIndicator(
+                            color = BaseColor,
+                            modifier = Modifier.size(48.dp),
+                            strokeWidth = 4.dp
+                        )
+                        Spacer(modifier = Modifier.height(24.dp))
+                        Text(
+                            text = "퀴즈 준비 중입니다...",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color.Black
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "퀴즈 문제를 준비하고 있어요",
                             fontSize = 14.sp,
                             color = Color.Gray
                         )
@@ -1074,6 +1088,11 @@ fun ChatMessageItem(
 ) {
     // 메시지 타입에 따른 렌더링 분기
     when (message.type) {
+        MessageType.QUIZ_START, MessageType.QUIZ_END,
+        MessageType.QUIZ_QUESTION, MessageType.QUIZ_ANSWER,
+        MessageType.QUIZ_REVEAL, MessageType.QUIZ_SUMMARY -> {
+            QuizSystemMessageItem(message = message)
+        }
         MessageType.AI_RESPONSE -> {
             AiResponseMessageItem(message = message)
         }
@@ -1164,8 +1183,8 @@ fun SystemMessageItem(message: ChatMessage) {
         Card(
             colors = CardDefaults.cardColors(
                 containerColor = when (message.type) {
-                    MessageType.DISCUSSION_START -> Color(0xFF2ECC71).copy(alpha = 0.06f)
-                    MessageType.DISCUSSION_END -> Color(0xFFE74C3C).copy(alpha = 0.06f)
+                    MessageType.DISCUSSION_START -> Color(0xFF2ECC71).copy(alpha = 0.03f)
+                    MessageType.DISCUSSION_END -> Color(0xFFE74C3C).copy(alpha = 0.03f)
                     else -> Color.Gray.copy(alpha = 0.1f)
                 }
             )
@@ -1188,14 +1207,18 @@ fun SystemMessageItem(message: ChatMessage) {
                     },
                     modifier = Modifier.size(16.dp)
                 )
+
                 Spacer(modifier = Modifier.width(8.dp))
+
                 Column {
-                    Text(
-                        text = message.message,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = Color.Black
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = message.message,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color.Black
+                        )
+                    }
                     Text(
                         text = message.timestamp,
                         fontSize = 10.sp,
@@ -1203,6 +1226,7 @@ fun SystemMessageItem(message: ChatMessage) {
                     )
                 }
             }
+
         }
     }
 }
@@ -1220,7 +1244,15 @@ fun RegularMessageItem(
         horizontalArrangement = if (isMyMessage) Arrangement.End else Arrangement.Start
     ) {
         if (!isMyMessage) {
-            if (message.profileImage != null) {
+            // 퀴즈 관련 메시지인지 확인
+            val isQuizMessage = message.type in listOf(
+                MessageType.QUIZ_ANSWER,
+                MessageType.QUIZ_QUESTION,
+                MessageType.QUIZ_START,
+                MessageType.QUIZ_END
+            )
+
+            if (message.profileImage != null && !isQuizMessage) {
                 AsyncImage(
                     model = message.profileImage,
                     contentDescription = "프로필 이미지",
@@ -1238,12 +1270,22 @@ fun RegularMessageItem(
                         .background(MainColor.copy(alpha = 0.3f)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = message.nickname.take(1),
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = BaseColor
-                    )
+                    if (isQuizMessage) {
+                        // 퀴즈 아이콘 표시
+                        Icon(
+                            painterResource(R.drawable.ic_quiz),
+                            contentDescription = "퀴즈",
+                            tint = BaseColor,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    } else {
+                        Text(
+                            text = message.nickname.take(1),
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = BaseColor
+                        )
+                    }
                 }
             }
 
@@ -1307,6 +1349,682 @@ fun RegularMessageItem(
                         fontSize = 10.sp,
                         color = Color.Gray,
                         modifier = Modifier.padding(start = 4.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun QuizControlPanel(
+    isStudyCategory: Boolean,
+    isHost: Boolean,
+    isQuizActive: Boolean,
+    isQuizConnecting: Boolean,
+    onStartQuiz: () -> Unit,
+    onEndQuiz: () -> Unit
+) {
+    if (isStudyCategory) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shadowElevation = 2.dp,
+            color = Color.White
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // 퀴즈 상태 표시
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (isQuizActive) {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .background(BaseColor, CircleShape)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "퀴즈 진행 중",
+                            fontSize = 12.sp,
+                            color = BaseColor,
+                            fontWeight = FontWeight.Medium
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .background(Color.Gray, CircleShape)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "일반 채팅",
+                            fontSize = 12.sp,
+                            color = Color.Gray,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+
+                // 퀴즈 시작/종료 버튼 (모임장만 볼 수 있음)
+                if (isHost) {
+                    Button(
+                        onClick = {
+                            if (isQuizActive) {
+                                onEndQuiz()
+                            } else {
+                                onStartQuiz()
+                            }
+                        },
+                        modifier = Modifier.height(32.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (isQuizActive) Color(0xFFE74C3C) else Color(
+                                0xFF2196F3
+                            )
+                        ),
+                        contentPadding = PaddingValues(horizontal = 12.dp),
+                        enabled = !isQuizConnecting
+                    ) {
+                        Icon(
+                            imageVector = if (isQuizActive) Icons.Default.Close else Icons.Default.PlayArrow,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = Color.White
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = if (isQuizActive) "퀴즈 종료" else "퀴즈 시작",
+                            fontSize = 12.sp,
+                            color = Color.White
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun QuizQuestionOverlay(
+    question: QuizQuestion,
+    selectedAnswerIndex: Int?,
+    isAnswerSubmitted: Boolean,
+    timeRemaining: Int,
+    onAnswerSelected: (Int) -> Unit,
+    onSubmitAnswer: () -> Unit
+) {
+    // 시간이 0이 되면 자동 제출
+    LaunchedEffect(timeRemaining) {
+        if (timeRemaining == 0 && selectedAnswerIndex != null && !isAnswerSubmitted) {
+            onSubmitAnswer()
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.7f)),
+        contentAlignment = Alignment.Center
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth(0.95f)
+                .padding(16.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(20.dp)
+            ) {
+                // 문제 헤더
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "문제 ${question.questionIndex + 1}",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = BaseColor
+                    )
+
+                    // 타이머
+                    Box(
+                        modifier = Modifier
+                            .background(
+                                color = when {
+                                    timeRemaining <= 3 -> Color.Red
+                                    timeRemaining <= 5 -> Color(0xFFFF9800) // 주황색
+                                    else -> BaseColor
+                                },
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = "${timeRemaining}초",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // 문제 텍스트
+                Text(
+                    text = question.questionText,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color.Black,
+                    lineHeight = 24.sp
+                )
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // 선택지들
+                question.options.forEachIndexed { index, option ->
+                    QuizOptionButton(
+                        index = index,
+                        text = option,
+                        isSelected = selectedAnswerIndex == index,
+                        isSubmitted = isAnswerSubmitted,
+                        onClick = {
+                            if (!isAnswerSubmitted) {
+                                onAnswerSelected(index)
+                            }
+                        }
+                    )
+
+                    if (index < question.options.size - 1) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // 제출 버튼
+                Button(
+                    onClick = onSubmitAnswer,
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = selectedAnswerIndex != null && !isAnswerSubmitted,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = BaseColor,
+                        disabledContainerColor = Color.Gray
+                    )
+                ) {
+                    Text(
+                        text = when {
+                            isAnswerSubmitted -> "제출 완료"
+                            timeRemaining == 0 -> "시간 종료"
+                            else -> "답안 제출"
+                        },
+                        color = Color.White,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+
+                if (isAnswerSubmitted) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "답안이 제출되었습니다. 잠시 후 결과가 공개됩니다.",
+                        fontSize = 12.sp,
+                        color = Color.Gray,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center
+                    )
+                }
+                else if (timeRemaining <= 5 && selectedAnswerIndex == null) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "시간이 얼마 남지 않았습니다! 답을 선택해주세요.",
+                        fontSize = 12.sp,
+                        color = Color.Red,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+        }
+    }
+}
+
+// 퀴즈 정답 버튼 컴포넌트
+@Composable
+fun QuizOptionButton(
+    index: Int,
+    text: String,
+    isSelected: Boolean,
+    isSubmitted: Boolean,
+    onClick: () -> Unit
+) {
+    val backgroundColor = when {
+        isSelected && !isSubmitted -> BaseColor.copy(alpha = 0.1f)
+        isSelected && isSubmitted -> BaseColor.copy(alpha = 0.2f)
+        else -> Color.Gray.copy(alpha = 0.05f)
+    }
+
+    val borderColor = when {
+        isSelected -> BaseColor
+        else -> Color.Gray.copy(alpha = 0.3f)
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = !isSubmitted) { onClick() },
+        colors = CardDefaults.cardColors(containerColor = backgroundColor),
+        border = BorderStroke(
+            width = if (isSelected) 2.dp else 1.dp,
+            color = borderColor
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 번호 표시
+            Box(
+                modifier = Modifier
+                    .size(24.dp)
+                    .background(
+                        color = if (isSelected) BaseColor else Color.Gray.copy(alpha = 0.3f),
+                        shape = CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "${index + 1}",
+                    color = if (isSelected) Color.White else Color.Gray,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            // 선택지 텍스트
+            Text(
+                text = text,
+                fontSize = 14.sp,
+                color = Color.Black,
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+// 퀴즈 정답 결과
+@Composable
+fun QuizResultOverlay(
+    quizReveal: QuizReveal,
+    currentUserId: Long,
+    onDismiss: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.7f)),
+        contentAlignment = Alignment.Center
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth(0.95f)
+                .padding(16.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "정답 공개",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = BaseColor
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // 정답 표시
+                Text(
+                    text = "정답: ${quizReveal.correctAnswerIndex + 1}번",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF4CAF50)
+                )
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // 사용자별 답안 결과
+                Text(
+                    text = "참여자 결과",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color.Black
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                LazyColumn(
+                    modifier = Modifier.heightIn(max = 200.dp)
+                ) {
+                    items(quizReveal.userAnswers) { userAnswer ->
+                        QuizUserAnswerItem(
+                            userAnswer = userAnswer,
+                            correctAnswer = quizReveal.correctAnswerIndex,
+                            isCurrentUser = userAnswer.userId == currentUserId
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                Button(
+                    onClick = onDismiss,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = BaseColor
+                    )
+                ) {
+                    Text(
+                        text = "확인",
+                        color = Color.White
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "3초 후 자동으로 닫힙니다",
+                fontSize = 12.sp,
+                color = Color.Gray,
+                textAlign = TextAlign.Center
+            )
+        }
+    }
+}
+
+@Composable
+fun QuizUserAnswerItem(
+    userAnswer: PerUserAnswer,
+    correctAnswer: Int,
+    isCurrentUser: Boolean
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isCurrentUser)
+                BaseColor.copy(alpha = 0.1f)
+            else
+                Color.Gray.copy(alpha = 0.05f)
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = if (isCurrentUser) "나" else "참여자 ${userAnswer.userId}",
+                fontSize = 14.sp,
+                fontWeight = if (isCurrentUser) FontWeight.Bold else FontWeight.Normal
+            )
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "${userAnswer.selectedIndex + 1}번",
+                    fontSize = 14.sp,
+                    color = if (userAnswer.isCorrect) Color(0xFF4CAF50) else Color(0xFFE74C3C)
+                )
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                Icon(
+                    imageVector = if (userAnswer.isCorrect) Icons.Default.Check else Icons.Default.Close,
+                    contentDescription = null,
+                    tint = if (userAnswer.isCorrect) Color(0xFF4CAF50) else Color(0xFFE74C3C),
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun QuizSummaryOverlay(
+    quizSummary: QuizSummary,
+    currentUserId: Long,
+    onDismiss: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.7f)),
+        contentAlignment = Alignment.Center
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "퀴즈 결과",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = BaseColor
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text(
+                    text = "총 ${quizSummary.totalQuestions}문제",
+                    fontSize = 16.sp,
+                    color = Color.Gray
+                )
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // 순위별 결과
+                LazyColumn(
+                    modifier = Modifier.heightIn(max = 300.dp)
+                ) {
+                    items(quizSummary.scores.sortedBy { it.rank }) { score ->
+                        QuizScoreItem(
+                            userScore = score,
+                            totalQuestions = quizSummary.totalQuestions,
+                            isCurrentUser = score.userId == currentUserId
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                Button(
+                    onClick = onDismiss,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = BaseColor
+                    )
+                ) {
+                    Text(
+                        text = "확인",
+                        color = Color.White
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun QuizScoreItem(
+    userScore: UserScore,
+    totalQuestions: Int,
+    isCurrentUser: Boolean
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = when {
+                isCurrentUser -> BaseColor.copy(alpha = 0.1f)
+                userScore.rank == 1 -> Color(0xFFFFD700).copy(alpha = 0.2f) // 금색
+                userScore.rank == 2 -> Color(0xFFC0C0C0).copy(alpha = 0.2f) // 은색
+                userScore.rank == 3 -> Color(0xFFCD7F32).copy(alpha = 0.2f) // 동색
+                else -> Color.Gray.copy(alpha = 0.05f)
+            }
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // 순위 아이콘
+                val rankIcon = when (userScore.rank) {
+                    1 -> "🥇"
+                    2 -> "🥈"
+                    3 -> "🥉"
+                    else -> "${userScore.rank}"
+                }
+
+                Text(
+                    text = rankIcon,
+                    fontSize = 16.sp
+                )
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                Text(
+                    text = "${userScore.nickname}${if (isCurrentUser) " (나)" else ""}",
+                    fontSize = 14.sp,
+                    fontWeight = if (isCurrentUser) FontWeight.Bold else FontWeight.Normal
+                )
+            }
+
+            Text(
+                text = "${userScore.correctCount}/${totalQuestions}",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                color = BaseColor
+            )
+        }
+    }
+}
+
+// 시스템 메시지 아이템 (퀴즈 관련 메시지용)
+@Composable
+fun QuizSystemMessageItem(message: ChatMessage) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Card(
+            colors = CardDefaults.cardColors(
+                containerColor = when (message.type) {
+                    MessageType.QUIZ_START -> DeepMainColor.copy(alpha = 0.1f)
+                    MessageType.QUIZ_QUESTION -> DeepMainColor.copy(alpha = 0.1f)
+                    MessageType.QUIZ_ANSWER -> MainColor
+                    MessageType.QUIZ_REVEAL -> DeepMainColor.copy(alpha = 0.1f)
+                    MessageType.QUIZ_SUMMARY -> DeepMainColor.copy(alpha = 0.1f)
+                    MessageType.QUIZ_END -> Color(0xFFE74C3C).copy(alpha = 0.3f)
+                    else -> Color.Gray.copy(alpha = 0.1f)
+                }
+            )
+        ) {
+            Row(
+                modifier = Modifier.padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val (iconVector, iconColor, displayText) = when (message.type) {
+                    MessageType.QUIZ_START -> Triple(
+                        R.drawable.ic_play,
+                        DeepMainColor,
+                        "퀴즈가 시작되었습니다!"
+                    )
+                    MessageType.QUIZ_QUESTION -> Triple(
+                        R.drawable.ic_quiz,
+                        DeepMainColor,
+                        "새로운 문제가 출제되었습니다"
+                    )
+                    MessageType.QUIZ_ANSWER -> Triple(
+                        R.drawable.ic_answer,
+                        DeepMainColor,
+                        message.message // 사용자별 답안 제출 메시지
+                    )
+                    MessageType.QUIZ_REVEAL -> Triple(
+                        R.drawable.ic_quiz,
+                        DeepMainColor,
+                        "정답이 공개되었습니다"
+                    )
+                    MessageType.QUIZ_SUMMARY -> Triple(
+                        R.drawable.ic_quiz,
+                        DeepMainColor,
+                        "퀴즈 결과가 나왔습니다"
+                    )
+                    MessageType.QUIZ_END -> Triple(
+                        R.drawable.ic_check,
+                        Color(0xFFE74C3C),
+                        "퀴즈가 종료되었습니다"
+                    )
+                    else -> Triple(
+                        R.drawable.ic_play,
+                        Color.Gray,
+                        message.message
+                    )
+                }
+
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            painter = painterResource(id = iconVector),
+                            contentDescription = null,
+                            tint = iconColor,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = message.message,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color.Black
+                        )
+                    }
+                    Text(
+                        text = message.timestamp,
+                        fontSize = 10.sp,
+                        color = Color.Gray,
+                        modifier = Modifier.padding(start = 24.dp)
                     )
                 }
             }
