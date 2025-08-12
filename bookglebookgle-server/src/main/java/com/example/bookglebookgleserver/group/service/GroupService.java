@@ -41,6 +41,9 @@ public interface GroupService {
 
     ResponseEntity<StreamingResponseBody> getPdfAndOcrZip(Long groupId, User user);
 
+    void updateMemberMaxReadPage(Long groupId, Long userId, int newMaxReadPage);
+
+    List<GroupMemberProgressDto> getGroupAllProgress(Long groupId, Long requesterId);
 }
 
 

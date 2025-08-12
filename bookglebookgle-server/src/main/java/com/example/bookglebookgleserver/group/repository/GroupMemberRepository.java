@@ -1,6 +1,7 @@
 package com.example.bookglebookgleserver.group.repository;
 
 import com.example.bookglebookgleserver.group.dto.GroupMemberDetailDto;
+import com.example.bookglebookgleserver.group.dto.GroupMemberProgressDto;
 import com.example.bookglebookgleserver.group.entity.Group;
 import com.example.bookglebookgleserver.group.entity.GroupMember;
 import com.example.bookglebookgleserver.user.entity.User;
@@ -40,9 +41,11 @@ public interface GroupMemberRepository extends JpaRepository<GroupMember, Long> 
 
     @Query("""
 select new com.example.bookglebookgleserver.group.dto.GroupMemberDetailDto(
-  u.id, u.nickname, u.profileColor,
+  u.id,
+  u.nickname,
+  u.profileColor,
   coalesce(gm.maxReadPage, 0),
-  0,
+  cast(round(coalesce(gm.progressPercent, 0)) as integer),
   gm.isHost,
   false
 )
@@ -75,6 +78,19 @@ update GroupMember gm
                      @Param("totalPages") int totalPages);
 
 
+    @Query("""
+select new com.example.bookglebookgleserver.group.dto.GroupMemberProgressDto(
+  u.id,
+  u.nickname,
+  coalesce(gm.maxReadPage, 0),
+  cast(round(coalesce(gm.progressPercent, 0)) as integer)
+)
+from GroupMember gm
+  join gm.user u
+where gm.group.id = :groupId
+order by u.id
+""")
+    List<GroupMemberProgressDto> findAllMemberProgressByGroupId(@Param("groupId") Long groupId);
 
 
     List<GroupMember> findByGroup(Group group);

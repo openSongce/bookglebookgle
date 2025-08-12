@@ -240,11 +240,8 @@ public class GroupServiceImpl implements GroupService {
             Long memberId = userIdToMemberId.get(m.userId());
             boolean ratingSubmitted = memberId != null && raterMemberIds.contains(memberId);
 
-            int progressPercent = m.progressPercent();
-            if (pageCount > 0) {
-                double ratio = ((double) (m.maxReadPage() + 1)) / pageCount;
-                progressPercent = (int) Math.round(Math.min(Math.max(ratio, 0.0), 1.0) * 100.0);
-            }
+            int progressPercent = Math.max(0, Math.min(100, m.progressPercent()));
+
 
             return new GroupMemberDetailDto(
                     m.userId(),
@@ -317,48 +314,7 @@ public class GroupServiceImpl implements GroupService {
 //        );
 //    }
 
-//    @Override
-//    @Transactional()
-//    public GroupDetailResponse getGroupDetail(Long groupId, User requester) {
-//        Group group = groupRepository.findByIdWithPdfAndMembers(groupId)
-//                .orElseThrow(() -> new NotFoundException("해당 모임이 존재하지 않습니다."));
-//
-//        int pageCount = resolvePageCount(group);
-//
-//        log.info("📄 그룹 ID={} 의 PDF 총 페이지 수: {}", groupId, pageCount);
-//
-//        boolean requesterIsHost = group.getHostUser().getId().equals(requester.getId());
-//
-//        List<GroupMember> gmList = group.getGroupMembers(); // fetch join으로 이미 로드됨
-//
-//        List<GroupMemberDetailDto> members = gmList.stream().map(gm -> {
-//            var u = gm.getUser();
-//            int last = Math.max(0, gm.getLastPageRead());
-//            int progress = (pageCount > 0) ? (int) Math.round((last * 100.0) / pageCount) : 0;
-//            return new GroupMemberDetailDto(
-//                    u.getId(),
-//                    u.getNickname(),
-//                    u.getProfileColor(),
-//                    last,
-//                    progress,
-//                    gm.isHost()
-//            );
-//        }).toList();
-//
-//        return new GroupDetailResponse(
-//                group.getRoomTitle(),
-//                group.getCategory().name(),
-//                group.getSchedule(),
-//                gmList.size(),
-//                group.getGroupMaxNum(),
-//                group.getDescription(),
-//                null,
-//                requesterIsHost,
-//                group.getMinRequiredRating(),
-//                pageCount,
-//                members
-//        );
-//    }
+
 
 
 
@@ -751,5 +707,46 @@ public class GroupServiceImpl implements GroupService {
             return String.format("매주 %s %s %d시 %d분", dayKorean, ampm, displayHour, minute);
         }
     }
+
+    private int calcProgressPercent(int maxReadPage, int pageCount) {
+        if (pageCount <= 0) return 0;
+        double ratio = ((double) (Math.max(0, maxReadPage) + 1)) / pageCount; // 0-based 보정
+        return (int) Math.round(Math.min(Math.max(ratio, 0.0), 1.0) * 100.0);
+    }
+
+
+    @Transactional
+    public void updateMemberMaxReadPage(Long groupId, Long userId, int newMaxReadPage) {
+        Group group = groupRepository.findById(groupId)
+                .orElseThrow(() -> new NotFoundException("그룹이 존재하지 않습니다."));
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("유저가 존재하지 않습니다."));
+
+        GroupMember gm = groupMemberRepository.findByGroupAndUser(group, user)
+                .orElseThrow(() -> new NotFoundException("그룹 멤버가 존재하지 않습니다."));
+
+        int pageCount = resolvePageCount(group);
+        int clamped = Math.min(Math.max(0, newMaxReadPage), Math.max(0, pageCount - 1));
+        if (clamped < gm.getMaxReadPage()) {
+            return; // 진도 역행 방지 → 저장하지 않고 종료
+        }
+
+        gm.setMaxReadPage(clamped);
+        gm.setProgressPercent((float) calcProgressPercent(clamped, pageCount));
+
+        groupMemberRepository.save(gm);
+    }
+
+    @Transactional(readOnly = true)
+    public List<GroupMemberProgressDto> getGroupAllProgress(Long groupId, Long requesterId) {
+        // 보안: 요청자가 해당 그룹 멤버인지 확인
+        if (!groupMemberRepository.isMember(groupId, requesterId)) {
+            throw new ForbiddenException("해당 그룹 멤버가 아닙니다.");
+        }
+        return groupMemberRepository.findAllMemberProgressByGroupId(groupId);
+    }
+
+
+
 }
 

@@ -6,6 +6,8 @@ import com.example.bookglebookgleserver.group.entity.Group;
 import com.example.bookglebookgleserver.group.entity.GroupMember;
 import com.example.bookglebookgleserver.group.repository.GroupMemberRepository;
 import com.example.bookglebookgleserver.group.repository.GroupRepository;
+import com.example.bookglebookgleserver.group.service.GroupService;
+import com.example.bookglebookgleserver.group.service.GroupServiceImpl;
 import com.example.bookglebookgleserver.pdf.dto.PdfProgressResponse;
 import com.example.bookglebookgleserver.pdf.entity.PdfFile;
 import com.example.bookglebookgleserver.pdf.entity.PdfReadingProgress;
@@ -35,6 +37,8 @@ public class PdfService {
     private final GroupRepository groupRepository;
     private final PdfReadingProgressRepository pdfReadingProgressRepository;
     private final GroupMemberRepository groupMemberRepository;
+
+    private final GroupService groupService;
 
     public void handlePdfUpload(MultipartFile file) {
         Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
@@ -103,13 +107,23 @@ public class PdfService {
                     .build();
             pdfReadingProgressRepository.save(progress);
         }
+
+        // group_member에도 즉시 반영
+        groupService.updateMemberMaxReadPage(groupId, userId, page);
     }
 
 
     @Transactional
     public int bumpMaxRead(long userId, long groupId, int page) {
-        return pdfReadingProgressRepository.bumpMaxReadPageById(userId, groupId, page);
-    }
+        int rows = pdfReadingProgressRepository.bumpMaxReadPageById(userId, groupId, page);
+        if (rows > 0) {
+            // 성공적으로 bump 되었으면 group_member에도 반영
+            groupService.updateMemberMaxReadPage(groupId, userId, page);
+        }
+        return rows;
+         }
+
+
 
     @Transactional
     public int setProgressPercent(long userId, long groupId, int percent) {

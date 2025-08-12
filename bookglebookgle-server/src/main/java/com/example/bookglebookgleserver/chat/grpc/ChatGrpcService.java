@@ -265,8 +265,8 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
             return;
         }
 
-        log.info("[QUIZ_START] groupId={}, meetingId={}, documentId={}, progress={}, total={}",
-                groupId, p.meetingId(), p.documentId(), p.progressPercentage(), p.totalQuestions());
+        log.info("[QUIZ_START] groupId={}, meetingId={}, documentId={}, total={}",
+                groupId, p.meetingId(), p.documentId(), p.totalQuestions());
 
         if (p.documentId() == null || p.documentId().isBlank() ||
                 p.meetingId()  == null || p.meetingId().isBlank()) {
@@ -289,11 +289,6 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
             return;
         }
 
-        // 진도율 → Phase 매핑
-        com.example.bookglebookgleserver.chat.QuizPhase phase =
-                (p.progressPercentage() >= 100)
-                        ? com.example.bookglebookgleserver.chat.QuizPhase.FINAL
-                        : com.example.bookglebookgleserver.chat.QuizPhase.MIDTERM;
 
         //  서버가 풍부한 QUIZ_START 메시지(진도율 포함) 브로드캐스트
         ChatMessage startMsg = ChatMessage.newBuilder()
@@ -304,8 +299,6 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
                         .setGroupId(groupId)
                         .setMeetingId(p.meetingId())
                         .setDocumentId(p.documentId())
-                        .setPhase(phase)
-                        .setProgressPercentage(p.progressPercentage()) // ★ 여기!
                         .setTotalQuestions(total)
                         .setQuizId(result.quizId())
                         .setStartedAt(System.currentTimeMillis())
@@ -316,7 +309,6 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
         //  Runner에 phase/진도율도 보관
         QuizRunner runner = new QuizRunner(
                 result.quizId(), groupId, items, total,
-                phase, p.progressPercentage(),                 // ★ 추가
                 (java.util.function.Consumer<com.example.bookglebookgleserver.chat.ChatMessage>)
                         (m -> ChatGrpcService.this.broadcastToRoom(groupId, m)),
                 scheduler,
@@ -404,8 +396,6 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
         private final List<AiServiceClient.QuizItem> items;
         private final int total;
 
-        private final com.example.bookglebookgleserver.chat.QuizPhase phase; //추가
-        private final int progressPercentage; //퍼센트
 
         private final ScheduledExecutorService scheduler;
         // import 충돌 방지: 필드 제네릭을 FQCN으로
@@ -424,8 +414,6 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
                    long groupId,
                    List<AiServiceClient.QuizItem> items,
                    int total,
-                   com.example.bookglebookgleserver.chat.QuizPhase phase,   //
-                   int progressPercentage,                                   //
                    java.util.function.Consumer<com.example.bookglebookgleserver.chat.ChatMessage> broadcaster,
                    ScheduledExecutorService scheduler,
                    Runnable onFinish) {
@@ -433,8 +421,6 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
             this.groupId = groupId;
             this.items = items;
             this.total = total;
-            this.phase = phase;                          //
-            this.progressPercentage = progressPercentage;//
             this.broadcaster = broadcaster;
             this.scheduler = scheduler;
             this.onFinish = onFinish;
@@ -484,7 +470,6 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
 
             var sum = com.example.bookglebookgleserver.chat.QuizSummary.newBuilder()
                     .setQuizId(quizId)
-                    .setPhase(phase)
                     .setTotalQuestions(total);  // 필요시 phase 등 추가 가능
 
             int rank = 1;

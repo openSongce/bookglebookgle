@@ -170,5 +170,14 @@ public class GroupController {
         return ResponseEntity.noContent().build();
     }
 
+    @GetMapping("/{groupId}/members/progress")
+    public ResponseEntity<List<GroupMemberProgressDto>> getAllMemberProgress(
+            @PathVariable Long groupId,
+            @AuthenticationPrincipal com.example.bookglebookgleserver.user.entity.User currentUser
+    ){
+        return ResponseEntity.ok(
+                groupService.getGroupAllProgress(groupId, currentUser.getId())
+        );
+    }
 
 }
