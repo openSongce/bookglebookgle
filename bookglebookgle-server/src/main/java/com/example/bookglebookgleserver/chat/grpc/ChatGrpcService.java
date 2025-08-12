@@ -442,9 +442,8 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
 
             answersThisQuestion.put(userId, selectedIndex);
             var item = items.get(questionIndex);
-            if (selectedIndex == item.correctIdx()) {
-                correctCounts.merge(userId, 1, Integer::sum);
-            }
+            int delta = (selectedIndex == item.correctIdx()) ? 1 : 0;
+            correctCounts.merge(userId, delta, Integer::sum);
         }
 
         private void scheduleRevealThenNext() {
