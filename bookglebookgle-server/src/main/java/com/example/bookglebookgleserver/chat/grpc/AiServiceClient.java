@@ -80,7 +80,7 @@ public class AiServiceClient {
         groupSessionMap.put(groupId, sessionId);
 
         DiscussionInitRequest request = DiscussionInitRequest.newBuilder()
-                .setDocumentId("doc-" + groupId)
+                .setDocumentId(String.valueOf(groupId))
                 .setMeetingId(String.valueOf(groupId))
                 .setSessionId(sessionId)
                 .setStartedAt(System.currentTimeMillis() / 1000)

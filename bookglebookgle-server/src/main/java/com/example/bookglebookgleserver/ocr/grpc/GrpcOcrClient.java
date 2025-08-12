@@ -66,7 +66,7 @@ public class GrpcOcrClient {
         try (InputStream inputStream = file.getInputStream()) {
             // 1. PDF Info 전송
             PdfInfo info = PdfInfo.newBuilder()
-                    .setDocumentId(String.valueOf(pdfId))
+                    .setDocumentId(String.valueOf(meetingId))
                     .setFileName(file.getOriginalFilename())
                     .setMeetingId(String.valueOf(meetingId))
                     .build();
