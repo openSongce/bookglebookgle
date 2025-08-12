@@ -48,6 +48,10 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);
 
 
+    // 필드 추가
+    private final ConcurrentHashMap<Long, String> userNickCache = new ConcurrentHashMap<>();
+
+
 
 
     @Override
@@ -185,6 +189,7 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
                     // === 3. 일반 채팅 메시지 처리 ===
                     else {
                         saveAndBroadcastNormalMessage(message, groupId);
+
                         return;
                     }
 
@@ -205,6 +210,8 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
                     log.warn("[gRPC-Chat] senderId={} User 없음! 메시지 저장/전송 생략", message.getSenderId());
                     return;
                 }
+                userNickCache.put(sender.getId(), sender.getNickname());
+
                 // DB 저장
                 try {
                     com.example.bookglebookgleserver.chat.entity.ChatMessage entity =
@@ -309,7 +316,9 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
                 (java.util.function.Consumer<com.example.bookglebookgleserver.chat.ChatMessage>)
                         (m -> ChatGrpcService.this.broadcastToRoom(groupId, m)),
                 scheduler,
-                () -> quizRunners.remove(groupId)
+                () -> quizRunners.remove(groupId),
+                this.userRepository,
+                this.userNickCache
         );
         quizRunners.put(groupId, runner);
 
@@ -410,13 +419,21 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
         // 현재 문제에서 유저별 선택 기록: userId -> selectedIndex
         private final Map<Long, Integer> answersThisQuestion = new ConcurrentHashMap<>();
 
+
+        private final UserRepository userRepository;
+        private final ConcurrentHashMap<Long, String> userNickCache;
+
+
+
         QuizRunner(String quizId,
                    long groupId,
                    List<AiServiceClient.QuizItem> items,
                    int total,
                    java.util.function.Consumer<com.example.bookglebookgleserver.chat.ChatMessage> broadcaster,
                    ScheduledExecutorService scheduler,
-                   Runnable onFinish) {
+                   Runnable onFinish,
+        UserRepository userRepository,
+            ConcurrentHashMap<Long, String> userNickCache) {
             this.quizId = quizId;
             this.groupId = groupId;
             this.items = items;
@@ -424,6 +441,8 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
             this.broadcaster = broadcaster;
             this.scheduler = scheduler;
             this.onFinish = onFinish;
+            this.userRepository = userRepository;
+            this.userNickCache = userNickCache;
         }
 
         void start() {
@@ -547,7 +566,7 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
 //                    .build();
 
             // 전송 전 최종 확인
-            log.info("[QUIZ] 전송할 정답: {}", revealMsg.getQuizQuestion().getCorrectAnswerIndex());
+            log.info("[QUIZ] 전송할 정답: {}", revealMsg.getQuizReveal().getCorrectAnswerIndex());
             broadcaster.accept(revealMsg);
         }
 
@@ -564,11 +583,22 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
                     .setQuizId(quizId)
                     .setTotalQuestions(total);
 
+            Set<Long> missing = new java.util.HashSet<>();
+            for (var e : ranking) {
+                if (!userNickCache.containsKey(e.getKey())) missing.add(e.getKey());
+            }
+            if (!missing.isEmpty()) {
+                userRepository.findAllById(missing).forEach(u -> userNickCache.put(u.getId(), u.getNickname()));
+            }
+
+
+
             int rank = 1;
             for (var e : ranking) {
+                long uid = e.getKey();
                 sum.addScores(com.example.bookglebookgleserver.chat.UserScore.newBuilder()
-                        .setUserId(e.getKey())
-                        .setNickname("") // 필요 시 닉네임 채우기
+                        .setUserId(uid)
+                        .setNickname(userNickCache.getOrDefault(uid, "익명")) // 필요 시 닉네임 채우기
                         .setCorrectCount(e.getValue())
                         .setRank(rank++)
                         .build());
