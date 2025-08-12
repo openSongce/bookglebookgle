@@ -135,7 +135,7 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
                                     .setSenderId(0L)
                                     .setSenderName("AI")
                                     .setTimestamp(System.currentTimeMillis())
-                                    .setType("DISCUSSION_START") // 프론트와 합의된 타입
+                                    .setType("AI_RESPONSE") // 프론트와 합의된 타입
                                     .setAiResponse(resp.getRecommendedTopic()) // 추천 토픽(없으면 빈 문자열)
                                     .addAllSuggestedTopics(resp.getDiscussionTopicsList()) // 핵심: 토픽 목록
                                     .build();
