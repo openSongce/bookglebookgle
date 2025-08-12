@@ -80,7 +80,7 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
                             }
 
                             startQuiz(groupId, message.getSenderId(), p);
-                            ChatGrpcService.this.broadcastToRoom(groupId, message);
+//                            ChatGrpcService.this.broadcastToRoom(groupId, message);
                         } catch (IllegalArgumentException ex) {
                             log.warn("[QUIZ_START] 잘못된 요청: {}", ex.getMessage());
                             broadcastSystem(groupId, "퀴즈 시작 실패: " + ex.getMessage());
@@ -255,7 +255,9 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
         }
 
         // AI에서 문제 세트 수신
-        var result = aiServiceClient.generateQuiz(p.documentId(), p.meetingId(), p.progressPercentage());
+        var result = aiServiceClient.generateQuiz(String.valueOf(groupId)
+                , String.valueOf(groupId)
+                , p.progressPercentage());
         var items = result.items();
         int total = Math.min(p.totalQuestions(), items.size());
         if (total <= 0) {
@@ -263,11 +265,38 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
             return;
         }
 
+        // 진도율 → Phase 매핑
+        com.example.bookglebookgleserver.chat.QuizPhase phase =
+                (p.progressPercentage() >= 100)
+                        ? com.example.bookglebookgleserver.chat.QuizPhase.FINAL
+                        : com.example.bookglebookgleserver.chat.QuizPhase.MIDTERM;
+
+        //  서버가 풍부한 QUIZ_START 메시지(진도율 포함) 브로드캐스트
+        ChatMessage startMsg = ChatMessage.newBuilder()
+                .setGroupId(groupId)
+                .setType("QUIZ_START")
+                .setTimestamp(System.currentTimeMillis())
+                .setQuizStart(com.example.bookglebookgleserver.chat.QuizStart.newBuilder()
+                        .setGroupId(groupId)
+                        .setMeetingId(p.meetingId())
+                        .setDocumentId(p.documentId())
+                        .setPhase(phase)
+                        .setProgressPercentage(p.progressPercentage()) // ★ 여기!
+                        .setTotalQuestions(total)
+                        .setQuizId(result.quizId())
+                        .setStartedAt(System.currentTimeMillis())
+                        .build())
+                .build();
+        broadcastToRoom(groupId, startMsg);
+
+        //  Runner에 phase/진도율도 보관
         QuizRunner runner = new QuizRunner(
                 result.quizId(), groupId, items, total,
-                (msg) -> ChatGrpcService.this.broadcastToRoom(groupId, msg),
+                phase, p.progressPercentage(),                 // ★ 추가
+                (java.util.function.Consumer<com.example.bookglebookgleserver.chat.ChatMessage>)
+                        (m -> ChatGrpcService.this.broadcastToRoom(groupId, m)),
                 scheduler,
-                () -> quizRunners.remove(groupId) //종료 시 맵에서 제거
+                () -> quizRunners.remove(groupId)
         );
         quizRunners.put(groupId, runner);
 
@@ -350,9 +379,13 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
         private final long groupId;
         private final List<AiServiceClient.QuizItem> items;
         private final int total;
-        private final java.util.function.Consumer<ChatMessage> broadcaster;
-        private final ScheduledExecutorService scheduler;
 
+        private final com.example.bookglebookgleserver.chat.QuizPhase phase; //추가
+        private final int progressPercentage; //퍼센트
+
+        private final ScheduledExecutorService scheduler;
+        // import 충돌 방지: 필드 제네릭을 FQCN으로
+        private final java.util.function.Consumer<com.example.bookglebookgleserver.chat.ChatMessage> broadcaster;
         private final Runnable onFinish;
 
         private volatile int idx = 0;                 // 현재 문제 index
@@ -360,18 +393,24 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
 
         // 정답 집계: userId -> 맞춘 개수
         private final ConcurrentHashMap<Long, Integer> correctCounts = new ConcurrentHashMap<>();
-
         //  현재 문제에서 중복 제출 방지
         private final Set<Long> answeredThisQuestion = ConcurrentHashMap.newKeySet();
 
-        QuizRunner(String quizId, long groupId, List<AiServiceClient.QuizItem> items, int total,
-                   java.util.function.Consumer<ChatMessage> broadcaster,
+        QuizRunner(String quizId,
+                   long groupId,
+                   List<AiServiceClient.QuizItem> items,
+                   int total,
+                   com.example.bookglebookgleserver.chat.QuizPhase phase,   //
+                   int progressPercentage,                                   //
+                   java.util.function.Consumer<com.example.bookglebookgleserver.chat.ChatMessage> broadcaster,
                    ScheduledExecutorService scheduler,
                    Runnable onFinish) {
             this.quizId = quizId;
             this.groupId = groupId;
             this.items = items;
             this.total = total;
+            this.phase = phase;                          //
+            this.progressPercentage = progressPercentage;//
             this.broadcaster = broadcaster;
             this.scheduler = scheduler;
             this.onFinish = onFinish;
@@ -397,7 +436,7 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
             }, 15, 15, TimeUnit.SECONDS);
         }
 
-        // ✅ 정답 제출 처리
+        // 정답 제출 처리
         void handleAnswer(long userId, String quizId, int questionIndex, int selectedIndex) {
             if (!this.quizId.equals(quizId)) return;
             if (questionIndex != idx) return;           // 현재 문제에 대해서만 인정
@@ -409,7 +448,7 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
             }
         }
 
-        // ✅ 최종 요약 브로드캐스트
+        //최종 요약 브로드캐스트
         private void broadcastSummary() {
             // 정답수 desc, userId asc 정렬
             List<Map.Entry<Long, Integer>> ranking = new ArrayList<>(correctCounts.entrySet());
@@ -421,6 +460,7 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
 
             var sum = com.example.bookglebookgleserver.chat.QuizSummary.newBuilder()
                     .setQuizId(quizId)
+                    .setPhase(phase)
                     .setTotalQuestions(total);  // 필요시 phase 등 추가 가능
 
             int rank = 1;
