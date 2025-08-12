@@ -67,6 +67,7 @@ message AnnotationPayload {
   string text = 4;
   Coordinates coordinates = 5;
   int64 id = 6; // 삭제, 수정시 사용
+  double scale = 7;
 }
 
 message Coordinates {

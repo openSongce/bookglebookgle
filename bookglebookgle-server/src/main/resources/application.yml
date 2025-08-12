@@ -6,7 +6,7 @@ server:
 
 ocr:
   server:
-    url: 52.79.59.66:50505
+    url: bgbgaiai-server:50505
 
 spring:
   config:

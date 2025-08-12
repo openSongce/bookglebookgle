@@ -43,7 +43,7 @@ public class User {
     private Integer ratingCnt;
 
     @Column(name = "is_active")
-    private boolean active = true;
+    private Boolean active = true;
 
     @Column(name = "deactivated_at")
     private LocalDateTime deactivatedAt;

@@ -69,12 +69,25 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
                     String msgType = message.getType();
 
                     if ("QUIZ_START".equals(msgType)) {
-                        // content나 별도 필드로 넘어오는 값들 가정 (프론트에서 전달)
-                        // 예: message.content = "documentId:...,meetingId:...,progress:50,total:4"
-                        // 실제로는 proto에 QuizStart payload가 있다면 그걸 쓰면 더 좋음.
-                        QuizStartParam p = parseQuizStart(message);
-                        startQuiz(groupId, message.getSenderId(), p);
-                        ChatGrpcService.this.broadcastToRoom(groupId, message);
+                        try {
+                            QuizStartParam p = parseQuizStart(message);
+
+                            // groupId(채팅방)와 meetingId 정합성 체크: 다르면 거부
+                            if (!String.valueOf(groupId).equals(p.meetingId())) {
+                                log.warn("[QUIZ_START] meetingId != groupId (meetingId={}, groupId={})", p.meetingId(), groupId);
+                                broadcastSystem(groupId, "퀴즈 시작 실패: meetingId가 방 ID와 다릅니다.");
+                                return;
+                            }
+
+                            startQuiz(groupId, message.getSenderId(), p);
+                            ChatGrpcService.this.broadcastToRoom(groupId, message);
+                        } catch (IllegalArgumentException ex) {
+                            log.warn("[QUIZ_START] 잘못된 요청: {}", ex.getMessage());
+                            broadcastSystem(groupId, "퀴즈 시작 실패: " + ex.getMessage());
+                        } catch (Exception ex) {
+                            log.error("[QUIZ_START] 처리 중 오류", ex);
+                            broadcastSystem(groupId, "퀴즈 시작 실패: 서버 오류");
+                        }
                         return;
                     }
 
@@ -227,6 +240,20 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
             broadcastSystem(groupId, "이미 진행 중인 퀴즈가 있습니다.");
             return;
         }
+
+        log.info("[QUIZ_START] groupId={}, meetingId={}, documentId={}, progress={}, total={}",
+                groupId, p.meetingId(), p.documentId(), p.progressPercentage(), p.totalQuestions());
+
+        if (p.documentId() == null || p.documentId().isBlank() ||
+                p.meetingId()  == null || p.meetingId().isBlank()) {
+            throw new IllegalArgumentException("documentId와 meetingId는 필수입니다.");
+        }
+
+        // (이중 체크) 방 ID와 meetingId 일치 보장
+        if (!String.valueOf(groupId).equals(p.meetingId())) {
+            throw new IllegalArgumentException("meetingId가 방 ID와 일치하지 않습니다.");
+        }
+
         // AI에서 문제 세트 수신
         var result = aiServiceClient.generateQuiz(p.documentId(), p.meetingId(), p.progressPercentage());
         var items = result.items();
@@ -268,24 +295,51 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
         // 실제로는 msg에 QuizStart payload를 넣는 게 더 좋음.
         // 여기서는 content 파싱 예시만.
         // ex) "documentId=doc_xxx;meetingId=meet_xxx;progress=50;total=4"
-        String documentId = "doc-" + msg.getGroupId();
-        String meetingId = String.valueOf(msg.getGroupId());
+        String documentId = null;
+        String meetingId = null;
         int progress = 50;
         int total = 4;
+
+        // 1) proto payload 우선
         try {
-            if (msg.getContent() != null) {
-                for (String part : msg.getContent().split("[;,&]")) {
-                    String[] kv = part.split("=");
-                    if (kv.length != 2) continue;
-                    switch (kv[0].trim()) {
-                        case "documentId" -> documentId = kv[1].trim();
-                        case "meetingId" -> meetingId = kv[1].trim();
-                        case "progress" -> progress = Integer.parseInt(kv[1].trim());
-                        case "total" -> total = Integer.parseInt(kv[1].trim());
-                    }
+            if (msg.hasQuizStart()) {
+                var qs = msg.getQuizStart();
+                String doc = qs.getDocumentId(); // 빈 문자열일 수 있음(proto3 기본)
+                String meet = qs.getMeetingId();
+
+                if (doc != null && !doc.isBlank()) {
+                    documentId = doc.trim();
                 }
+                if (meet != null && !meet.isBlank()) {
+                    meetingId = meet.trim();
+                }
+                if (qs.getProgressPercentage() > 0) progress = qs.getProgressPercentage();
+                if (qs.getTotalQuestions() > 0)     total    = qs.getTotalQuestions();
             }
         } catch (Exception ignored) {}
+
+        // 2) content key=value fallback
+        if ((documentId == null || meetingId == null) && msg.getContent() != null) {
+            for (String part : msg.getContent().split("[;,&]")) {
+                String[] kv = part.split("=");
+                if (kv.length != 2) continue;
+                switch (kv[0].trim()) {
+                    case "documentId" -> documentId = kv[1].trim(); // ★ 임의 prefix 금지
+                    case "meetingId"  -> meetingId  = kv[1].trim();
+                    case "progress"   -> progress   = Integer.parseInt(kv[1].trim());
+                    case "total"      -> total      = Integer.parseInt(kv[1].trim());
+                }
+            }
+        }
+
+        // 3) 필수값 최종 검증: 하나라도 없으면 예외
+        if (documentId == null || documentId.isBlank()) {
+            throw new IllegalArgumentException("documentId가 없습니다.");
+        }
+        if (meetingId == null || meetingId.isBlank()) {
+            throw new IllegalArgumentException("meetingId가 없습니다.");
+        }
+
         return new QuizStartParam(documentId, meetingId, progress, total);
     }
     private record QuizStartParam(String documentId, String meetingId, int progressPercentage, int totalQuestions) {}

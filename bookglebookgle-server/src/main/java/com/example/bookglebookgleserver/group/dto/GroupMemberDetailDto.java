@@ -17,6 +17,6 @@ public record GroupMemberDetailDto(
         @Schema(description = "방장 여부", example = "false")
         boolean isHost,
 
-        @Schema(description = "완독 여부", example = "false")
-        boolean isCompleted
+        @Schema(description = "이 멤버가 그룹 평점을 제출(완료)했는지", example = "true")
+        boolean ratingSubmitted
 ) {}

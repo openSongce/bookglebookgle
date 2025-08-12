@@ -81,7 +81,7 @@ class GroupMemberRepositoryTest {
 
         // when
         // 한 방 프로젝션(Detail) 쓰는 경우
-        List<GroupMemberDetailDto> rows = groupMemberRepository.findMemberDetailsByGroupId(g.getId(), 100);
+        List<GroupMemberDetailDto> rows = groupMemberRepository.findMemberDetailsByGroupId(g.getId());
 
         // then
         assertThat(rows).hasSize(1);
