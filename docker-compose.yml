@@ -33,6 +33,7 @@ services:
       - ./application.yml:/app/config/application.yml
     networks:
       - test-net
+      - bgbg-network
 
   loki:
     image: grafana/loki:2.9.4
@@ -105,4 +106,6 @@ networks:
   test-net:
     driver: bridge
   monitoring:
+    external: true
+  bgbg-network:
     external: true
