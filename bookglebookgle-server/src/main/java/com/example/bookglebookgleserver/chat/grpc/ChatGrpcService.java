@@ -423,6 +423,9 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
         private final UserRepository userRepository;
         private final ConcurrentHashMap<Long, String> userNickCache;
 
+        // QuizRunner 필드
+        private final Set<Long> participants = ConcurrentHashMap.newKeySet();
+
 
 
         QuizRunner(String quizId,
@@ -456,8 +459,10 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
         // 클라가 제출한 답 처리
         void handleAnswer(long userId, String quizId, int questionIndex, int selectedIndex) {
             if (!this.quizId.equals(quizId)) return;
-            if (questionIndex != idx) return;             // 현재 문제에 대해서만 인정
-            if (!answeredThisQuestion.add(userId)) return; // 중복제출 방지
+            if (questionIndex != idx) return;
+            if (!answeredThisQuestion.add(userId)) return;
+
+            participants.add(userId); // ★ 참여자 기록
 
             answersThisQuestion.put(userId, selectedIndex);
             var item = items.get(questionIndex);
@@ -570,48 +575,62 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
             broadcaster.accept(revealMsg);
         }
 
-        // 최종 요약 브로드캐스트 (그대로 유지)
         private void broadcastSummary() {
-            List<Map.Entry<Long, Integer>> ranking = new ArrayList<>(correctCounts.entrySet());
-            ranking.sort((a, b) -> {
+            // 참여자 전원의 점수로 리스트 구성 (0점도 포함)
+            List<Map.Entry<Long, Integer>> base = new ArrayList<>();
+            for (Long uid : participants) {
+                base.add(Map.entry(uid, correctCounts.getOrDefault(uid, 0)));
+            }
+
+            // 정렬: 점수 desc, userId asc
+            base.sort((a, b) -> {
                 int c = Integer.compare(b.getValue(), a.getValue());
                 if (c != 0) return c;
                 return Long.compare(a.getKey(), b.getKey());
             });
 
-            var sum = com.example.bookglebookgleserver.chat.QuizSummary.newBuilder()
+            var sum = QuizSummary.newBuilder()
                     .setQuizId(quizId)
                     .setTotalQuestions(total);
 
+            // 닉네임 캐시 보강
             Set<Long> missing = new java.util.HashSet<>();
-            for (var e : ranking) {
-                if (!userNickCache.containsKey(e.getKey())) missing.add(e.getKey());
-            }
+            for (var e : base) if (!userNickCache.containsKey(e.getKey())) missing.add(e.getKey());
             if (!missing.isEmpty()) {
-                userRepository.findAllById(missing).forEach(u -> userNickCache.put(u.getId(), u.getNickname()));
+                userRepository.findAllById(missing)
+                        .forEach(u -> userNickCache.put(u.getId(), u.getNickname()));
             }
 
+            // 순위 매기기 (동점은 동일 순위 부여)
+            int rank = 0;
+            int processed = 0;
+            Integer prevScore = null;
 
-
-            int rank = 1;
-            for (var e : ranking) {
+            for (var e : base) {
+                processed++;
+                int score = e.getValue();
+                if (prevScore == null || score < prevScore) {
+                    rank = processed;       // 다음 순위 = 현재까지 처리한 인원 수
+                    prevScore = score;
+                }
                 long uid = e.getKey();
-                sum.addScores(com.example.bookglebookgleserver.chat.UserScore.newBuilder()
+                sum.addScores(UserScore.newBuilder()
                         .setUserId(uid)
-                        .setNickname(userNickCache.getOrDefault(uid, "익명")) // 필요 시 닉네임 채우기
-                        .setCorrectCount(e.getValue())
-                        .setRank(rank++)
+                        .setNickname(userNickCache.getOrDefault(uid, "익명"))
+                        .setCorrectCount(score)
+                        .setRank(rank)
                         .build());
             }
 
-            ChatMessage summaryMsg = ChatMessage.newBuilder()
+
+            broadcaster.accept(ChatMessage.newBuilder()
                     .setGroupId(groupId)
                     .setType("QUIZ_SUMMARY")
                     .setTimestamp(System.currentTimeMillis())
                     .setQuizSummary(sum.build())
-                    .build();
-            broadcaster.accept(summaryMsg);
+                    .build());
         }
+
 
         void stop(String reason) {
             if (future != null && !future.isCancelled()) future.cancel(false);
