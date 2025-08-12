@@ -496,18 +496,32 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
         // 정답 공개 (proto 수정 없이 QuizQuestion 재사용)
         private void sendReveal() {
             var it = items.get(idx);
-            log.info("[QUIZ] Q{} 정답 공개: {}", idx + 1, it.correctIdx());
+            int correctAnswer = it.correctIdx();
+
+            // 추가 검증
+            if (correctAnswer < 0 || correctAnswer >= it.options().size()) {
+                log.error("[QUIZ] 잘못된 정답 인덱스: {}, 선택지 수: {}", correctAnswer, it.options().size());
+                return;
+            }
+
+            log.info("[QUIZ] Q{} 정답 공개: {}번 - {}", idx + 1, correctAnswer, it.options().get(correctAnswer));
 
             ChatMessage reveal = ChatMessage.newBuilder()
                     .setGroupId(groupId)
-                    .setType("QUIZ_REVEAL") // 프론트는 이 type 수신 시 정답 표시
+                    .setType("QUIZ_REVEAL")
                     .setTimestamp(System.currentTimeMillis())
+                    .setContent("정답: " + correctAnswer) // content에도 정답 추가
                     .setQuizQuestion(QuizQuestion.newBuilder()
                             .setQuizId(quizId)
                             .setQuestionIndex(idx)
-                            .setCorrectAnswerIndex(it.correctIdx()) // 여기서만 정답 전송
+                            .setQuestionText(it.text())
+                            .addAllOptions(it.options())
+                            .setCorrectAnswerIndex(correctAnswer)
                             .build())
                     .build();
+
+            // 전송 전 최종 확인
+            log.info("[QUIZ] 전송할 정답: {}", reveal.getQuizQuestion().getCorrectAnswerIndex());
             broadcaster.accept(reveal);
         }
 
