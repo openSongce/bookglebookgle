@@ -2,6 +2,7 @@ package com.ssafy.bookglebookgle.ui.screen
 
 import android.graphics.Bitmap
 import android.graphics.PointF
+import android.os.SystemClock
 import android.util.Log
 import android.view.MotionEvent
 import androidx.compose.animation.AnimatedVisibility
@@ -151,6 +152,16 @@ fun PdfReadScreen(
 
     var showChatSheet by remember { mutableStateOf(false) }
 
+    LaunchedEffect(showTextSelectionOptions) {
+        pdfView?.apply {
+            setUserTransformLocked(showTextSelectionOptions) // 팬/줌 락
+            isSwipeEnabled = !showTextSelectionOptions
+            setPageFling(!showTextSelectionOptions)
+            enableDoubleTap(!showTextSelectionOptions)
+            if (showTextSelectionOptions) stopFling()
+        }
+    }
+
 
 
 
@@ -240,6 +251,9 @@ fun PdfReadScreen(
     val isFollower = remember(isCurrentLeader, readingMode) {
         readingMode == PdfViewModel.ReadingMode.FOLLOW && !isCurrentLeader
     }
+
+    var lastViewportOrScrollTs by remember { mutableStateOf(0L) }
+    fun canOpenPopup(): Boolean = SystemClock.elapsedRealtime() - lastViewportOrScrollTs > 200L
 
     LaunchedEffect(isFollower) {
         pdfView?.apply {
@@ -620,11 +634,13 @@ fun PdfReadScreen(
                                             comments: List<CommentModel>,
                                             pointOfNote: PointF
                                         ) {
+                                            if (!canOpenPopup()) return
                                             viewModel.showCommentPopup(comments, pointOfNote)
                                             Log.d("PdfReadScreen", "댓글 클릭: ${comments.size}개")
                                         }
 
                                         override fun onHighlightClicked(highlights: List<HighlightModel>, pointOfHighlight: PointF) {
+                                            if (!canOpenPopup()) return
                                             viewModel.showHighlightPopup(highlights, pointOfHighlight)
                                             Log.d("PdfReadScreen", "하이라이트 클릭: ${highlights.size}개")
                                         }
@@ -642,8 +658,11 @@ fun PdfReadScreen(
                                         }
 
                                         override fun onScrolling() {
-                                            hideTextSelection()
-                                            textSelectionOptionsWindow.dismiss(false)
+                                            if (!showTextSelectionOptions) {
+                                                lastViewportOrScrollTs = SystemClock.elapsedRealtime()
+                                                hideTextSelection()
+                                                textSelectionOptionsWindow.dismiss(false)
+                                            }
                                         }
 
                                         override fun onMergeStart(
@@ -673,6 +692,7 @@ fun PdfReadScreen(
                                             centerXNorm: Float,
                                             centerYNorm: Float
                                         ) {
+                                            lastViewportOrScrollTs = SystemClock.elapsedRealtime()
                                             viewModel.onViewportChangedFromUi(
                                                 pageIndex0 = pageIndex,
                                                 fitWidthZoom = fitWidthZoom,
@@ -798,7 +818,9 @@ fun PdfReadScreen(
                     comments = selectedComments,                // distinctBy(id) 적용됨
                     currentUserId = userId,
                     onDelete = { id -> viewModel.deleteComment(id); viewModel.hideCommentPopup() },
-                    onDismiss = { viewModel.hideCommentPopup() }
+                    onDismiss = { viewModel.hideCommentPopup()
+                        pdfView?.dismissSelection()
+                    }
                 )
             }
 
@@ -977,7 +999,8 @@ fun PdfReadScreen(
                         viewModel.deleteHighlight(id)
                         viewModel.hideHighlightPopup()
                     },
-                    onDismiss = { viewModel.hideHighlightPopup() }
+                    onDismiss = { viewModel.hideHighlightPopup()
+                        pdfView?.dismissSelection()}
                 )
             }
 

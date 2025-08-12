@@ -1,6 +1,9 @@
 package com.ssafy.bookglebookgle.repository
 
 import android.util.Log
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
+import com.ssafy.bookglebookgle.entity.OcrResult
 import com.ssafy.bookglebookgle.entity.pdf.AddBookmarkRequest
 import com.ssafy.bookglebookgle.entity.pdf.AddCommentRequest
 import com.ssafy.bookglebookgle.entity.pdf.AddHighlightRequest
@@ -16,13 +19,17 @@ import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.BookmarkModel
 import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.CommentModel
 import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.Coordinates
 import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.HighlightModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.ResponseBody
 import retrofit2.Response
 import java.io.File
+import java.io.FileInputStream
 import java.io.InputStream
+import java.util.zip.ZipInputStream
 import javax.inject.Inject
 
 private const val TAG = "싸피_PdfRepositoryImpl"
@@ -31,10 +38,12 @@ class PdfRepositoryImpl @Inject constructor(
     private val pdfApi: PdfApi
 ) : PdfRepository {
 
-    data class PdfData(
+    data class PdfWithOcrData(
         val inputStream: InputStream?,
+        val ocrResults: List<OcrResult>? = null,
         val fileName: String
     )
+
 
     override suspend fun uploadPdf(file: File): Boolean {
         return try {
@@ -61,23 +70,59 @@ class PdfRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun getGroupPdf(groupId: Long): PdfData? {
+    /**
+     * 그룹 PDF 조회 (OCR 처리 여부에 따라 응답 형태 결정)
+     * - imageBased=true인 그룹: ZIP 형태로 PDF + OCR JSON 반환
+     * - imageBased=false인 그룹: PDF 파일만 반환
+     */
+    override suspend fun getGroupPdf(groupId: Long, cacheDir: File): PdfWithOcrData? {
         return try {
-            Log.d(TAG, "=== 그룹 PDF 다운로드 시작 ===")
-            Log.d(TAG, "그룹 ID: $groupId")
+            withContext(Dispatchers.IO) {
+                Log.d(TAG, "=== 그룹 PDF 다운로드 시작 ===")
+                Log.d(TAG, "그룹 ID: $groupId")
 
-            val response = pdfApi.getGroupPdf(groupId)
-            Log.d(TAG, "응답 코드: ${response.code()}")
+                val response = pdfApi.getGroupPdf(
+                    groupId = groupId,
+                    accept = "application/zip",
+                )
+                Log.d(TAG, "응답 코드: ${response.code()}")
 
-            if (response.isSuccessful) {
-                val fileName = extractFileNameFromHeaders(response)
-                val inputStream = response.body()!!.byteStream()
-                Log.d(TAG, "PDF 다운로드 성공 - 파일명: $fileName")
+                if (response.isSuccessful) {
+                    val contentType = response.headers()["Content-Type"]?.lowercase().orEmpty()
+                    val contentDisposition = response.headers()["Content-Disposition"].orEmpty()
+                    val fileName = parseFilename(contentDisposition) ?: if (contentType.contains("zip")) {
+                        "group-$groupId.zip"
+                    } else {
+                        "group-$groupId.pdf"
+                    }
 
-                PdfData(inputStream, fileName)
-            } else {
-                Log.e(TAG, "PDF 다운로드 실패 - 응답코드: ${response.code()}, 메시지: ${response.message()}")
-                null
+                    Log.d(TAG, "Content-Type: $contentType")
+                    Log.d(TAG, "파일명: $fileName")
+
+                    // Content-Type에 따라 처리 분기
+                    when {
+                        contentType.contains("application/zip") -> {
+                            Log.d(TAG, "ZIP 파일로 인식 - OCR 데이터 포함")
+                            processZipToInputStream(response, cacheDir, groupId)
+                        }
+                        contentType.contains("application/pdf") -> {
+                            Log.d(TAG, "PDF 파일로 인식 - OCR 데이터 없음")
+                            val inputStream = response.body()!!.byteStream()
+                            PdfWithOcrData(
+                                inputStream = inputStream,
+                                ocrResults = null,
+                                fileName = fileName.removeSuffix(".pdf")
+                            )
+                        }
+                        else -> {
+                            Log.e(TAG, "지원하지 않는 Content-Type: $contentType")
+                            null
+                        }
+                    }
+                } else {
+                    Log.e(TAG, "PDF 다운로드 실패 - 응답코드: ${response.code()}, 메시지: ${response.message()}")
+                    null
+                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "PDF 다운로드 중 예외 발생", e)
@@ -85,281 +130,148 @@ class PdfRepositoryImpl @Inject constructor(
         }
     }
 
-//    // 댓글 관리
-//    override suspend fun addComment(
-//        groupId: Long,
-//        snippet: String,
-//        text: String,
-//        page: Int,
-//        coordinates: Coordinates
-//    ): CommentModel? {
-//        return try {
-//            Log.d(TAG, "=== 댓글 추가 요청 ===")
-//            Log.d(TAG, "그룹 ID: $groupId, 페이지: $page, 텍스트: $text")
-//            Log.d(TAG, "좌표: startX=${coordinates.startX}, startY=${coordinates.startY}, endX=${coordinates.endX}, endY=${coordinates.endY}")
-//
-//            val request = AddCommentRequest(
-//                snippet = snippet,
-//                text = text,
-//                page = page,
-//                coordinates = CoordinatesRequest(
-//                    startX = coordinates.startX,
-//                    startY = coordinates.startY,
-//                    endX = coordinates.endX,
-//                    endY = coordinates.endY
-//                )
-//            )
-//
-//            val response = pdfApi.addComment(groupId, request)
-//            Log.d(TAG, "응답 코드: ${response.code()}")
-//
-//            if (response.isSuccessful) {
-//                response.body()?.let { commentResponse ->
-//                    Log.d(TAG, "댓글 추가 성공: $commentResponse")
-//
-//                    CommentModel(
-//                        id = commentResponse.id,
-//                        snippet = commentResponse.snippet,
-//                        text = commentResponse.text,
-//                        page = commentResponse.page,
-//                        coordinates = Coordinates(
-//                            startX = commentResponse.coordinates.startX,
-//                            startY = commentResponse.coordinates.startY,
-//                            endX = commentResponse.coordinates.endX,
-//                            endY = commentResponse.coordinates.endY
-//                        )
-//                    )
-//                }
-//            } else {
-//                Log.e(TAG, "댓글 추가 실패: ${response.code()} ${response.message()}")
-//                response.errorBody()?.string()?.let { Log.e(TAG, "에러: $it") }
-//                null
-//            }
-//        } catch (e: Exception) {
-//            Log.e(TAG, "댓글 추가 중 예외 발생", e)
-//            null
-//        }
-//    }
-//
-//    override suspend fun getComments(groupId: Long): List<CommentModel>? {
-//        return try {
-//            Log.d(TAG, "=== 댓글 조회 요청 ===")
-//            Log.d(TAG, "그룹 ID: $groupId")
-//
-//            val response = pdfApi.getComments(groupId)
-//            Log.d(TAG, "응답 코드: ${response.code()}")
-//
-//            if (response.isSuccessful) {
-//                response.body()?.let { commentList ->
-//                    Log.d(TAG, "댓글 조회 성공 - 댓글 수: ${commentList.size}")
-//
-//                    commentList.map { commentResponse ->
-//                        CommentModel(
-//                            id = commentResponse.id,
-//                            snippet = commentResponse.snippet,
-//                            text = commentResponse.text,
-//                            page = commentResponse.page,
-//                            coordinates = Coordinates(
-//                                startX = commentResponse.coordinates.startX,
-//                                startY = commentResponse.coordinates.startY,
-//                                endX = commentResponse.coordinates.endX,
-//                                endY = commentResponse.coordinates.endY
-//                            )
-//                        )
-//                    }
-//                }
-//            } else {
-//                Log.e(TAG, "댓글 조회 실패: ${response.code()} ${response.message()}")
-//                null
-//            }
-//        } catch (e: Exception) {
-//            Log.e(TAG, "댓글 조회 중 예외 발생", e)
-//            null
-//        }
-//    }
-//
-//    override suspend fun updateComment(commentId: Long, newText: String): CommentModel? {
-//        return try {
-//            Log.d(TAG, "=== 댓글 수정 요청 ===")
-//            Log.d(TAG, "댓글 ID: $commentId, 새 텍스트: $newText")
-//
-//            val request = UpdateCommentRequest(text = newText)
-//            val response = pdfApi.updateComment(commentId, request)
-//            Log.d(TAG, "응답 코드: ${response.code()}")
-//
-//            if (response.isSuccessful) {
-//                response.body()?.let { commentResponse ->
-//                    Log.d(TAG, "댓글 수정 성공: $commentResponse")
-//
-//                    CommentModel(
-//                        id = commentResponse.id,
-//                        snippet = commentResponse.snippet,
-//                        text = commentResponse.text,
-//                        page = commentResponse.page,
-//                        coordinates = Coordinates(
-//                            startX = commentResponse.coordinates.startX,
-//                            startY = commentResponse.coordinates.startY,
-//                            endX = commentResponse.coordinates.endX,
-//                            endY = commentResponse.coordinates.endY
-//                        )
-//                    )
-//                }
-//            } else {
-//                Log.e(TAG, "댓글 수정 실패: ${response.code()} ${response.message()}")
-//                null
-//            }
-//        } catch (e: Exception) {
-//            Log.e(TAG, "댓글 수정 중 예외 발생", e)
-//            null
-//        }
-//    }
-//
-//    override suspend fun deleteComment(commentId: Long): DeleteAnnotationResponse? {
-//        return try {
-//            Log.d(TAG, "=== 댓글 삭제 요청 ===")
-//            Log.d(TAG, "댓글 ID: $commentId")
-//
-//            val response = pdfApi.deleteComment(commentId)
-//            Log.d(TAG, "응답 코드: ${response.code()}")
-//
-//            if (response.isSuccessful) {
-//                response.body()?.let { apiDeleteResponse ->
-//                    Log.d(TAG, "댓글 삭제 성공 - 삭제된 ID들: ${apiDeleteResponse.deletedIds}")
-//
-//                    // API Response를 내부 모델로 변환
-//                    DeleteAnnotationResponse(
-//                        deletedIds = apiDeleteResponse.deletedIds
-//                    )
-//                }
-//            } else {
-//                Log.e(TAG, "댓글 삭제 실패: ${response.code()} ${response.message()}")
-//                null
-//            }
-//        } catch (e: Exception) {
-//            Log.e(TAG, "댓글 삭제 중 예외 발생", e)
-//            null
-//        }
-//    }
-//
-//    // 하이라이트 관리
-//    override suspend fun addHighlight(
-//        groupId: Long,
-//        snippet: String,
-//        color: String,
-//        page: Int,
-//        coordinates: Coordinates
-//    ): HighlightModel? {
-//        return try {
-//            Log.d(TAG, "=== 하이라이트 추가 요청 ===")
-//            Log.d(TAG, "그룹 ID: $groupId, 페이지: $page, 색상: $color")
-//            Log.d(TAG, "좌표: startX=${coordinates.startX}, startY=${coordinates.startY}, endX=${coordinates.endX}, endY=${coordinates.endY}")
-//
-//            val request = AddHighlightRequest(
-//                snippet = snippet,
-//                color = color,
-//                page = page,
-//                coordinates = CoordinatesRequest(
-//                    startX = coordinates.startX,
-//                    startY = coordinates.startY,
-//                    endX = coordinates.endX,
-//                    endY = coordinates.endY
-//                )
-//            )
-//
-//            val response = pdfApi.addHighlight(groupId, request)
-//            Log.d(TAG, "응답 코드: ${response.code()}")
-//
-//            if (response.isSuccessful) {
-//                response.body()?.let { highlightResponse ->
-//                    Log.d(TAG, "하이라이트 추가 성공: $highlightResponse")
-//
-//                    HighlightModel(
-//                        id = highlightResponse.id,
-//                        snippet = highlightResponse.snippet,
-//                        color = highlightResponse.color,
-//                        page = highlightResponse.page,
-//                        coordinates = Coordinates(
-//                            startX = highlightResponse.coordinates.startX,
-//                            startY = highlightResponse.coordinates.startY,
-//                            endX = highlightResponse.coordinates.endX,
-//                            endY = highlightResponse.coordinates.endY
-//                        )
-//                    )
-//                }
-//            } else {
-//                Log.e(TAG, "하이라이트 추가 실패: ${response.code()} ${response.message()}")
-//                response.errorBody()?.string()?.let { Log.e(TAG, "에러: $it") }
-//                null
-//            }
-//        } catch (e: Exception) {
-//            Log.e(TAG, "하이라이트 추가 중 예외 발생", e)
-//            null
-//        }
-//    }
-//
-//    override suspend fun getHighlights(groupId: Long): List<HighlightModel>? {
-//        return try {
-//            Log.d(TAG, "=== 하이라이트 조회 요청 ===")
-//            Log.d(TAG, "그룹 ID: $groupId")
-//
-//            val response = pdfApi.getHighlights(groupId)
-//            Log.d(TAG, "응답 코드: ${response.code()}")
-//
-//            if (response.isSuccessful) {
-//                response.body()?.let { highlightList ->
-//                    Log.d(TAG, "하이라이트 조회 성공 - 하이라이트 수: ${highlightList.size}")
-//
-//                    highlightList.map { highlightResponse ->
-//                        HighlightModel(
-//                            id = highlightResponse.id,
-//                            snippet = highlightResponse.snippet,
-//                            color = highlightResponse.color,
-//                            page = highlightResponse.page,
-//                            coordinates = Coordinates(
-//                                startX = highlightResponse.coordinates.startX,
-//                                startY = highlightResponse.coordinates.startY,
-//                                endX = highlightResponse.coordinates.endX,
-//                                endY = highlightResponse.coordinates.endY
-//                            )
-//                        )
-//                    }
-//                }
-//            } else {
-//                Log.e(TAG, "하이라이트 조회 실패: ${response.code()} ${response.message()}")
-//                null
-//            }
-//        } catch (e: Exception) {
-//            Log.e(TAG, "하이라이트 조회 중 예외 발생", e)
-//            null
-//        }
-//    }
-//
-//    override suspend fun deleteHighlight(highlightId: Long): DeleteAnnotationResponse? {
-//        return try {
-//            Log.d(TAG, "=== 하이라이트 삭제 요청 ===")
-//            Log.d(TAG, "하이라이트 ID: $highlightId")
-//
-//            val response = pdfApi.deleteHighlight(highlightId)
-//            Log.d(TAG, "응답 코드: ${response.code()}")
-//
-//            if (response.isSuccessful) {
-//                response.body()?.let { apiDeleteResponse ->
-//                    Log.d(TAG, "하이라이트 삭제 성공 - 삭제된 ID들: ${apiDeleteResponse.deletedIds}")
-//
-//                    // API Response를 내부 모델로 변환
-//                    DeleteAnnotationResponse(
-//                        deletedIds = apiDeleteResponse.deletedIds
-//                    )
-//                }
-//            } else {
-//                Log.e(TAG, "하이라이트 삭제 실패: ${response.code()} ${response.message()}")
-//                null
-//            }
-//        } catch (e: Exception) {
-//            Log.e(TAG, "하이라이트 삭제 중 예외 발생", e)
-//            null
-//        }
-//    }
+    /**
+     * ZIP 파일을 InputStream으로 처리 (PDF + OCR JSON 추출)
+     */
+    private fun processZipToInputStream(response: Response<ResponseBody>, cacheDir: File, groupId: Long): PdfWithOcrData? {
+        return try {
+            Log.d(TAG, "=== ZIP 파일을 InputStream으로 처리 시작 ===")
+
+            // 임시로 ZIP 파일 저장
+            val tempZipFile = File(cacheDir, "temp_group_$groupId.zip")
+            response.body()!!.use { body ->
+                body.byteStream().use { input ->
+                    tempZipFile.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+            }
+
+            val extractDir = File(cacheDir, "group-$groupId-extracted")
+            if (!extractDir.exists()) {
+                extractDir.mkdirs()
+            }
+
+            var pdfFile: File? = null
+            var ocrResults: List<OcrResult>? = null
+            var fileName = "PDF"
+
+            ZipInputStream(FileInputStream(tempZipFile)).use { zipStream ->
+                var entry = zipStream.nextEntry
+
+                while (entry != null) {
+                    Log.d(TAG, "ZIP 엔트리 발견: ${entry.name}")
+
+                    if (!entry.isDirectory) {
+                        val outputFile = File(extractDir, entry.name)
+                        outputFile.parentFile?.mkdirs()
+
+                        outputFile.outputStream().use { output ->
+                            zipStream.copyTo(output)
+                        }
+
+                        when {
+                            entry.name.endsWith(".pdf", ignoreCase = true) -> {
+                                pdfFile = outputFile
+                                fileName = entry.name.removeSuffix(".pdf")
+                                Log.d(TAG, "PDF 파일 추출: ${outputFile.absolutePath}")
+                            }
+                            entry.name.endsWith(".json", ignoreCase = true) &&
+                                    entry.name.contains("ocr", ignoreCase = true) -> {
+                                ocrResults = parseOcrJson(outputFile)
+                                Log.d(TAG, "OCR JSON 파일 파싱 완료: ${ocrResults?.size}개 결과")
+                            }
+                        }
+                    }
+
+                    zipStream.closeEntry()
+                    entry = zipStream.nextEntry
+                }
+            }
+
+            // 임시 ZIP 파일 정리
+            tempZipFile.delete()
+
+            if (pdfFile != null) {
+                Log.d(TAG, "ZIP 처리 완료 - PDF: ${pdfFile!!.name}, OCR: ${ocrResults?.size ?: 0}개")
+
+                // PDF 파일을 InputStream으로 변환
+                val pdfInputStream = FileInputStream(pdfFile!!)
+
+                PdfWithOcrData(
+                    inputStream = pdfInputStream,
+                    ocrResults = ocrResults,
+                    fileName = fileName
+                )
+            } else {
+                Log.e(TAG, "ZIP에서 PDF 파일을 찾을 수 없음")
+                null
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "ZIP 파일 처리 중 예외 발생", e)
+            null
+        }
+    }
+
+    /**
+     * OCR JSON 파일 파싱
+     */
+    private fun parseOcrJson(jsonFile: File): List<OcrResult>? {
+        return try {
+            Log.d(TAG, "=== OCR JSON 파싱 시작 ===")
+            Log.d(TAG, "JSON 파일: ${jsonFile.absolutePath}")
+            Log.d(TAG, "JSON 파일 크기: ${jsonFile.length()} bytes")
+
+            val jsonContent = jsonFile.readText()
+            Log.d(TAG, "JSON 내용 길이: ${jsonContent.length}")
+            Log.d(TAG, "JSON 미리보기: ${jsonContent.take(200)}...")
+
+            val gson = Gson()
+            val listType = object : TypeToken<List<OcrResult>>() {}.type
+            val results = gson.fromJson<List<OcrResult>>(jsonContent, listType)
+
+            Log.d(TAG, "OCR 결과 파싱 완료: ${results?.size}개")
+            results?.forEachIndexed { index, result ->
+                Log.d(TAG, "OCR[$index]: 페이지=${result.pageNumber}, 텍스트=${result.text.take(50)}...")
+            }
+
+            results
+        } catch (e: Exception) {
+            Log.e(TAG, "OCR JSON 파싱 실패", e)
+            null
+        }
+    }
+
+    /**
+     * 응답 바디를 파일로 다운로드 (더 이상 사용하지 않음)
+     */
+    @Deprecated("InputStream 방식으로 변경됨")
+    private fun downloadFile(response: Response<ResponseBody>, cacheDir: File, fileName: String): File {
+        val outputFile = File(cacheDir, fileName)
+
+        response.body()!!.use { body ->
+            body.byteStream().use { input ->
+                outputFile.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            }
+        }
+
+        return outputFile
+    }
+
+    /**
+     * Content-Disposition 헤더에서 파일명 추출
+     */
+    private fun parseFilename(contentDisposition: String): String? {
+        if (contentDisposition.isBlank()) return null
+
+        val regex = Regex("""filename\*?=("[^"]+"|[^;]+)""", RegexOption.IGNORE_CASE)
+        val match = regex.find(contentDisposition) ?: return null
+        return match.groupValues[1].trim('"')
+    }
+
+
 
     // 북마크 관리
     override suspend fun addBookmark(groupId: Long, page: Int): BookmarkModel? {

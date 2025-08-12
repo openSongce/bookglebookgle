@@ -33,14 +33,17 @@ import com.ssafy.bookglebookgle.entity.HighlightSync
 import com.ssafy.bookglebookgle.entity.PageViewportSync
 import com.ssafy.bookglebookgle.entity.Participant
 import com.ssafy.bookglebookgle.entity.PdfPageSync
+import com.ssafy.bookglebookgle.entity.smartMergeToLines
 import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.HighlightModel
 import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.PdfAnnotationModel
 import com.ssafy.bookglebookgle.repository.PdfGrpcRepository
 import com.ssafy.bookglebookgle.repository.PdfSyncConnectionStatus
+import com.ssafy.bookglebookgle.util.PdfOcrMerger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.withContext
 import kotlin.math.max
 
 
@@ -153,6 +156,11 @@ class PdfViewModel @Inject constructor(
 
     private val _showHighlightPopup = MutableStateFlow(false)
     val showHighlightPopup: StateFlow<Boolean> = _showHighlightPopup.asStateFlow()
+
+    // ViewModel 상단 멤버들 옆에 추가
+    private val _isOcrEnabled = MutableStateFlow(false)
+    val isOcrEnabled: StateFlow<Boolean> = _isOcrEnabled.asStateFlow()
+
 
 
     // ↑ 클래스 필드에 추가
@@ -351,66 +359,71 @@ class PdfViewModel @Inject constructor(
     /**
      * 그룹 PDF 파일을 서버에서 다운로드
      */
+
+
     fun loadGroupPdf(groupId: Long, context: android.content.Context) {
         Log.d(TAG, "==== PDF 다운로드 시작 ====")
-        Log.d(TAG, "그룹 ID: $groupId")
-        Log.d(TAG, "현재 로딩 상태: ${_isLoading.value}")
-
         _isLoading.value = true
         _pdfLoadError.value = null
         _pdfReady.value = false
 
         viewModelScope.launch {
             try {
-                Log.d(TAG, "Repository에서 PDF 다운로드 요청 시작")
-                val pdfData = pdfRepository.getGroupPdf(groupId)
+                // 1) 네트워크 + ZIP 처리까지 전부 IO에서 수행
+                val pdfData = withContext(Dispatchers.IO) {
+                    pdfRepository.getGroupPdf(groupId, cacheDir = context.cacheDir)
+                }
 
-                if (pdfData != null && pdfData.inputStream != null) {
-                    Log.d(TAG, "PDF 다운로드 성공")
-                    Log.d(TAG, "파일명: ${pdfData.fileName}")
-
-                    // PDF 제목 설정 (확장자 제거)
-                    val title = pdfData.fileName.removeSuffix(".pdf")
-                    _pdfTitle.value = title
-                    Log.d(TAG, "PDF 제목 설정: $title")
-
-                    // PDF 바이트 데이터 읽기
-                    Log.d(TAG, "PDF 바이트 데이터 읽기 시작")
-                    val bytes = pdfData.inputStream.readBytes()
-                    Log.d(TAG, "PDF 크기: ${bytes.size} bytes")
-
-                    // PDF 헤더 검증
-                    if (bytes.size >= 4 && String(bytes.sliceArray(0..3)) == "%PDF") {
-                        Log.d(TAG, "유효한 PDF 파일 확인됨")
-
-                        // 임시 파일 생성
-                        val tempFile = File.createTempFile("group_pdf_$groupId", ".pdf", context.cacheDir)
-                        tempFile.writeBytes(bytes)
-
-                        Log.d(TAG, "임시 파일 저장 완료: ${tempFile.absolutePath}")
-                        Log.d(TAG, "임시 파일 크기: ${tempFile.length()} bytes")
-
-                        _pdfFile.value = tempFile
-                        _pdfReady.value = true
-                        _isLoading.value = false
-
-                        Log.d(TAG, "PDF 로드 완료 - 상태 업데이트 완료")
-                    } else {
-                        val error = "유효하지 않은 PDF 파일 - 헤더: ${if (bytes.size >= 4) String(bytes.sliceArray(0..3)) else "크기 부족"}"
-                        Log.e(TAG, error)
-                        _pdfLoadError.value = error
-                        _isLoading.value = false
-                        _pdfReady.value = false
-                    }
-                } else {
+                if (pdfData?.inputStream == null) {
                     val error = "PDF 파일을 다운로드할 수 없습니다 - pdfData: $pdfData"
                     Log.e(TAG, error)
                     _pdfLoadError.value = error
                     _isLoading.value = false
-                    _pdfReady.value = false
+                    return@launch
                 }
+
+                _pdfTitle.value = pdfData.fileName
+
+                // 2) 스트림을 바로 파일로 복사 (IO)
+                val original = withContext(Dispatchers.IO) {
+                    val f = File.createTempFile("group_pdf_$groupId", ".pdf", context.cacheDir)
+                    pdfData.inputStream.use { input ->
+                        f.outputStream().use { output -> input.copyTo(output) }
+                    }
+                    f
+                }
+                Log.d(TAG, "원본 PDF 저장 완료: ${original.absolutePath}")
+
+                // 3) OCR 있으면 PDF에 병합 (IO)
+                val finalFile = if (!pdfData.ocrResults.isNullOrEmpty()) {
+                    Log.d(TAG, "OCR 데이터 감지 → PDF에 텍스트 레이어 병합")
+                    val out = File.createTempFile("group_pdf_${groupId}_ocr", ".pdf", context.cacheDir)
+                    withContext(Dispatchers.IO) {
+                        val lines = pdfData.ocrResults!!.smartMergeToLines()
+                        PdfOcrMerger.merge(
+                            context = context,
+                            originalPdf = original,
+                            ocrLines = lines,
+                            outFile = out,
+                            fontAsset = "fonts/NotoSansCJK-Regular.ttf",
+                            baselineFactor = 0.00f,
+                            fontSize = 10f
+                        )
+                    }
+                    out
+                } else {
+                    original
+                }
+
+                // 4) UI 상태 갱신 (Main)
+                _pdfFile.value = finalFile
+                _isOcrEnabled.value = false // 이미 PDF에 텍스트가 들어감
+                _pdfReady.value = true
+                _isLoading.value = false
+                Log.d(TAG, "PDF 로드 완료")
+
             } catch (e: Exception) {
-                val error = "PDF 다운로드 중 오류가 발생했습니다: ${e.message}"
+                val error = "PDF 다운로드/병합 중 오류: ${e.message}"
                 Log.e(TAG, error, e)
                 _pdfLoadError.value = error
                 _isLoading.value = false
@@ -418,6 +431,8 @@ class PdfViewModel @Inject constructor(
             }
         }
     }
+
+
 
     // ========== PDF 뷰어 상태 관리 ==========
 

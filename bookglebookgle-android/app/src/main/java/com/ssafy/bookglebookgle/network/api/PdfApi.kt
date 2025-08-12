@@ -15,11 +15,13 @@ import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.Multipart
 import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Part
 import retrofit2.http.Path
+import retrofit2.http.Streaming
 
 interface PdfApi {
     /**
@@ -32,14 +34,18 @@ interface PdfApi {
     ): Response<Unit>
 
     /**
-     * 특정 그룹의 PDF 파일 목록 조회 API
+     * 특정 그룹의 PDF 파일 조회 API
      * @param groupId 그룹 ID
-     * @return PDF 파일 목록
+     * @param accept Content-Type 헤더 (application/zip으로 요청하면 OCR 포함)
+     * @return PDF 파일 또는 ZIP 파일 (PDF + OCR JSON)
      */
     @GET("group/{groupId}/pdf")
+    @Streaming
     suspend fun getGroupPdf(
-        @Path("groupId") groupId: Long
+        @Path("groupId") groupId: Long,
+        @Header("Accept") accept: String = "application/zip",
     ): Response<ResponseBody>
+
 //
 //    /**
 //    * 댓글 추가
