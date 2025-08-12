@@ -83,7 +83,7 @@ fun GroupDetailScreen(
         )
     }
 
-// 저장 결과 토스트/닫기
+    // 저장 결과 토스트/닫기
     LaunchedEffect(rateState) {
         when (rateState) {
             is RateMemberUiState.Success -> {
@@ -99,22 +99,24 @@ fun GroupDetailScreen(
         }
     }
 
-    val userInfoManager : UserInfoManager
-
-    // 컴포넌트가 처음 생성될 때 그룹 상세 정보 조회
-    LaunchedEffect(groupId, isMyGroup) {
+    LaunchedEffect(groupId) {
         viewModel.setInitialMyGroupState(isMyGroup)
         viewModel.getGroupDetail(groupId)
     }
 
+    val userInfoManager : UserInfoManager
+
     // 가입 성공 시 처리
+    // GroupDetailScreen.kt의 LaunchedEffect(joinGroupState) 부분을 다음과 같이 수정하세요
+
     LaunchedEffect(joinGroupState) {
         when (joinGroupState) {
             is JoinGroupUiState.Success -> {
                 Log.d("GroupDetailScreen", "그룹 가입 성공!")
                 Toast.makeText(context, "그룹에 성공적으로 가입했습니다!", Toast.LENGTH_SHORT).show()
-                // 성공 처리 후 상태 초기화
                 viewModel.resetJoinGroupState()
+                kotlinx.coroutines.delay(100)
+                viewModel.getGroupDetail(groupId)
             }
             is JoinGroupUiState.Error -> {
                 val errorMessage = (joinGroupState as JoinGroupUiState.Error).message
@@ -127,15 +129,16 @@ fun GroupDetailScreen(
                         "이미 가입된 모임입니다."
                     }
 
-                    // 그룹 정원 초과
+                    // 그룹 정원 초과 (여러 패턴 추가)
                     errorMessage.contains("그룹 정원이 초과되었습니다") ||
-                            errorMessage.contains("정원") -> {
+                            errorMessage.contains("정원이 초과") ||
+                            errorMessage.contains("정원") && errorMessage.contains("초과") -> {
                         "모임 정원이 가득 찼습니다."
                     }
 
                     // 평점 부족
                     errorMessage.contains("평점이 낮아") ||
-                            errorMessage.contains("평점") -> {
+                            errorMessage.contains("평점") && errorMessage.contains("참가할 수 없습니다") -> {
                         if (uiState is GroupDetailUiState.Success) {
                             val requiredRating = (uiState as GroupDetailUiState.Success).groupDetail.minRequiredRating
                             "평점이 부족해 가입할 수 없습니다.\n(최소 요구 평점: ${requiredRating}점)"
@@ -144,31 +147,35 @@ fun GroupDetailScreen(
                         }
                     }
 
-                    // 해당 그룹이 존재하지 않음 (404)
+                    // 가입 조건 불만족
+                    errorMessage.contains("가입 조건을 만족하지 않습니다") -> {
+                        "가입 조건을 만족하지 않습니다."
+                    }
+
+                    // 가입 요청 거부
+                    errorMessage.contains("가입 요청이 거부되었습니다") -> {
+                        "가입 요청이 거부되었습니다."
+                    }
+
+                    // 해당 그룹이 존재하지 않음
                     errorMessage.contains("해당 그룹이 존재하지 않습니다") ||
-                            errorMessage.contains("404") -> {
+                            errorMessage.contains("존재하지 않") -> {
                         "존재하지 않는 모임입니다."
                     }
 
-                    // 서버 오류 (500)
-                    errorMessage.contains("500") ||
-                            errorMessage.contains("서버 오류") -> {
+                    // 서버 오류
+                    errorMessage.contains("서버 오류") -> {
                         "서버 오류가 발생했습니다.\n잠시 후 다시 시도해주세요."
-                    }
-
-                    // 기타 400 에러
-                    errorMessage.contains("400") -> {
-                        "잘못된 요청입니다."
                     }
 
                     // 기본 에러 메시지
                     else -> {
-                        "모임 가입에 실패했습니다.\n다시 시도해주세요."
+                        errorMessage.ifBlank { "모임 가입에 실패했습니다.\n다시 시도해주세요." }
                     }
                 }
 
+                Log.d("GroupDetailScreen", "최종 토스트 메시지: $toastMessage")
                 Toast.makeText(context, toastMessage, Toast.LENGTH_LONG).show()
-                // 에러 처리 후 상태 초기화
                 viewModel.resetJoinGroupState()
             }
             else -> {}
@@ -565,6 +572,15 @@ fun ProgressStatusCard(
             .toInt().coerceIn(0, 100)
     }
 
+    // 이름 길이 제한 함수
+    fun truncateName(name: String): String {
+        return if (name.length > 4) {
+            name.take(3) + "..."
+        } else {
+            name
+        }
+    }
+
     val percents = members.map { percentOf(it) }
     val avg = if (percents.isNotEmpty()) percents.sum() / percents.size else 0
 
@@ -582,7 +598,7 @@ fun ProgressStatusCard(
 
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.spacedBy(ScreenSize.width * 0.04f, Alignment.Start)
         ) {
             members.forEach { m ->
                 val p = percentOf(m)
@@ -604,7 +620,7 @@ fun ProgressStatusCard(
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = m.userNickName,
+                        text = truncateName(m.userNickName),
                         fontSize = fontSize.sp,
                         color = Color.DarkGray,
                         maxLines = 1
