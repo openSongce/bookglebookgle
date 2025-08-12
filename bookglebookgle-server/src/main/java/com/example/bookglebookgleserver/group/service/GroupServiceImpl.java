@@ -13,6 +13,7 @@ import com.example.bookglebookgleserver.global.exception.NotFoundException;
 import com.example.bookglebookgleserver.group.dto.*;
 import com.example.bookglebookgleserver.group.entity.Group;
 import com.example.bookglebookgleserver.group.entity.GroupMember;
+import com.example.bookglebookgleserver.group.repository.GroupMemberRatingRepository;
 import com.example.bookglebookgleserver.group.repository.GroupMemberRepository;
 import com.example.bookglebookgleserver.group.repository.GroupRepository;
 import com.example.bookglebookgleserver.ocr.dto.OcrTextBlockDto;
@@ -55,6 +56,7 @@ public class GroupServiceImpl implements GroupService {
     private final ChatRoomRepository chatRoomRepository;
     private final ChatRoomMemberRepository chatRoomMemberRepository;
     private final GroupNotificationScheduler groupNotificationScheduler;
+    private final GroupMemberRatingRepository groupMemberRatingRepository;
 
     private static final TimeZone TZ = TimeZone.getTimeZone("Asia/Seoul");
 
@@ -210,6 +212,9 @@ public class GroupServiceImpl implements GroupService {
                 })
                 .collect(Collectors.toList());
     }
+
+
+
     @Transactional(readOnly = true)
     public GroupDetailResponse getGroupDetail(Long groupId, User requester) {
         Group group = groupRepository.findById(groupId)
@@ -218,16 +223,44 @@ public class GroupServiceImpl implements GroupService {
         int pageCount = resolvePageCount(group);
         boolean requesterIsHost = group.getHostUser().getId().equals(requester.getId());
 
-        // 한 쿼리로 DTO 바로 받아오기
-        List<GroupMemberDetailDto> members =
-                groupMemberRepository.findMemberDetailsByGroupId(groupId, pageCount);
+        // 기본 멤버 정보 + (기존 쿼리) 진도
+        List<GroupMemberDetailDto> baseMembers =
+                groupMemberRepository.findMemberDetailsByGroupId(groupId);
 
-        // 요청자 완독 여부
-        boolean requesterCompleted = members.stream()
-                .filter(m -> Objects.equals(m.userId(), requester.getId()))
-                .findFirst()
-                .map(GroupMemberDetailDto::isCompleted)
-                .orElse(false);
+        // 이 그룹에서 '평가를 1건이라도 남긴(from_member)'의 group_member.id 집합
+        Set<Long> raterMemberIds = groupMemberRatingRepository.findAllRaterMemberIdsByGroupId(groupId);
+
+        // userId -> memberId 매핑 (group_member_rating은 memberId 기준이라 필요)
+        List<GroupMember> gmEntities = groupMemberRepository.findByGroup_Id(groupId);
+        Map<Long, Long> userIdToMemberId = gmEntities.stream()
+                .collect(Collectors.toMap(gm -> gm.getUser().getId(), GroupMember::getId));
+
+        // 최종 DTO: ratingSubmitted 세팅 + 진행률 보정(0-based → +1)
+        List<GroupMemberDetailDto> members = baseMembers.stream().map(m -> {
+            Long memberId = userIdToMemberId.get(m.userId());
+            boolean ratingSubmitted = memberId != null && raterMemberIds.contains(memberId);
+
+            int progressPercent = m.progressPercent();
+            if (pageCount > 0) {
+                double ratio = ((double) (m.maxReadPage() + 1)) / pageCount;
+                progressPercent = (int) Math.round(Math.min(Math.max(ratio, 0.0), 1.0) * 100.0);
+            }
+
+            return new GroupMemberDetailDto(
+                    m.userId(),
+                    m.userNickName(),
+                    m.profileColor(),
+                    m.maxReadPage(),
+                    progressPercent,
+                    m.isHost(),
+                    /* 마지막 필드 이름이 바뀌었으면 여기 맞춰주세요 */
+                    ratingSubmitted // ← ratingSubmitted
+            );
+        }).toList();
+
+        // 전원 100% 진도면 완료
+        boolean allMemberCompleted = !members.isEmpty()
+                && members.stream().allMatch(mm -> mm.progressPercent() >= 100);
 
         String readableSchedule = cronToReadable(group.getSchedule());
 
@@ -243,9 +276,46 @@ public class GroupServiceImpl implements GroupService {
                 group.getMinRequiredRating(),
                 pageCount,
                 members,
-                requesterCompleted
+                allMemberCompleted
         );
     }
+
+//    @Transactional(readOnly = true)
+//    public GroupDetailResponse getGroupDetail(Long groupId, User requester) {
+//        Group group = groupRepository.findById(groupId)
+//                .orElseThrow(() -> new NotFoundException("해당 모임이 존재하지 않습니다."));
+//
+//        int pageCount = resolvePageCount(group);
+//        boolean requesterIsHost = group.getHostUser().getId().equals(requester.getId());
+//
+//        // 한 쿼리로 DTO 바로 받아오기
+//        List<GroupMemberDetailDto> members =
+//                groupMemberRepository.findMemberDetailsByGroupId(groupId, pageCount);
+//
+//        // 요청자 완독 여부
+//        boolean requesterCompleted = members.stream()
+//                .filter(m -> Objects.equals(m.userId(), requester.getId()))
+//                .findFirst()
+//                .map(GroupMemberDetailDto::isCompleted)
+//                .orElse(false);
+//
+//        String readableSchedule = cronToReadable(group.getSchedule());
+//
+//        return new GroupDetailResponse(
+//                group.getRoomTitle(),
+//                group.getCategory().name(),
+//                readableSchedule,
+//                members.size(),
+//                group.getGroupMaxNum(),
+//                group.getDescription(),
+//                null,
+//                requesterIsHost,
+//                group.getMinRequiredRating(),
+//                pageCount,
+//                members,
+//                requesterCompleted
+//        );
+//    }
 
 //    @Override
 //    @Transactional()
@@ -506,11 +576,21 @@ public class GroupServiceImpl implements GroupService {
         int pageCount = resolvePageCount(loaded);
         List<GroupMember> gmList = loaded.getGroupMembers();
 
+        // 이 그룹에서 '평가를 1건이라도 남긴(from_member)'의 group_member.id 집합
+        Set<Long> raterMemberIds = groupMemberRatingRepository.findAllRaterMemberIdsByGroupId(groupId);
+
+        // 멤버 DTO 구성 (0‑based 진행률 보정 + ratingSubmitted 세팅)
         List<GroupMemberDetailDto> members = gmList.stream().map(gm -> {
             var u = gm.getUser();
             int max = Math.max(0, gm.getMaxReadPage());
-            int progress = (pageCount > 0) ? (int) Math.round((max * 100.0) / pageCount) : 0;
-            boolean completed = pageCount > 0 && max >= pageCount;
+
+            int progress = 0;
+            if (pageCount > 0) {
+                double ratio = ((double) (max + 1)) / pageCount; // 0-based 보정
+                progress = (int) Math.round(Math.min(Math.max(ratio, 0.0), 1.0) * 100.0);
+            }
+
+            boolean ratingSubmitted = raterMemberIds.contains(gm.getId());
 
             return new GroupMemberDetailDto(
                     u.getId(),
@@ -519,14 +599,13 @@ public class GroupServiceImpl implements GroupService {
                     max,
                     progress,
                     gm.isHost(),
-                    completed
+                    ratingSubmitted
             );
         }).toList();
 
-        // 요청자 완독 여부 계산해서 응답에 포함 (getGroupDetail과 동일 정책)
-        boolean requesterCompleted = members.stream()
-                .anyMatch(m -> Objects.equals(m.userId(), user.getId()) && m.isCompleted());
-
+        // 그룹 전체 읽기 완료(전원 100%)
+        boolean allReadCompleted = !members.isEmpty()
+                && members.stream().allMatch(m -> m.progressPercent() >= 100);
 
         return new GroupDetailResponse(
                 loaded.getRoomTitle(),
@@ -540,7 +619,7 @@ public class GroupServiceImpl implements GroupService {
                 loaded.getMinRequiredRating(),
                 pageCount,
                 members,
-                requesterCompleted
+                allReadCompleted
         );
     }
 
