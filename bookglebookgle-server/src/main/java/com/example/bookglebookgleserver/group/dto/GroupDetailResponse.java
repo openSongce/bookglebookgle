@@ -30,7 +30,7 @@ public record GroupDetailResponse(
         @Schema(description = "멤버 상세 리스트")
         List<GroupMemberDetailDto> members,
 
-        @Schema(description = "완독 여부", example = "false")
-        boolean isCompleted
+        @Schema(description = "그룹의 모든 멤버 진도 100% 시 true", example = "false")
+        boolean  allMembersCompleted
 
 ) {}
