@@ -3,6 +3,7 @@ package com.ssafy.bookglebookgle.network.api
 import androidx.constraintlayout.widget.Group
 import com.ssafy.bookglebookgle.entity.GroupDetailResponse
 import com.ssafy.bookglebookgle.entity.GroupListResponse
+import com.ssafy.bookglebookgle.entity.GroupMemberProgress
 import com.ssafy.bookglebookgle.entity.MyGroupResponse
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
@@ -106,4 +107,9 @@ interface GroupApi {
         @Query("toId") toId: Long,
         @Query("score") score: Float
     ): retrofit2.Response<Unit>
+
+    @GET("group/{groupId}/members/progress")
+    suspend fun getGroupMembersProgress(
+        @Path("groupId") groupId: Long
+    ): Response<List<GroupMemberProgress>>
 }

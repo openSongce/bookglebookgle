@@ -4,6 +4,7 @@ import android.util.Log
 import com.ssafy.bookglebookgle.entity.GroupDetail
 import com.ssafy.bookglebookgle.entity.GroupDetailResponse
 import com.ssafy.bookglebookgle.entity.GroupListResponse
+import com.ssafy.bookglebookgle.entity.GroupMemberProgress
 import com.ssafy.bookglebookgle.entity.MyGroupResponse
 import com.ssafy.bookglebookgle.entity.toDomain
 import com.ssafy.bookglebookgle.network.api.GroupApi
@@ -318,6 +319,61 @@ class GroupRepositoryImpl @Inject constructor(
         } catch (e: Exception) {
             Log.e(TAG, "멤버 평점 등록 예외 - ${e.message}", e)
             throw Exception("멤버 평점 등록 중 오류가 발생했습니다: ${e.message}", e)
+        }
+    }
+
+    override suspend fun getGroupMembersProgress(groupId: Long): Response<List<GroupMemberProgress>> {
+        return try {
+            Log.d(TAG, "모임 멤버 진행 상황 조회 요청 시작 - groupId: $groupId")
+
+            val response = groupApi.getGroupMembersProgress(groupId)
+
+            if (response.isSuccessful) {
+                Log.d(TAG, "모임 멤버 진행 상황 조회 성공 - 응답코드: ${response.code()}")
+
+                val progressList = response.body()
+                if (progressList != null) {
+                    Log.d(TAG, "진행 상황 리스트 크기: ${progressList.size}")
+
+                    progressList.forEachIndexed { index, progress ->
+                        Log.d(TAG, "=== 멤버 $index 진행 상황 ===")
+                        Log.d(TAG, "userId: ${progress.userId}")
+                        Log.d(TAG, "userNickName: ${progress.userNickName}")
+                        Log.d(TAG, "maxReadPage: ${progress.maxReadPage}")
+                        Log.d(TAG, "progressPercent: ${progress.progressPercent}%")
+                        Log.d(TAG, "================================")
+                    }
+
+                    // 전체 평균 진행률 계산해서 로그
+                    val averageProgress = if (progressList.isNotEmpty()) {
+                        progressList.map { it.progressPercent }.average()
+                    } else 0.0
+                    Log.d(TAG, "전체 평균 진행률: $averageProgress%")
+
+                    // 완료한 멤버 수 (100% 완료한 멤버)
+                    val completedCount = progressList.count { it.progressPercent == 100 }
+                    Log.d(TAG, "완료한 멤버 수: $completedCount / ${progressList.size}")
+
+                    // 진행률별 분포
+                    Log.d(TAG, "=== 진행률 분포 ===")
+                    val sortedByProgress = progressList.sortedByDescending { it.progressPercent }
+                    sortedByProgress.forEach { progress ->
+                        Log.d(TAG, "${progress.userNickName}: ${progress.progressPercent}% (${progress.maxReadPage}페이지)")
+                    }
+
+                } else {
+                    Log.w(TAG, "응답 body가 null입니다")
+                }
+            } else {
+                val errorBody = response.errorBody()?.string()
+                Log.d(TAG, "모임 멤버 진행 상황 조회 실패 - 응답코드: ${response.code()}, 메시지: ${response.message()}")
+                Log.d(TAG, "서버 에러 메시지: $errorBody")
+            }
+
+            response
+        } catch (e: Exception) {
+            Log.e(TAG, "모임 멤버 진행 상황 조회 실패 - 네트워크 오류: ${e.message}")
+            throw Exception("모임 멤버 진행 상황 조회 중 오류가 발생했습니다: ${e.message}", e)
         }
     }
 
