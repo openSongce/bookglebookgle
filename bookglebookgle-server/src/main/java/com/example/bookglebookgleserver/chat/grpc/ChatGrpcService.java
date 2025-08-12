@@ -1,11 +1,8 @@
 package com.example.bookglebookgleserver.chat.grpc;
 
-import com.example.bookglebookgleserver.chat.ChatMessage;
+import com.example.bookglebookgleserver.chat.*;
 import com.bgbg.ai.grpc.AIServiceProto.ChatMessageResponse; // (AI 응답용 proto 메시지 import)
 import com.bgbg.ai.grpc.AIServiceProto.DiscussionInitResponse; // ★ 추가: 토론 시작 응답
-import com.example.bookglebookgleserver.chat.ChatServiceGrpc;
-import com.example.bookglebookgleserver.chat.QuizEnd;
-import com.example.bookglebookgleserver.chat.QuizQuestion;
 import com.example.bookglebookgleserver.chat.entity.ChatRoom;
 import com.example.bookglebookgleserver.chat.repository.ChatMessageRepository;
 import com.example.bookglebookgleserver.chat.repository.ChatRoomRepository;
@@ -410,6 +407,8 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
         private final ConcurrentHashMap<Long, Integer> correctCounts = new ConcurrentHashMap<>();
         // 현재 문제에서 중복 제출 방지
         private final Set<Long> answeredThisQuestion = ConcurrentHashMap.newKeySet();
+        // 현재 문제에서 유저별 선택 기록: userId -> selectedIndex
+        private final Map<Long, Integer> answersThisQuestion = new ConcurrentHashMap<>();
 
         QuizRunner(String quizId,
                    long groupId,
@@ -441,6 +440,7 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
             if (questionIndex != idx) return;             // 현재 문제에 대해서만 인정
             if (!answeredThisQuestion.add(userId)) return; // 중복제출 방지
 
+            answersThisQuestion.put(userId, selectedIndex);
             var item = items.get(questionIndex);
             if (selectedIndex == item.correctIdx()) {
                 correctCounts.merge(userId, 1, Integer::sum);
@@ -456,6 +456,7 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
                 future = scheduler.schedule(() -> {
                     // 다음 문제로 넘어가기 전에, 현재 문제에 대한 중복 제출 기록 초기화
                     answeredThisQuestion.clear();
+                    answersThisQuestion.clear();
 
                     int next = idx + 1;
                     if (next >= total) {
@@ -506,23 +507,49 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
 
             log.info("[QUIZ] Q{} 정답 공개: {}번 - {}", idx + 1, correctAnswer, it.options().get(correctAnswer));
 
-            ChatMessage reveal = ChatMessage.newBuilder()
+            // PerUserAnswer 리스트 구성
+            QuizReveal.Builder revealBuilder = QuizReveal.newBuilder()
+                    .setQuizId(quizId)
+                    .setQuestionIndex(idx)
+                    .setCorrectAnswerIndex(correctAnswer);
+
+            for (Map.Entry<Long, Integer> e : answersThisQuestion.entrySet()) {
+                long userId = e.getKey();
+                int selectedIndex = e.getValue();
+                boolean isCorrect = (selectedIndex == correctAnswer);
+
+                revealBuilder.addUserAnswers(
+                        PerUserAnswer.newBuilder()
+                                .setUserId(userId)
+                                .setSelectedIndex(selectedIndex)
+                                .setIsCorrect(isCorrect)
+                                .build()
+                );
+            }
+            ChatMessage revealMsg = ChatMessage.newBuilder()
                     .setGroupId(groupId)
                     .setType("QUIZ_REVEAL")
                     .setTimestamp(System.currentTimeMillis())
-                    .setContent("정답: " + correctAnswer) // content에도 정답 추가
-                    .setQuizQuestion(QuizQuestion.newBuilder()
-                            .setQuizId(quizId)
-                            .setQuestionIndex(idx)
-                            .setQuestionText(it.text())
-                            .addAllOptions(it.options())
-                            .setCorrectAnswerIndex(correctAnswer)
-                            .build())
+                    .setQuizReveal(revealBuilder.build())   // ✅ oneof: quiz_reveal
                     .build();
 
+//            ChatMessage reveal = ChatMessage.newBuilder()
+//                    .setGroupId(groupId)
+//                    .setType("QUIZ_REVEAL")
+//                    .setTimestamp(System.currentTimeMillis())
+//                    .setContent("정답: " + correctAnswer) // content에도 정답 추가
+//                    .setQuizQuestion(QuizQuestion.newBuilder()
+//                            .setQuizId(quizId)
+//                            .setQuestionIndex(idx)
+//                            .setQuestionText(it.text())
+//                            .addAllOptions(it.options())
+//                            .setCorrectAnswerIndex(correctAnswer)
+//                            .build())
+//                    .build();
+
             // 전송 전 최종 확인
-            log.info("[QUIZ] 전송할 정답: {}", reveal.getQuizQuestion().getCorrectAnswerIndex());
-            broadcaster.accept(reveal);
+            log.info("[QUIZ] 전송할 정답: {}", revealMsg.getQuizQuestion().getCorrectAnswerIndex());
+            broadcaster.accept(revealMsg);
         }
 
         // 최종 요약 브로드캐스트 (그대로 유지)
