@@ -3,6 +3,7 @@ package com.ssafy.bookglebookgle.repository
 import com.ssafy.bookglebookgle.entity.GroupDetail
 import com.ssafy.bookglebookgle.entity.GroupDetailResponse
 import com.ssafy.bookglebookgle.entity.GroupListResponse
+import com.ssafy.bookglebookgle.entity.GroupMemberProgress
 import com.ssafy.bookglebookgle.entity.MyGroupResponse
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
@@ -40,5 +41,7 @@ interface GroupRepository {
     suspend fun leaveGroup(groupId: Long): Response<ResponseBody>
 
     suspend fun rateMember(groupId: Long, toId: Long, score: Float): Response<Unit>
+
+    suspend fun getGroupMembersProgress(groupId: Long): Response<List<GroupMemberProgress>>
 
 }

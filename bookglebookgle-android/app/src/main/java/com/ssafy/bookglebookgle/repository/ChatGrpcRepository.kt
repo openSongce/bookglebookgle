@@ -233,7 +233,7 @@ class ChatGrpcRepository @Inject constructor(
             .setGroupId(currentGroupId)
             .setSenderId(currentUserId)
             .setSenderName(currentUserName)
-            .setContent("퀴즈를 종료합니다.")
+            .setContent(reason)
             .setTimestamp(System.currentTimeMillis())
             .setType("QUIZ_END")
             .setQuizEnd(quizEnd)

@@ -64,7 +64,11 @@ data class ChatRoomUiState(
     val quizSummary: QuizSummary? = null,
     val isQuizConnecting: Boolean = false,
     val userQuizAnswers: Map<Int, Int> = emptyMap(), // questionIndex -> selectedIndex
-)
+    // 진도율 관련 상태 추가
+    val averageProgress: Int = 0,
+    val isLoadingProgress: Boolean = false,
+    val progressError: String? = null,
+    )
 
 @HiltViewModel
 class ChatRoomViewModel @Inject constructor(
@@ -242,6 +246,11 @@ class ChatRoomViewModel @Inject constructor(
 
                 isInitialLoad = false
 
+                // STUDY 카테고리인 경우에만 진도율 조회
+                if (isStudyCategory) {
+                    loadGroupProgress()
+                }
+
                 //gRPC 연결
                 connectToGrpcChat(groupId, userId, actualUserName)
 
@@ -250,6 +259,93 @@ class ChatRoomViewModel @Inject constructor(
                     error = "채팅방 불러오기 실패: ${e.message}",
                     isLoading = false
                 )
+            }
+        }
+    }
+
+    // 퀴즈 시작 함수들 추가
+    @RequiresApi(Build.VERSION_CODES.O)
+    fun startMidtermQuiz() {
+        startQuizWithPhase(QuizPhase.MIDTERM, "중간 퀴즈")
+    }
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    fun startFinalQuiz() {
+        startQuizWithPhase(QuizPhase.FINAL, "최종 퀴즈")
+    }
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    private fun startQuizWithPhase(phase: QuizPhase, quizName: String) {
+        if (!_uiState.value.isHost) {
+            _uiState.value = _uiState.value.copy(
+                error = "$quizName 시작은 모임장만 가능합니다.",
+                isQuizConnecting = false
+            )
+            return
+        }
+
+        if (!_uiState.value.isStudyCategory) {
+            _uiState.value = _uiState.value.copy(
+                error = "학습 카테고리 채팅방에서만 퀴즈 기능을 사용할 수 있습니다.",
+                isQuizConnecting = false
+            )
+            return
+        }
+
+        if (!_uiState.value.grpcConnected) {
+            _uiState.value = _uiState.value.copy(
+                error = "실시간 채팅에 연결되지 않았습니다.",
+                isQuizConnecting = false
+            )
+            return
+        }
+
+        viewModelScope.launch {
+            try {
+                _uiState.value = _uiState.value.copy(
+                    isQuizConnecting = true,
+                    error = null
+                )
+
+                // 퀴즈 연결 타임아웃 타이머 시작
+                startQuizConnectionTimeout()
+
+                // 진도율에 따른 프로그레스 퍼센티지 설정
+                val progressPercentage = when (phase) {
+                    QuizPhase.MIDTERM -> 50
+                    QuizPhase.FINAL -> 100
+                    else -> _uiState.value.averageProgress
+                }
+
+                // 퀴즈 시작 요청
+                chatGrpcRepository.startQuiz(
+                    groupId = currentGroupId,
+                    meetingId = currentGroupId.toString(),
+                    documentId = currentGroupId.toString(),
+                    phase = phase,
+                    progressPercentage = progressPercentage
+                )
+
+            } catch (e: Exception) {
+                // 에러 발생 시 타임아웃 타이머 정지 및 로딩 해제
+                stopQuizConnectionTimeout()
+                _uiState.value = _uiState.value.copy(
+                    isQuizConnecting = false,
+                    error = "$quizName 시작 요청 실패: ${e.message}"
+                )
+
+                // 퀴즈 시작 실패 시스템 메시지 추가
+                val currentTime = System.currentTimeMillis()
+                val errorMessage = ChatMessage(
+                    messageId = currentTime,
+                    userId = -1,
+                    nickname = "시스템",
+                    profileImage = null,
+                    message = "$quizName 시작에 실패했습니다: ${e.message}",
+                    timestamp = DateTimeUtils.formatChatTime(currentTime.toString()),
+                    type = MessageType.QUIZ_END
+                )
+                addNewMessage(errorMessage)
             }
         }
     }
@@ -332,6 +428,58 @@ class ChatRoomViewModel @Inject constructor(
         }
     }
 
+    /**
+     * 모임 멤버들의 진도율 조회 및 평균 계산
+     */
+    private fun loadGroupProgress() {
+        if (currentGroupId == 0L) return
+
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoadingProgress = true, progressError = null)
+
+            try {
+                val response = groupRepositoryImpl.getGroupMembersProgress(currentGroupId)
+
+                if (response.isSuccessful) {
+                    val memberProgressList = response.body() ?: emptyList()
+
+                    if (memberProgressList.isNotEmpty()) {
+                        // 평균 진도율 계산
+                        val totalProgress = memberProgressList.sumOf { it.progressPercent }
+                        val averageProgress = totalProgress / memberProgressList.size
+
+                        Log.d(TAG, "모임 진도율 조회 성공 - 멤버수: ${memberProgressList.size}, 평균 진도율: $averageProgress%")
+
+                        _uiState.value = _uiState.value.copy(
+                            averageProgress = averageProgress,
+                            isLoadingProgress = false
+                        )
+                    } else {
+                        Log.d(TAG, "모임 멤버 진도율 데이터가 없음")
+                        _uiState.value = _uiState.value.copy(
+                            averageProgress = 0,
+                            isLoadingProgress = false
+                        )
+                    }
+                } else {
+                    val errorMsg = "진도율 조회 실패: ${response.message()}"
+                    Log.d(TAG, errorMsg)
+                    _uiState.value = _uiState.value.copy(
+                        isLoadingProgress = false,
+                        progressError = errorMsg
+                    )
+                }
+            } catch (e: Exception) {
+                val errorMsg = "진도율 조회 중 오류: ${e.message}"
+                Log.e(TAG, errorMsg, e)
+                _uiState.value = _uiState.value.copy(
+                    isLoadingProgress = false,
+                    progressError = errorMsg
+                )
+            }
+        }
+    }
+
     // gRPC 실시간 채팅 연결
     private fun connectToGrpcChat(groupId: Long, userId: Long, actualUserName: String) {
         viewModelScope.launch {
@@ -402,7 +550,8 @@ class ChatRoomViewModel @Inject constructor(
             suggestedTopics = aiMessage.suggestedTopics,
             showAiSuggestions = aiMessage.suggestedTopics.isNotEmpty(),
             // AI 응답이 오면 토론 중으로 자동 설정 (READING 카테고리인 경우)
-            isDiscussionActive = if (_uiState.value.isReadingCategory) true else _uiState.value.isDiscussionActive
+            isDiscussionActive = if (_uiState.value.isReadingCategory) true else _uiState.value.isDiscussionActive,
+            shouldScrollToBottom = true
         )
     }
 
@@ -427,7 +576,8 @@ class ChatRoomViewModel @Inject constructor(
             suggestedTopics = if (!isActive) emptyList() else _uiState.value.suggestedTopics,
 
             // 토론 종료 시 AI 타이핑 상태도 초기화
-            isAiTyping = if (!isActive) false else _uiState.value.isAiTyping
+            isAiTyping = if (!isActive) false else _uiState.value.isAiTyping,
+            shouldScrollToBottom = true
         )
 
         // 토론 종료 시 AI 타이핑도 명시적으로 정지
@@ -526,7 +676,6 @@ class ChatRoomViewModel @Inject constructor(
                 // 에러 발생 시 로딩 해제
                 _uiState.value = _uiState.value.copy(
                     isDiscussionConnecting = false,
-                    error = "토론 시작 실패: ${e.message}"
                 )
             }
         }
@@ -752,7 +901,9 @@ class ChatRoomViewModel @Inject constructor(
                     isAnswerSubmitted = false,
                     showQuizResult = false,
                     currentQuizReveal = null,
-                    quizSummary = null
+                    quizSummary = null,
+                    currentQuestion = null,
+                    shouldScrollToBottom = true
                 )
             }
 
@@ -766,7 +917,8 @@ class ChatRoomViewModel @Inject constructor(
                         quizTimeRemaining = question.timeoutSeconds,
                         showQuizResult = false,
                         currentQuizReveal = null,
-                        quizSummary = null
+                        quizSummary = null,
+                        shouldScrollToBottom = true
                     )
                     startQuizTimer(question.timeoutSeconds)
                 }
@@ -781,18 +933,11 @@ class ChatRoomViewModel @Inject constructor(
                         isAnswerSubmitted = false,
                         showQuizResult = true,
                         currentQuestion = null,
-                        quizSummary = null
+                        quizSummary = null,
+                        shouldScrollToBottom = true
                     )
                     stopQuizTimer()
 
-                    viewModelScope.launch {
-                        if (_uiState.value.showQuizResult && _uiState.value.currentQuizReveal?.quizId == reveal.quizId) {
-                            _uiState.value = _uiState.value.copy(
-                                showQuizResult = false,
-                                currentQuizReveal = null
-                            )
-                        }
-                    }
                 }
             }
             MessageType.QUIZ_ANSWER -> {
@@ -807,7 +952,8 @@ class ChatRoomViewModel @Inject constructor(
                         quizSummary = summary,
                         showQuizResult = false,
                         currentQuizReveal = null,
-                        currentQuestion = null
+                        currentQuestion = null,
+                        shouldScrollToBottom = true
                     )
                 }
             }
@@ -830,7 +976,8 @@ class ChatRoomViewModel @Inject constructor(
                         currentQuizReveal = null,
                         quizTimeRemaining = 0,
                         userQuizAnswers = emptyMap(),
-                        isQuizConnecting = false
+                        isQuizConnecting = false,
+                        shouldScrollToBottom = true
                     )
                     stopQuizTimer()
                 }
@@ -1001,7 +1148,7 @@ class ChatRoomViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
-                chatGrpcRepository.endQuiz("퀴즈를 종료합니다.")
+//                chatGrpcRepository.endQuiz("퀴즈 종료")
 
                 // 로컬 상태도 즉시 업데이트
                 _uiState.value = _uiState.value.copy(

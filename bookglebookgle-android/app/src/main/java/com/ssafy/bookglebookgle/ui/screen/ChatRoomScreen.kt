@@ -41,6 +41,8 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -105,6 +107,16 @@ fun ChatRoomScreen(
         }
     }
 
+    // 키보드 컨트롤러와 포커스 매니저 추가
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
+
+    // 키보드를 숨기는 함수
+    val hideKeyboard = {
+        keyboardController?.hide()
+        focusManager.clearFocus()
+    }
+
     // 화면 나갈 때 채팅방 나가기
     DisposableEffect(Unit) {
         onDispose {
@@ -116,6 +128,17 @@ fun ChatRoomScreen(
     LaunchedEffect(groupId) {
         viewModel.enterChatRoom(groupId, userId)
         viewModel.markChatAsRead()
+
+        // 메시지가 로드될 때까지 잠시 대기 후 스크롤
+        kotlinx.coroutines.delay(300)
+        if (uiState.chatMessages.isNotEmpty()) {
+            scope.launch {
+                listState.scrollToItem(uiState.chatMessages.size - 1)
+                previousMessageCount = uiState.chatMessages.size
+                showNewMessageButton = false
+                newMessageCount = 0
+            }
+        }
     }
 
     // 초기 로드 완료 시 맨 아래로 스크롤
@@ -261,6 +284,20 @@ fun ChatRoomScreen(
                 val newMessages = uiState.chatMessages.takeLast(newMessagesAdded)
                 val hasMyMessage = newMessages.any { viewModel.isMyMessage(it, userId) }
 
+                // 퀴즈/토론/AI 관련 중요 메시지인지 확인
+                val hasImportantMessage = newMessages.any { message ->
+                    message.type in listOf(
+                        MessageType.QUIZ_START,
+                        MessageType.QUIZ_QUESTION,
+                        MessageType.QUIZ_REVEAL,
+                        MessageType.QUIZ_SUMMARY,
+                        MessageType.QUIZ_END,
+                        MessageType.AI_RESPONSE,
+                        MessageType.DISCUSSION_START,
+                        MessageType.DISCUSSION_END
+                    )
+                }
+
                 // 새 메시지 도착 시 맨 아래 근처에 있으면 스크롤
                 scope.launch {
                     val lastVisibleItem = listState.layoutInfo.visibleItemsInfo.lastOrNull()
@@ -268,7 +305,7 @@ fun ChatRoomScreen(
                     val isNearBottom = lastVisibleItem?.index != null &&
                             (totalItems - lastVisibleItem.index) <= 3
 
-                    if (isNearBottom || hasMyMessage) {
+                    if (isNearBottom || hasMyMessage || hasImportantMessage) {
                         // 맨 아래 근처에 있으면 자동 스크롤
                         listState.animateScrollToItem(currentMessageCount - 1)
                         viewModel.markChatAsRead()
@@ -277,11 +314,43 @@ fun ChatRoomScreen(
                         newMessageCount = 0
                     } else {
                         // 위에 있으면 새 메시지 버튼 표시
-                        newMessageCount += newMessagesAdded
-                        showNewMessageButton = true
+                        if (!hasImportantMessage) {
+                            newMessageCount += newMessagesAdded
+                            showNewMessageButton = true
+                        } else {
+                            // 중요 메시지인 경우에도 강제 스크롤 (사용자가 위에 있어도)
+                            listState.animateScrollToItem(currentMessageCount - 1)
+                            viewModel.markChatAsRead()
+                            showNewMessageButton = false
+                            newMessageCount = 0
+                        }
                     }
                 }
                 previousMessageCount = currentMessageCount
+            }
+        }
+    }
+
+    LaunchedEffect(uiState.isQuizActive, uiState.currentQuestion) {
+        if (uiState.isQuizActive && uiState.currentQuestion != null && uiState.chatMessages.isNotEmpty()) {
+            scope.launch {
+                // 퀴즈 문제가 나올 때 자동으로 맨 아래로 스크롤
+                listState.animateScrollToItem(uiState.chatMessages.size - 1)
+                viewModel.markChatAsRead()
+                showNewMessageButton = false
+                newMessageCount = 0
+            }
+        }
+    }
+
+    LaunchedEffect(uiState.isDiscussionActive) {
+        if (uiState.chatMessages.isNotEmpty()) {
+            scope.launch {
+                // 토론 시작/종료 시 자동으로 맨 아래로 스크롤
+                listState.animateScrollToItem(uiState.chatMessages.size - 1)
+                viewModel.markChatAsRead()
+                showNewMessageButton = false
+                newMessageCount = 0
             }
         }
     }
@@ -305,6 +374,18 @@ fun ChatRoomScreen(
                         newMessageCount = 0
                     }
                 }
+            }
+        }
+    }
+
+    // 퀴즈 요약이 나타날 때 자동 스크롤
+    LaunchedEffect(uiState.quizSummary) {
+        if (uiState.quizSummary != null && uiState.chatMessages.isNotEmpty()) {
+            scope.launch {
+                listState.animateScrollToItem(uiState.chatMessages.size - 1)
+                viewModel.markChatAsRead()
+                showNewMessageButton = false
+                newMessageCount = 0
             }
         }
     }
@@ -393,6 +474,8 @@ fun ChatRoomScreen(
                         if (uiState.isHost) {
                             Button(
                                 onClick = {
+                                    // 키보드 숨기기
+                                    hideKeyboard()
                                     Log.d(TAG, "토론 버튼 클릭됨! 현재 상태: ${uiState.isDiscussionActive}")
                                     if (uiState.isDiscussionActive) {
                                         Log.d(TAG, "토론 종료 호출")
@@ -435,8 +518,14 @@ fun ChatRoomScreen(
                 isHost = uiState.isHost,
                 isQuizActive = uiState.isQuizActive,
                 isQuizConnecting = uiState.isQuizConnecting,
-                onStartQuiz = { viewModel.startQuiz() },
-                onEndQuiz = { viewModel.endQuiz() }
+                averageProgress = uiState.averageProgress,
+                isLoadingProgress = uiState.isLoadingProgress,
+                onStartMidtermQuiz = {hideKeyboard()
+                    viewModel.startMidtermQuiz() },
+                onStartFinalQuiz = { hideKeyboard()
+                    viewModel.startFinalQuiz() },
+                onEndQuiz = { hideKeyboard()
+                    viewModel.endQuiz() }
             )
 
             Box(
@@ -1270,7 +1359,7 @@ fun RegularMessageItem(
                         .background(MainColor.copy(alpha = 0.3f)),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (isQuizMessage) {
+                    if (isQuizMessage || message.nickname.isEmpty()) {
                         // 퀴즈 아이콘 표시
                         Icon(
                             painterResource(R.drawable.ic_quiz),
@@ -1362,7 +1451,10 @@ fun QuizControlPanel(
     isHost: Boolean,
     isQuizActive: Boolean,
     isQuizConnecting: Boolean,
-    onStartQuiz: () -> Unit,
+    averageProgress: Int,
+    isLoadingProgress: Boolean,
+    onStartMidtermQuiz: () ->Unit,
+    onStartFinalQuiz: () ->Unit,
     onEndQuiz: () -> Unit
 ) {
     if (isStudyCategory) {
@@ -1412,36 +1504,59 @@ fun QuizControlPanel(
                 }
 
                 // 퀴즈 시작/종료 버튼 (모임장만 볼 수 있음)
-                if (isHost) {
-                    Button(
-                        onClick = {
-                            if (isQuizActive) {
-                                onEndQuiz()
-                            } else {
-                                onStartQuiz()
-                            }
-                        },
-                        modifier = Modifier.height(32.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (isQuizActive) Color(0xFFE74C3C) else Color(
-                                0xFF2196F3
-                            )
-                        ),
-                        contentPadding = PaddingValues(horizontal = 12.dp),
-                        enabled = !isQuizConnecting
+                if (isHost && !isQuizActive) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = if (isQuizActive) Icons.Default.Close else Icons.Default.PlayArrow,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                            tint = Color.White
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = if (isQuizActive) "퀴즈 종료" else "퀴즈 시작",
-                            fontSize = 12.sp,
-                            color = Color.White
-                        )
+                        Button(
+                            onClick = onStartMidtermQuiz,
+                            modifier = Modifier.height(32.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isQuizActive) Color(0xFFE74C3C) else Color(
+                                    0xFF2196F3
+                                )
+                            ),
+                            contentPadding = PaddingValues(horizontal = 12.dp),
+                            enabled = !isQuizConnecting && averageProgress >= 50 && !isLoadingProgress
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PlayArrow,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = Color.White
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "중간 퀴즈",
+                                fontSize = 12.sp,
+                                color = Color.White
+                            )
+                        }
+                        Button(
+                            onClick = onStartFinalQuiz,
+                            modifier = Modifier.height(32.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isQuizActive) Color(0xFFE74C3C) else Color(
+                                    0xFF2196F3
+                                )
+                            ),
+                            contentPadding = PaddingValues(horizontal = 12.dp),
+                            enabled = !isQuizConnecting && averageProgress >= 100 && !isLoadingProgress
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PlayArrow,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = Color.White
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "최종 퀴즈",
+                                fontSize = 12.sp,
+                                color = Color.White
+                            )
+                        }
                     }
                 }
             }
@@ -1458,6 +1573,21 @@ fun QuizQuestionOverlay(
     onAnswerSelected: (Int) -> Unit,
     onSubmitAnswer: () -> Unit
 ) {
+    // 키보드 컨트롤러와 포커스 매니저 추가
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
+
+    // 키보드를 숨기는 함수
+    val hideKeyboard = {
+        keyboardController?.hide()
+        focusManager.clearFocus()
+    }
+
+    // 퀴즈 오버레이가 나타날 때 키보드 숨기기
+    LaunchedEffect(Unit) {
+        hideKeyboard()
+    }
+
     // 시간이 0이 되면 자동 제출
     LaunchedEffect(timeRemaining) {
         if (timeRemaining == 0 && selectedAnswerIndex != null && !isAnswerSubmitted) {
@@ -1847,15 +1977,60 @@ fun QuizSummaryOverlay(
 
                 Spacer(modifier = Modifier.height(20.dp))
 
-                // 순위별 결과
-                LazyColumn(
-                    modifier = Modifier.heightIn(max = 300.dp)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 100.dp, max = 300.dp), // 최소 높이 설정으로 일관성 확보
+                    contentAlignment = Alignment.Center // Box 내부 요소들을 중앙 정렬
                 ) {
-                    items(quizSummary.scores.sortedBy { it.rank }) { score ->
-                        QuizScoreItem(
-                            userScore = score,
-                            totalQuestions = quizSummary.totalQuestions,
-                            isCurrentUser = score.userId == currentUserId
+                    // 결과가 있는지 확인
+                    if (quizSummary.scores.isNotEmpty()) {
+                        // 랭킹이 제대로 설정되어 있는지 확인
+                        val hasValidRanking = quizSummary.scores.any { it.rank > 0 }
+
+                        if (hasValidRanking) {
+                            LazyColumn(
+                                modifier = Modifier.heightIn(max = 300.dp)
+                            ) {
+                                items(quizSummary.scores.sortedBy { it.rank }) { score ->
+                                    QuizScoreItem(
+                                        userScore = score,
+                                        totalQuestions = quizSummary.totalQuestions,
+                                        isCurrentUser = score.userId == currentUserId,
+                                        showRanking = true
+                                    )
+                                }
+                            }
+                        } else {
+                            // 랭킹이 없는 경우 - 참여자별 결과만 표시
+                            Text(
+                                text = "참여자별 결과",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color.Black,
+                                modifier = Modifier.padding(bottom = 12.dp)
+                            )
+
+                            LazyColumn(
+                                modifier = Modifier.heightIn(max = 300.dp)
+                            ) {
+                                items(quizSummary.scores.sortedBy { it.nickname }) { score ->
+                                    QuizScoreItem(
+                                        userScore = score,
+                                        totalQuestions = quizSummary.totalQuestions,
+                                        isCurrentUser = score.userId == currentUserId,
+                                        showRanking = false
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        // 결과가 아예 없는 경우
+                        Text(
+                            text = "참여한 사용자가 없습니다.",
+                            fontSize = 14.sp,
+                            color = Color.Gray,
+                            modifier = Modifier.padding(vertical = 20.dp)
                         )
                     }
                 }
@@ -1882,7 +2057,8 @@ fun QuizSummaryOverlay(
 fun QuizScoreItem(
     userScore: UserScore,
     totalQuestions: Int,
-    isCurrentUser: Boolean
+    isCurrentUser: Boolean,
+    showRanking: Boolean = true
 ) {
     Card(
         modifier = Modifier
@@ -1891,9 +2067,9 @@ fun QuizScoreItem(
         colors = CardDefaults.cardColors(
             containerColor = when {
                 isCurrentUser -> BaseColor.copy(alpha = 0.1f)
-                userScore.rank == 1 -> Color(0xFFFFD700).copy(alpha = 0.2f) // 금색
-                userScore.rank == 2 -> Color(0xFFC0C0C0).copy(alpha = 0.2f) // 은색
-                userScore.rank == 3 -> Color(0xFFCD7F32).copy(alpha = 0.2f) // 동색
+                showRanking && userScore.rank == 1 -> Color(0xFFFFD700).copy(alpha = 0.2f) // 금색
+                showRanking && userScore.rank == 2 -> Color(0xFFC0C0C0).copy(alpha = 0.2f) // 은색
+                showRanking && userScore.rank == 3 -> Color(0xFFCD7F32).copy(alpha = 0.2f) // 동색
                 else -> Color.Gray.copy(alpha = 0.05f)
             }
         )
@@ -1908,18 +2084,30 @@ fun QuizScoreItem(
             Row(
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // 순위 아이콘
-                val rankIcon = when (userScore.rank) {
-                    1 -> "🥇"
-                    2 -> "🥈"
-                    3 -> "🥉"
-                    else -> "${userScore.rank}"
-                }
+                if (showRanking && userScore.rank > 0) {
+                    // 순위 아이콘 (랭킹이 있는 경우에만)
+                    val rankIcon = when (userScore.rank) {
+                        1 -> "🥇"
+                        2 -> "🥈"
+                        3 -> "🥉"
+                        else -> "${userScore.rank}위"
+                    }
 
-                Text(
-                    text = rankIcon,
-                    fontSize = 16.sp
-                )
+                    Text(
+                        text = rankIcon,
+                        fontSize = 16.sp,
+                        modifier = Modifier.padding(end = 8.dp)
+                    )
+                } else {
+                    // 랭킹이 없는 경우 단순 불릿 포인트
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .background(BaseColor, CircleShape)
+                            .padding(end = 8.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                }
 
                 Spacer(modifier = Modifier.width(8.dp))
 
