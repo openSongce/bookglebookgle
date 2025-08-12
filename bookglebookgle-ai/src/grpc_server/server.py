@@ -91,7 +91,12 @@ class GRPCServer:
                 
                 ai_service_pb2_grpc.add_AIServiceServicer_to_server(ai_servicer, self.server)
                 
-                self.server.add_insecure_port(f"[::]:{self.settings.SERVER_PORT}")
+                # SERVER_HOST 설정에 따라 바인딩 주소 결정
+                bind_address = f"{self.settings.SERVER_HOST}:{self.settings.SERVER_PORT}"
+                if self.settings.SERVER_HOST == "0.0.0.0":
+                    bind_address = f"[::]:{self.settings.SERVER_PORT}"  # 모든 인터페이스
+                
+                self.server.add_insecure_port(bind_address)
                 await self.server.start()
                 
                 logger.info(f"✅ gRPC Server started successfully on port {self.settings.SERVER_PORT}")

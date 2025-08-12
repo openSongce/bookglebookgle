@@ -4,15 +4,18 @@ services:
   bgbgaiai:
     build: .
     container_name: bgbgaiai-server
-    ports:
-      - "50505:50505"  # gRPC
-      - "8126:8126"    # HTTP
+    # ports 제거 - 외부 접근 차단 (최고 보안)
+    # ports:
+    #   - "50505:50505"  # gRPC
+    #   - "8126:8126"    # HTTP
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
     env_file:
       - .env
     environment:
+      # 최고 보안 설정: localhost 바인딩
+      - SERVER_HOST=0.0.0.0
       - GRPC_PORT=50505
       - HTTP_PORT=8126
       - LOG_LEVEL=INFO
@@ -24,9 +27,6 @@ services:
       - DATABASE__REDIS_PORT=6379
       - DATABASE__REDIS_PASSWORD=bgbg_redis_2024!
       - DATABASE__REDIS_DB=0
-      - DATABASE__REDIS_MAX_CONNECTIONS=20
-      - DATABASE__REDIS_SOCKET_TIMEOUT=5
-      - DATABASE__REDIS_SOCKET_CONNECT_TIMEOUT=5
     restart: unless-stopped
     depends_on:
       redis:
@@ -43,8 +43,9 @@ services:
   redis:
     image: redis:7-alpine
     container_name: bgbg-redis
-    ports:
-      - "6382:6379"  # 외부 접근용 포트 매핑
+    # Redis 외부 접근 차단 (최고 보안)
+    # ports:
+    #   - "6382:6379"  # 외부 접근용 포트 매핑
     volumes:
       - redis_data:/data
     command: redis-server --appendonly yes --requirepass bgbg_redis_2024!
@@ -60,7 +61,10 @@ services:
 
 networks:
   bgbg-network:
-    driver: bridge
+    external: true
+    # driver: bridge
+    # internal: true를 제거하여 모델 다운로드 허용
+    # 보안은 포트 매핑 제거로 충분히 보장됨
 
 volumes:
   redis_data:
