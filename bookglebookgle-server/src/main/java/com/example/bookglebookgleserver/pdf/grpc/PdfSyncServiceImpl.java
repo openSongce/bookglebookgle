@@ -557,8 +557,8 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
 
                             // avatarKey (없으면 빈 문자열)
                             String resolvedAvatarKey =
-                                    (u != null && u.getAvatarKey() != null)
-                                            ? u.getAvatarKey()
+                                    (u != null && u.getProfileImageUrl() != null)
+                                            ? u.getProfileImageUrl()
                                             : "";
 
                             return Participant.newBuilder()
