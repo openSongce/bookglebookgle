@@ -45,13 +45,17 @@ select new com.example.bookglebookgleserver.group.dto.GroupMemberDetailDto(
   u.nickname,
   u.profileColor,
   coalesce(gm.maxReadPage, 0),
-  0,  -- 진행률은 서비스에서 계산/보정
+  0,
   gm.isHost,
-  exists (
-    select 1 from GroupMemberRating r
-    where r.group.id = gm.group.id
-      and r.fromMember.id = gm.id
-  )
+  case
+    when (
+      select count(r.id)
+      from GroupMemberRating r
+      where r.group.id = gm.group.id
+        and r.fromMember.id = gm.id
+    ) > 0
+    then true else false
+  end
 )
 from GroupMember gm
 join gm.user u
