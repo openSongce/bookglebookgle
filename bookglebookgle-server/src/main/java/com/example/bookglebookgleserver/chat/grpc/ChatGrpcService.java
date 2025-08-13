@@ -1,11 +1,12 @@
 package com.example.bookglebookgleserver.chat.grpc;
 
+import com.bgbg.ai.grpc.AIServiceProto.ChatMessageResponse;
+import com.bgbg.ai.grpc.AIServiceProto.DiscussionInitResponse;
 import com.example.bookglebookgleserver.chat.*;
-import com.bgbg.ai.grpc.AIServiceProto.ChatMessageResponse; // (AI 응답용 proto 메시지 import)
-import com.bgbg.ai.grpc.AIServiceProto.DiscussionInitResponse; // ★ 추가: 토론 시작 응답
 import com.example.bookglebookgleserver.chat.entity.ChatRoom;
 import com.example.bookglebookgleserver.chat.repository.ChatMessageRepository;
 import com.example.bookglebookgleserver.chat.repository.ChatRoomRepository;
+import com.example.bookglebookgleserver.fcm.service.FcmGroupService;
 import com.example.bookglebookgleserver.user.entity.User;
 import com.example.bookglebookgleserver.user.repository.UserRepository;
 import io.grpc.stub.StreamObserver;
@@ -16,17 +17,11 @@ import net.devh.boot.grpc.server.service.GrpcService;
 
 import java.time.Instant;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArraySet;
-
-import java.util.List;
-import java.util.ArrayList;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 @Slf4j
 @GrpcService
@@ -37,6 +32,7 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
     private final ChatRoomRepository chatRoomRepository;
     private final UserRepository userRepository;
     private final AiServiceClient aiServiceClient;
+    private final FcmGroupService fcmGroupService;
 
     // 채팅방별로 클라이언트 목록 관리
     private final ConcurrentHashMap<Long, Set<StreamObserver<ChatMessage>>> roomObservers = new ConcurrentHashMap<>();
@@ -230,6 +226,22 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
                 }
                 // 브로드캐스트
                 ChatGrpcService.this.broadcastToRoom(groupId, message);
+                try {
+                    // 바디 길이가 너무 길면 잘라 주는 게 UX에 좋아요(선택)
+                    String text = message.getContent();
+                    if (text != null && text.length() > 120) {
+                        text = text.substring(0, 117) + "...";
+                    }
+                    fcmGroupService.sendChat(
+                            groupId,
+                            sender.getId(),
+                            chatRoom.getGroupTitle(),      // title: 그룹명
+                            sender.getNickname(),     // body prefix: 발신자 닉네임
+                            text                      // body: "닉네임: 내용" 형태로 조립됨
+                    );
+                } catch (Exception pushEx) {
+                    log.warn("[gRPC-Chat] FCM 알림 전송 실패: {}", pushEx.getMessage());
+                }
             }
 
             @Override
