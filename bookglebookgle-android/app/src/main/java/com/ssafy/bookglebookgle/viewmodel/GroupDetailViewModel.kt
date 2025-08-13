@@ -105,6 +105,7 @@ class GroupDetailViewModel @Inject constructor(
         val userId: String,
         val nickname: String,
         val color: String?,
+        val imageUrl: String? = null,
         val isHost: Boolean,
         val maxReadPage1Based: Int // 0-based -> 1-based 변환
     )
@@ -115,6 +116,7 @@ class GroupDetailViewModel @Inject constructor(
                 userId = it.userId.toString(),
                 nickname = it.userNickName,     // 도메인 필드명이 다르면 여기를 맞춰주세요
                 color = it.profileColor,
+                imageUrl = it.photoUrl,
                 isHost = it.isHost,
                 maxReadPage1Based = (it.lastPageRead + 1).coerceAtLeast(0)
             )
