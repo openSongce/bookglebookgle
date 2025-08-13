@@ -39,6 +39,13 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 
+enum class ChatFilter(val displayName: String, val category: String?) {
+    ALL("전체", null),
+    READING("독서", "READING"),
+    REVIEW("첨삭", "REVIEW"),
+    STUDY("학습", "STUDY")
+}
+
 @Composable
 fun ChatListScreen(
     navController: NavHostController,
@@ -55,6 +62,11 @@ fun ChatListScreen(
         } else {
             uiState.chatList.filter { it.category == selectedCategory }
         }
+    }
+
+    // 현재 필터 상태
+    val currentFilter = remember(selectedCategory) {
+        ChatFilter.values().find { it.category == selectedCategory } ?: ChatFilter.ALL
     }
 
     LaunchedEffect(Unit) {
@@ -143,26 +155,27 @@ fun ChatListScreen(
                 }
 
                 else -> {
-                    // 선택된 카테고리 표시
+                    // 현재 필터 표시 (전체가 아닌 경우)
                     if (selectedCategory != null) {
-                        Row(
+                        Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(top = 8.dp, bottom = 4.dp, end = 24.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.End
+                                .padding(start = 16.dp)
                         ) {
-
-                            Text(
-                                text = "전체 보기",
-                                fontSize = 12.sp,
-                                color = Color(0xFF007AFF),
-                                modifier = Modifier.clickable {
-                                    selectedCategory = null
-                                }
-                            )
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = Color(0xFFEFE5D8),
+                                modifier = Modifier.wrapContentSize()
+                            ) {
+                                Text(
+                                    text = "${currentFilter.displayName} (${filteredChatList.size})",
+                                    color = Color.DarkGray,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                )
+                            }
                         }
-
                     }
 
                     // 채팅방 목록
@@ -197,89 +210,63 @@ fun ChatListScreen(
             }
         }
 
-        // 카테고리 필터 드롭다운
+        // 필터 드롭다운 (MyGroupScreen 스타일 적용)
         if (showCategoryFilter) {
-            CategoryFilterDropdown(
+            FilterDropdown(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(top = 56.dp, end = 16.dp)
-                    .zIndex(1f),
-                onCategorySelected = { category ->
-                    selectedCategory = category
+                    .padding(top = 52.dp, end = 16.dp)
+                    .zIndex(10f),
+                currentFilter = currentFilter,
+                onFilterSelected = { filter ->
+                    selectedCategory = filter.category
                     showCategoryFilter = false
                 },
-                onDismiss = { showCategoryFilter = false }
+                onDismiss = {
+                    showCategoryFilter = false
+                }
+            )
+        }
+
+        // 드롭다운이 열려있을 때 배경 클릭으로 닫기
+        if (showCategoryFilter) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.1f))
+                    .clickable {
+                        showCategoryFilter = false
+                    }
+                    .zIndex(5f)
             )
         }
     }
 }
 
 @Composable
-fun CategoryFilterDropdown(
+fun FilterDropdown(
     modifier: Modifier = Modifier,
-    onCategorySelected: (String?) -> Unit,
+    currentFilter: ChatFilter,
+    onFilterSelected: (ChatFilter) -> Unit,
     onDismiss: () -> Unit
 ) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .clickable(
-                indication = null, // 클릭 효과 제거
-                interactionSource = remember { MutableInteractionSource() }
-            ) {
-                onDismiss()
-            }
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(8.dp),
+        color = Color.White,
+        shadowElevation = 8.dp
     ) {
-        Card(
-            modifier = modifier.width(80.dp),
-            shape = RoundedCornerShape(8.dp),
-            colors = CardDefaults.cardColors(containerColor = MainColor),
-            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+        Column(
+            modifier = Modifier
+                .width(160.dp)
+                .padding(vertical = 8.dp)
         ) {
-            Column(
-                modifier = Modifier.padding(8.dp)
-            ) {
-                CategoryFilterItem(
-                    text = "전체",
+            ChatFilter.values().forEach { filter ->
+                FilterDropdownItem(
+                    filter = filter,
+                    isSelected = filter == currentFilter,
                     onClick = {
-                        onCategorySelected(null)
-                    }
-                )
-
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    thickness = 1.dp,
-                    color = Color.White
-                )
-
-                CategoryFilterItem(
-                    text = "독서",
-                    onClick = {
-                        onCategorySelected("READING")
-                    }
-                )
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    thickness = 1.dp,
-                    color = Color.White
-                )
-
-                CategoryFilterItem(
-                    text = "첨삭",
-                    onClick = {
-                        onCategorySelected("REVIEW")
-                    }
-                )
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    thickness = 1.dp,
-                    color = Color.White
-                )
-
-                CategoryFilterItem(
-                    text = "학습",
-                    onClick = {
-                        onCategorySelected("STUDY")
+                        onFilterSelected(filter)
                     }
                 )
             }
@@ -288,20 +275,27 @@ fun CategoryFilterDropdown(
 }
 
 @Composable
-fun CategoryFilterItem(
-    text: String,
+fun FilterDropdownItem(
+    filter: ChatFilter,
+    isSelected: Boolean,
     onClick: () -> Unit
 ) {
-    Text(
-        text = text,
-        fontSize = 14.sp,
-        textAlign = TextAlign.Center,
-        color = Color.Black,
+    Box(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() }
+            .background(
+                if (isSelected) Color(0xFFEFE5D8) else Color.Transparent
+            )
             .padding(horizontal = 16.dp, vertical = 12.dp)
-    )
+    ) {
+        Text(
+            text = filter.displayName,
+            fontSize = 14.sp,
+            color = if (isSelected) Color(0xFF8B4513) else Color.Black,
+            fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal
+        )
+    }
 }
 
 @Composable
