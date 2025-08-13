@@ -763,6 +763,18 @@ public class GroupServiceImpl implements GroupService {
     }
 
 
+    @Override
+    public List<CompletedBookDto> getCompletedBooks(Long userId) {
+        List<CompletedBookRow> rows = groupMemberRepository.findCompletedBooksByUserIdNative(userId);
+        return rows.stream()
+                .map(r -> new CompletedBookDto(
+                        r.getFileName(),
+                        Group.Category.valueOf(r.getCategory())  // 문자열 → Enum
+                ))
+                .toList();
+    }
+
+
 
 }
 

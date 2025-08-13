@@ -1,5 +1,7 @@
 package com.example.bookglebookgleserver.group.repository;
 
+import com.example.bookglebookgleserver.group.dto.CompletedBookDto;
+import com.example.bookglebookgleserver.group.dto.CompletedBookRow;
 import com.example.bookglebookgleserver.group.dto.GroupMemberDetailDto;
 import com.example.bookglebookgleserver.group.dto.GroupMemberProgressDto;
 import com.example.bookglebookgleserver.group.entity.Group;
@@ -95,9 +97,29 @@ order by u.id
 """)
     List<GroupMemberProgressDto> findAllMemberProgressByGroupId(@Param("groupId") Long groupId);
 
+    @Query(value = """
+        select pf.file_name as fileName,
+               g.category  as category
+        from group_member gm
+        join `group` g   on gm.group_id = g.group_id
+        join pdf_file pf on g.pdf_id   = pf.pdf_id
+        where gm.user_id = :userId
+          and gm.progress_percent >= 100
+          and g.is_deleted = false
+        group by pf.pdf_id, pf.file_name, g.category
+        """, nativeQuery = true)
+    List<CompletedBookRow> findCompletedBooksByUserIdNative(@Param("userId") Long userId);
+
+
+
+
+
+
 
     @Query("SELECT gm.id FROM GroupMember gm WHERE gm.user.id = :userId AND gm.group.id = :groupId")
     Optional<Long> findGroupMemberIdByUserIdAndGroupId(@Param("userId") Long userId, @Param("groupId") Long groupId);
+
+
 
 
 

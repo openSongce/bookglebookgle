@@ -44,6 +44,11 @@ public interface GroupService {
     void updateMemberMaxReadPage(Long groupId, Long userId, int newMaxReadPage);
 
     List<GroupMemberProgressDto> getGroupAllProgress(Long groupId, Long requesterId);
+
+    List<CompletedBookDto> getCompletedBooks(Long userId);
+
+
+
 }
 
 
