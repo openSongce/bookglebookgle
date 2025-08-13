@@ -359,7 +359,7 @@ fun MainScreen(navController: NavHostController, viewModel: MainViewModel = hilt
 fun RecommendGroupCard(
     group: GroupListResponse,
     width: Dp,
-    height: Dp,
+    height: Dp,                 // ← 이미지만의 높이로 사용
     rightMargin: Dp,
     dimensions: ResponsiveDimensions,
     onClick: () -> Unit
@@ -373,37 +373,40 @@ fun RecommendGroupCard(
         shape = RoundedCornerShape(dimensions.defaultCornerRadius)
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
+
+            // 🔹 TOP: 이미지 (가로폭 꽉 채움 + 살짝 더 커 보이게 Crop)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(dimensions.recommendCardImageHeight) // 고정 높이 사용
+                    .height(maxOf(height, dimensions.recommendCardImageHeight)) // 필요시 더 크게
+                    .clip(
+                        RoundedCornerShape(
+                            topStart = dimensions.defaultCornerRadius,
+                            topEnd = dimensions.defaultCornerRadius
+                        )
+                    )
             ) {
                 Image(
                     painter = painterResource(
                         id = when (group.category) {
                             "READING" -> R.drawable.main_reading
-                            "STUDY" -> R.drawable.main_studying
-                            "REVIEW" -> R.drawable.main_editing
-                            else -> R.drawable.main_reading
+                            "STUDY"   -> R.drawable.main_studying
+                            "REVIEW"  -> R.drawable.main_editing
+                            else      -> R.drawable.main_reading
                         }
                     ),
                     contentDescription = null,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clip(RoundedCornerShape(
-                            topStart = dimensions.defaultCornerRadius,
-                            topEnd = dimensions.defaultCornerRadius
-                        )),
-                    contentScale = ContentScale.Fit // 이미지 전체가 보이도록 변경
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop // ← 너비 꽉, 더 크게 보이게
                 )
 
-                // 인원수를 이미지 위 오른쪽 아래에 배치
+                // 🔸 인원수 배지 (이미지 오른쪽 아래)
                 Surface(
                     shape = RoundedCornerShape(dimensions.cornerRadiusSmall),
                     color = Color(0xFFf5ecdf),
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
-                        .padding(dimensions.spacingSmall)
+                        .padding(8.dp)
                 ) {
                     Text(
                         "${group.currentNum}/${group.groupMaxNum}명",
@@ -417,6 +420,7 @@ fun RecommendGroupCard(
                 }
             }
 
+            // 🔹 BOTTOM: 제목 + 설명 (이미지 아래)
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -425,7 +429,8 @@ fun RecommendGroupCard(
                 Text(
                     text = group.roomTitle,
                     fontWeight = FontWeight.Bold,
-                    fontSize = dimensions.textSizeSubtitle
+                    fontSize = dimensions.textSizeSubtitle,
+                    maxLines = 1
                 )
 
                 Spacer(modifier = Modifier.height(dimensions.spacingTiny))
@@ -440,6 +445,8 @@ fun RecommendGroupCard(
         }
     }
 }
+
+
 
 @Composable
 fun MeetingCard(
