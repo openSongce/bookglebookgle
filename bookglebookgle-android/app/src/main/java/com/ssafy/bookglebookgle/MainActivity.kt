@@ -94,7 +94,7 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        emitDeepLinkIntent(intent) // ⭐ 포그라운드 클릭 시 여기로 옴
+        emitDeepLinkIntent(intent) // 포그라운드 클릭 시 여기로 옴
     }
 
     private fun emitDeepLinkIntent(intent: Intent) {
