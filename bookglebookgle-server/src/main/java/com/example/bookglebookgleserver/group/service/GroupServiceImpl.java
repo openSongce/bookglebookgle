@@ -223,26 +223,12 @@ public class GroupServiceImpl implements GroupService {
         int pageCount = resolvePageCount(group);
         boolean requesterIsHost = group.getHostUser().getId().equals(requester.getId());
 
-        // 기본 멤버 정보 + (기존 쿼리) 진도
-        List<GroupMemberDetailDto> baseMembers =
-                groupMemberRepository.findMemberDetailsByGroupId(groupId);
+        // ✅ 쿼리에서 ratingSubmitted 까지 한번에 받음
+        List<GroupMemberDetailDto> base = groupMemberRepository.findMemberDetailsByGroupId(groupId);
 
-        // 이 그룹에서 '평가를 1건이라도 남긴(from_member)'의 group_member.id 집합
-        Set<Long> raterMemberIds = groupMemberRatingRepository.findAllRaterMemberIdsByGroupId(groupId);
-
-        // userId -> memberId 매핑 (group_member_rating은 memberId 기준이라 필요)
-        List<GroupMember> gmEntities = groupMemberRepository.findByGroup_Id(groupId);
-        Map<Long, Long> userIdToMemberId = gmEntities.stream()
-                .collect(Collectors.toMap(gm -> gm.getUser().getId(), GroupMember::getId));
-
-        // 최종 DTO: ratingSubmitted 세팅 + 진행률 보정(0-based → +1)
-        List<GroupMemberDetailDto> members = baseMembers.stream().map(m -> {
-            Long memberId = userIdToMemberId.get(m.userId());
-            boolean ratingSubmitted = memberId != null && raterMemberIds.contains(memberId);
-
-            int progressPercent = Math.max(0, Math.min(100, m.progressPercent()));
-
-
+        // 진행률은 서비스에서 보정(0‑based → +1)하되, ratingSubmitted는 그대로 사용
+        List<GroupMemberDetailDto> members = base.stream().map(m -> {
+            int progressPercent = calcProgressPercent(m.maxReadPage(), pageCount); // 이미 있는 유틸
             return new GroupMemberDetailDto(
                     m.userId(),
                     m.userNickName(),
@@ -250,14 +236,11 @@ public class GroupServiceImpl implements GroupService {
                     m.maxReadPage(),
                     progressPercent,
                     m.isHost(),
-                    /* 마지막 필드 이름이 바뀌었으면 여기 맞춰주세요 */
-                    ratingSubmitted // ← ratingSubmitted
+                    m.ratingSubmitted() // ← 쿼리에서 온 값 그대로
             );
         }).toList();
 
-        // 전원 100% 진도면 완료
-        boolean allMemberCompleted = !members.isEmpty()
-                && members.stream().allMatch(mm -> mm.progressPercent() >= 100);
+        boolean allMemberCompleted = !members.isEmpty() && members.stream().allMatch(mm -> mm.progressPercent() >= 100);
 
         String readableSchedule = cronToReadable(group.getSchedule());
 

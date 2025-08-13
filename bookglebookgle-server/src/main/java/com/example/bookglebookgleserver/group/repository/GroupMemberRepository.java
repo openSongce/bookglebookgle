@@ -45,14 +45,20 @@ select new com.example.bookglebookgleserver.group.dto.GroupMemberDetailDto(
   u.nickname,
   u.profileColor,
   coalesce(gm.maxReadPage, 0),
-  cast(round(coalesce(gm.progressPercent, 0)) as integer),
+  0,  -- 진행률은 서비스에서 계산/보정
   gm.isHost,
-  false
+  exists (
+    select 1 from GroupMemberRating r
+    where r.group.id = gm.group.id
+      and r.fromMember.id = gm.id
+  )
 )
-from GroupMember gm join gm.user u
+from GroupMember gm
+join gm.user u
 where gm.group.id = :groupId
 """)
     List<GroupMemberDetailDto> findMemberDetailsByGroupId(@Param("groupId") Long groupId);
+
 
     @Modifying
     @Query("""
