@@ -1637,14 +1637,13 @@ private fun AvatarBubble(
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .offset(x = 2.dp, y = (-8).dp) // 바깥으로 살짝
+                    .offset(x = (-22).dp, y = 5.dp) // 바깥으로 살짝
                     .clip(CircleShape)
-                    .background(Color(0xFFFFF8E1))
-                    .border(1.dp, Color(0xFFFFC107), CircleShape)
-                    .size(size * 0.38f),
+                    .background(Color.Transparent)
+                    .size(size * 0.5f),
                 contentAlignment = Alignment.Center
             ) {
-                Text("👑", fontSize = (size.value * 0.22f).sp)
+                Text("👑", fontSize = (size.value * 0.3f).sp)
             }
         }
     }

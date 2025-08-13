@@ -366,7 +366,7 @@ class ChatGrpcRepository @Inject constructor(
             messageId = grpcMessage.timestamp,
             userId = grpcMessage.senderId,
             nickname = grpcMessage.senderName,
-            profileImage = null,
+            profileImage = grpcMessage.avatarKey.takeIf { it.isNotBlank() },
             message = displayMessage,
             timestamp = formatTimestamp(grpcMessage.timestamp),
             type = messageType,
@@ -378,7 +378,8 @@ class ChatGrpcRepository @Inject constructor(
             quizAnswer = if (grpcMessage.hasQuizAnswer()) convertQuizAnswer(grpcMessage.quizAnswer) else null,
             quizReveal = if (grpcMessage.hasQuizReveal()) convertQuizReveal(grpcMessage.quizReveal) else null,
             quizSummary = if (grpcMessage.hasQuizSummary()) convertQuizSummary(grpcMessage.quizSummary) else null,
-            quizEnd = if (grpcMessage.hasQuizEnd()) convertQuizEnd(grpcMessage.quizEnd) else null
+            quizEnd = if (grpcMessage.hasQuizEnd()) convertQuizEnd(grpcMessage.quizEnd) else null,
+            avatarBgColor = grpcMessage.avatarBgColor.takeIf { it.isNotBlank() }
         )
     }
 
