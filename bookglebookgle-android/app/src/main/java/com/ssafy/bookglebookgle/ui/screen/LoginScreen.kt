@@ -1,5 +1,7 @@
+// ui/screen/LoginScreen.kt
 package com.ssafy.bookglebookgle.ui.screen
 
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.widget.Toast
 import androidx.compose.foundation.Image
@@ -14,7 +16,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -23,6 +24,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -52,7 +54,6 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
@@ -67,10 +68,8 @@ import kotlinx.coroutines.launch
 import androidx.credentials.*
 import com.google.android.libraries.identity.googleid.*
 import android.util.Log
-import androidx.compose.foundation.text.input.InputTransformation.Companion.keyboardOptions
 import androidx.compose.foundation.text.selection.LocalTextSelectionColors
 import androidx.compose.foundation.text.selection.TextSelectionColors
-import androidx.compose.material.icons.Icons
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -80,13 +79,23 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.unit.Dp
 import androidx.credentials.exceptions.GetCredentialException
 import com.kakao.sdk.user.UserApiClient
 import com.ssafy.bookglebookgle.BuildConfig
 import com.ssafy.bookglebookgle.ui.theme.BaseColor
 import com.ssafy.bookglebookgle.ui.theme.MainColor
+import com.ssafy.bookglebookgle.ui.theme.rememberResponsiveDimensions
+import com.ssafy.bookglebookgle.ui.theme.defaultButtonHeight
+import com.ssafy.bookglebookgle.ui.theme.defaultCornerRadius
+import com.ssafy.bookglebookgle.ui.theme.defaultIconSize
+import com.ssafy.bookglebookgle.ui.theme.defaultPadding
+import com.ssafy.bookglebookgle.ui.theme.socialButtonHeight
+import com.ssafy.bookglebookgle.ui.theme.socialButtonSpacing
+import com.ssafy.bookglebookgle.ui.theme.formSpacing
 
 
+@SuppressLint("UnusedBoxWithConstraintsScope")
 @Composable
 fun LoginScreen(navController: NavController, loginViewModel: LoginViewModel = hiltViewModel()) {
 
@@ -100,12 +109,12 @@ fun LoginScreen(navController: NavController, loginViewModel: LoginViewModel = h
     var passwordVisible by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
-
     val window = (LocalView.current.context as Activity).window
-
     val lifecycleOwner = LocalLifecycleOwner.current
-
     val clientId = BuildConfig.GOOGLE_CLIENT_ID
+
+    // 반응형 디멘션 가져오기
+    val dimensions = rememberResponsiveDimensions()
 
     SideEffect {
         WindowCompat.getInsetsController(window, window.decorView)?.isAppearanceLightStatusBars =
@@ -120,15 +129,12 @@ fun LoginScreen(navController: NavController, loginViewModel: LoginViewModel = h
                     popUpTo("login") { inclusive = true }
                 }
             }
-
             false -> {
-                loginViewModel.loginSuccess.value = null // 초기화
+                loginViewModel.loginSuccess.value = null
             }
-
             null -> {}
         }
     }
-
 
     // 에러 메세지 토스트
     LaunchedEffect(loginViewModel.errorMessage.value) {
@@ -137,7 +143,6 @@ fun LoginScreen(navController: NavController, loginViewModel: LoginViewModel = h
             loginViewModel.errorMessage.value = null
         }
     }
-
 
     //Google Login
     val startGoogleLogin = {
@@ -188,27 +193,28 @@ fun LoginScreen(navController: NavController, loginViewModel: LoginViewModel = h
         }
     }
 
-    // UI
+    // UI - 반응형 디자인 시스템 적용
     BoxWithConstraints(
-        modifier = Modifier.fillMaxSize()
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
     ) {
-        val maxW = maxWidth
-        val maxH = maxHeight
-
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = maxW * 0.08f)// 전체 가로 패딩을 화면의 8%로
+                .widthIn(
+                    max = if (dimensions.isTablet) dimensions.contentMaxWidth * 1.5f else Dp.Infinity
+                )
+                .fillMaxHeight()
+                .padding(horizontal = dimensions.defaultPadding) // 좌우 패딩 유지
                 .padding(WindowInsets.systemBars.asPaddingValues()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Spacer(modifier = Modifier.weight(1f))
 
-            // 로고 (원형 + 책 아이콘)
+            // 로고
             Surface(
                 shape = CircleShape,
                 color = Color(0xFFF5F0E6),
-                modifier = Modifier.size(maxW * 0.3f)
+                modifier = Modifier.size(dimensions.logoSize)
             ) {
                 Image(
                     painter = painterResource(id = R.drawable.login_logo),
@@ -221,23 +227,32 @@ fun LoginScreen(navController: NavController, loginViewModel: LoginViewModel = h
 
             Text(
                 text = "회원 서비스 이용을 위해\n로그인해주세요",
-                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
+                style = MaterialTheme.typography.bodyLarge.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontSize = dimensions.textSizeTitle
+                ),
                 textAlign = TextAlign.Center
             )
 
-            Spacer(modifier = Modifier.weight(0.5f))
+            Spacer(modifier = Modifier.height(dimensions.spacingLarge))
 
+            // 아이디 입력 필드
             CompositionLocalProvider(
                 LocalTextSelectionColors provides TextSelectionColors(
-                    handleColor = BaseColor, // 드래그 핸들(물방울) 색상
-                    backgroundColor = BaseColor.copy(alpha = 0.3f) // 선택 영역 배경색 (투명도 적용)
+                    handleColor = BaseColor,
+                    backgroundColor = BaseColor.copy(alpha = 0.3f)
                 )
             ) {
                 OutlinedTextField(
                     value = id,
                     onValueChange = { loginViewModel.id.value = it },
-                    placeholder = { Text("아이디를 입력해주세요.") },
-                    shape = RoundedCornerShape(maxW * 0.02f),
+                    placeholder = {
+                        Text(
+                            "아이디를 입력해주세요.",
+                            fontSize = dimensions.textSizeBody
+                        )
+                    },
+                    shape = RoundedCornerShape(dimensions.defaultCornerRadius),
                     modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(
@@ -249,24 +264,33 @@ fun LoginScreen(navController: NavController, loginViewModel: LoginViewModel = h
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = BaseColor,
                         cursorColor = BaseColor,
+                    ),
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(
+                        fontSize = dimensions.textSizeBody
                     )
                 )
             }
 
-            Spacer(modifier = Modifier.weight(0.25f))
+            Spacer(modifier = Modifier.height(dimensions.formSpacing))
 
+            // 비밀번호 입력 필드
             CompositionLocalProvider(
                 LocalTextSelectionColors provides TextSelectionColors(
-                    handleColor = BaseColor, // 드래그 핸들(물방울) 색상
-                    backgroundColor = BaseColor.copy(alpha = 0.3f) // 선택 영역 배경색 (투명도 적용)
+                    handleColor = BaseColor,
+                    backgroundColor = BaseColor.copy(alpha = 0.3f)
                 )
             ) {
                 OutlinedTextField(
                     value = password,
                     onValueChange = { loginViewModel.password.value = it },
-                    placeholder = { Text("비밀번호를 입력해주세요.") },
+                    placeholder = {
+                        Text(
+                            "비밀번호를 입력해주세요.",
+                            fontSize = dimensions.textSizeBody
+                        )
+                    },
                     visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                    shape = RoundedCornerShape(maxW * 0.02f),
+                    shape = RoundedCornerShape(dimensions.defaultCornerRadius),
                     modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(
@@ -276,8 +300,11 @@ fun LoginScreen(navController: NavController, loginViewModel: LoginViewModel = h
                         }
                     ),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = BaseColor, // 포커스 시 테두리 색상
+                        focusedBorderColor = BaseColor,
                         cursorColor = BaseColor
+                    ),
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(
+                        fontSize = dimensions.textSizeBody
                     ),
                     trailingIcon = {
                         IconButton(
@@ -286,46 +313,55 @@ fun LoginScreen(navController: NavController, loginViewModel: LoginViewModel = h
                             Icon(
                                 painterResource(if (passwordVisible) R.drawable.noneye else R.drawable.eye),
                                 contentDescription = if (passwordVisible) "비밀번호 숨기기" else "비밀번호 보이기",
-                                tint = Color(0xFF8D7E6E)
+                                tint = Color(0xFF8D7E6E),
+                                modifier = Modifier.size(dimensions.defaultIconSize)
                             )
                         }
                     }
                 )
             }
 
-            Spacer(modifier = Modifier.weight(0.25f))
+            Spacer(modifier = Modifier.height(dimensions.formSpacing))
 
             // 로그인 버튼
             Button(
-                onClick = {
-                    loginViewModel.login() },
+                onClick = { loginViewModel.login() },
                 colors = ButtonDefaults.buttonColors(
                     containerColor = if (id.isNotBlank() && password.isNotBlank())
                         Color(0xFFDED0BB) else Color(0xFFCCC7C0)
                 ),
                 enabled = id.isNotBlank() && password.isNotBlank(),
-                shape = RoundedCornerShape(maxW * 0.02f),
+                shape = RoundedCornerShape(dimensions.defaultCornerRadius),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(maxH * 0.06f)
+                    .height(dimensions.defaultButtonHeight)
             ) {
-                Text("로그인", color = Color.White)
+                Text(
+                    "로그인",
+                    color = Color.White,
+                    fontSize = dimensions.textSizeSubtitle,
+                    fontWeight = FontWeight.Medium
+                )
             }
 
-            Spacer(modifier = Modifier.weight(0.25f))
+            Spacer(modifier = Modifier.height(dimensions.spacingLarge))
 
-            OrDivider()
+            OrDivider(textSize = dimensions.textSizeBody)
+
+            Spacer(modifier = Modifier.height(dimensions.spacingSmall))
 
             // 카카오 & 구글 로그인 버튼
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(dimensions.socialButtonSpacing)
             ) {
+                // 카카오 로그인
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .aspectRatio(4.5f / 1.5f) // 너비:높이 비율
-                        .clip(RoundedCornerShape(maxW * 0.03f))
+                        .height(dimensions.socialButtonHeight)
+                        .clip(RoundedCornerShape(dimensions.defaultCornerRadius))
                         .background(Color(0xFFFEE500))
                         .clickable { startKakaoLogin() },
                     contentAlignment = Alignment.Center
@@ -337,21 +373,25 @@ fun LoginScreen(navController: NavController, loginViewModel: LoginViewModel = h
                         Image(
                             painter = painterResource(id = R.drawable.login_kakao),
                             contentDescription = null,
-                            modifier = Modifier.fillMaxHeight(0.5f)
+                            modifier = Modifier.size(dimensions.defaultIconSize)
                         )
-                        Spacer(modifier = Modifier.width(maxW * 0.02f))
-                        Text("시작하기", color = Color.Black, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.width(dimensions.spacingSmall))
+                        Text(
+                            "시작하기",
+                            color = Color.Black,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = dimensions.textSizeBody
+                        )
                     }
                 }
 
-                Spacer(modifier = Modifier.width(maxW * 0.04f))
-
+                // 구글 로그인
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .aspectRatio(4.5f / 1.5f)
-                        .clip(RoundedCornerShape(maxW * 0.03f))
-                        .border(1.dp, Color.Gray, shape = RoundedCornerShape(maxW * 0.03f))
+                        .height(dimensions.socialButtonHeight)
+                        .clip(RoundedCornerShape(dimensions.defaultCornerRadius))
+                        .border(1.dp, Color.Gray, shape = RoundedCornerShape(dimensions.defaultCornerRadius))
                         .clickable { startGoogleLogin() },
                     contentAlignment = Alignment.Center
                 ) {
@@ -362,42 +402,62 @@ fun LoginScreen(navController: NavController, loginViewModel: LoginViewModel = h
                         Image(
                             painter = painterResource(id = R.drawable.login_google),
                             contentDescription = null,
-                            modifier = Modifier.fillMaxHeight(0.5f)
+                            modifier = Modifier.size(dimensions.defaultIconSize)
                         )
-                        Spacer(modifier = Modifier.width(maxW * 0.02f))
-                        Text("시작하기", color = Color.Black, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.width(dimensions.spacingSmall))
+                        Text(
+                            "시작하기",
+                            color = Color.Black,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = dimensions.textSizeBody
+                        )
                     }
                 }
             }
 
+            Spacer(modifier = Modifier.height(dimensions.spacingMedium))
+
             TextButton(onClick = { /* 비밀번호 찾기 */ }) {
-                Text("비밀번호 찾기", color = Color(0xFFCCC7C0), fontSize = maxW.value.times(0.03).sp)
+                Text(
+                    "비밀번호 찾기",
+                    color = Color(0xFFCCC7C0),
+                    fontSize = dimensions.textSizeBody
+                )
             }
 
             Spacer(modifier = Modifier.weight(1f))
 
+            // 회원가입 버튼
             Button(
                 onClick = {
                     loginViewModel.clearFields()
-                    navController.navigate("register") },
+                    navController.navigate("register")
+                },
                 colors = ButtonDefaults.outlinedButtonColors(containerColor = Color(0xFFDED0BB)),
-                shape = RoundedCornerShape(maxW * 0.02f),
+                shape = RoundedCornerShape(dimensions.defaultCornerRadius),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(maxH * 0.06f)
+                    .height(dimensions.defaultButtonHeight)
             ) {
-                Text("회원가입", color = Color.White)
+                Text(
+                    "회원가입",
+                    color = Color.White,
+                    fontSize = dimensions.textSizeSubtitle,
+                    fontWeight = FontWeight.Medium
+                )
             }
 
             Spacer(modifier = Modifier.weight(0.5f))
         }
     }
-
-
 }
 
 @Composable
-fun OrDivider(modifier: Modifier = Modifier, text: String = "또는") {
+fun OrDivider(
+    modifier: Modifier = Modifier,
+    text: String = "또는",
+    textSize: androidx.compose.ui.unit.TextUnit
+) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
@@ -408,7 +468,7 @@ fun OrDivider(modifier: Modifier = Modifier, text: String = "또는") {
         Text(
             text = "  $text  ",
             color = Color.Gray,
-            style = MaterialTheme.typography.bodyMedium
+            style = MaterialTheme.typography.bodyMedium.copy(fontSize = textSize)
         )
         HorizontalDivider(modifier = Modifier.weight(1f), color = Color.Gray)
     }

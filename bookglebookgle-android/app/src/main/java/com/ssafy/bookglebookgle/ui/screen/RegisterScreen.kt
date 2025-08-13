@@ -1,5 +1,6 @@
 package com.ssafy.bookglebookgle.ui.screen
 
+import android.annotation.SuppressLint
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,19 +26,22 @@ import androidx.navigation.NavController
 import com.ssafy.bookglebookgle.R
 import com.ssafy.bookglebookgle.entity.RegisterStep
 import com.ssafy.bookglebookgle.ui.theme.BaseColor
+import com.ssafy.bookglebookgle.ui.theme.*
 import com.ssafy.bookglebookgle.viewmodel.RegisterViewModel
 
-
-
+@SuppressLint("UnusedBoxWithConstraintsScope")
 @Composable
 fun RegisterScreen(navController: NavController, registerViewModel: RegisterViewModel = hiltViewModel()) {
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
 
+    // 반응형 디멘션 사용
+    val dimensions = rememberResponsiveDimensions()
+
     LaunchedEffect(registerViewModel.registerSuccess) {
         if (registerViewModel.registerSuccess) {
             navController.navigate("main") {
-                popUpTo("register") { inclusive = true } // 뒤로가기 시 회원가입 화면 안 보이게
+                popUpTo("register") { inclusive = true }
             }
         }
     }
@@ -47,62 +51,78 @@ fun RegisterScreen(navController: NavController, registerViewModel: RegisterView
             navController.navigate("login") {
                 popUpTo("register") { inclusive = true }
             }
-            registerViewModel.resetLoginFailed() // 여기서 다시 false로 바꾸기
+            registerViewModel.resetLoginFailed()
         }
     }
 
-
-    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        val maxW = maxWidth
-        val maxH = maxHeight
-        val innerPadding = maxW * 0.02f
-
+    BoxWithConstraints(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = maxW * 0.08f)
+                .widthIn(
+                    max = if (dimensions.isTablet) dimensions.contentMaxWidth * 1.5f else Dp.Infinity
+                )
+                .fillMaxHeight()
+                .padding(horizontal = dimensions.defaultPadding) // 좌우 패딩 유지
                 .padding(WindowInsets.systemBars.asPaddingValues()),
             horizontalAlignment = Alignment.Start
         ) {
-            Spacer(modifier = Modifier.height(maxH * 0.05f))
+            Spacer(modifier = Modifier.height(dimensions.spacingExtraLarge))
+            Spacer(modifier = Modifier.height(dimensions.spacingExtraLarge))
 
+            // 타이틀
+            Text(
+                "북글북글에서 사용할",
+                fontWeight = FontWeight.Bold,
+                fontSize = dimensions.textSizeHeadline
+            )
+            Spacer(modifier = Modifier.height(dimensions.spacingTiny))
+            Text(
+                "개인 정보를 입력해주세요.",
+                fontWeight = FontWeight.Bold,
+                fontSize = dimensions.textSizeHeadline
+            )
+            Spacer(modifier = Modifier.height(dimensions.spacingSmall))
 
-            Spacer(modifier = Modifier.height(maxH * 0.05f))
-            Text("북글북글에서 사용할", fontWeight = FontWeight.Bold, fontSize = (maxW * 0.06f).value.sp)
-            Spacer(modifier = Modifier.height(maxH * 0.008f))
-            Text("개인 정보를 입력해주세요.", fontWeight = FontWeight.Bold, fontSize = (maxW * 0.06f).value.sp)
-            Spacer(modifier = Modifier.height(maxH * 0.01f))
-
+            // 설명 텍스트
             Text(
                 text = when (registerViewModel.step) {
                     RegisterStep.EMAIL -> "*입력한 이메일로 인증코드가 발송됩니다."
                     RegisterStep.DETAILS -> "닉네임은 공백없이 12자 이하\n기호는 _ - 만 사용 가능합니다."
                 },
                 color = Color.Gray,
-                fontSize = (maxW * 0.032f).value.sp,
-                modifier = Modifier.padding(start = maxW * 0.01f)
+                fontSize = dimensions.textSizeCaption,
+                modifier = Modifier.padding(start = dimensions.spacingTiny)
             )
 
-            Spacer(modifier = Modifier.height(maxH * 0.05f))
+            Spacer(modifier = Modifier.height(dimensions.spacingExtraLarge))
 
+            // 이메일 단계
             if (registerViewModel.step == RegisterStep.EMAIL) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(Color(0xFFF1F3F5), RoundedCornerShape(maxW * 0.02f))
-                        .padding(vertical = maxH * 0.005f)
-                        .padding(end = maxW * 0.03f),
+                        .background(Color(0xFFF1F3F5), RoundedCornerShape(dimensions.defaultCornerRadius))
+                        .padding(vertical = dimensions.spacingSmall)
+                        .padding(end = dimensions.spacingMedium),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     OutlinedTextField(
                         value = registerViewModel.email,
                         onValueChange = registerViewModel::onEmailChange,
-                        placeholder = { Text("이메일을 입력해주세요.") },
+                        placeholder = {
+                            Text(
+                                "이메일을 입력해주세요.",
+                                fontSize = dimensions.textSizeBody
+                            )
+                        },
                         modifier = Modifier
                             .weight(1f)
-                            .padding(start = innerPadding)
+                            .padding(start = dimensions.spacingSmall)
                             .background(Color.Transparent),
-                        shape = RoundedCornerShape(maxW * 0.02f),
+                        shape = RoundedCornerShape(dimensions.defaultCornerRadius),
                         colors = OutlinedTextFieldDefaults.colors(
                             unfocusedBorderColor = Color.Transparent,
                             focusedBorderColor = Color.Transparent,
@@ -116,13 +136,20 @@ fun RegisterScreen(navController: NavController, registerViewModel: RegisterView
                         keyboardActions = KeyboardActions(
                             onDone = {
                                 focusManager.clearFocus()
-                                keyboardController?.hide()  // 👈 키보드 내려감
+                                keyboardController?.hide()
                             }
                         ),
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(
+                            fontSize = dimensions.textSizeBody
+                        )
                     )
+
+                    // 중복 확인 버튼
                     Box(
                         modifier = Modifier
-                            .clickable(enabled = isValidEmail(registerViewModel.email) && registerViewModel.isRequestButtonEnabled) {
+                            .clickable(
+                                enabled = isValidEmail(registerViewModel.email) && registerViewModel.isRequestButtonEnabled
+                            ) {
                                 keyboardController?.hide()
                                 registerViewModel.onRequestAuthCode()
                             }
@@ -130,54 +157,71 @@ fun RegisterScreen(navController: NavController, registerViewModel: RegisterView
                             .background(
                                 if (isValidEmail(registerViewModel.email) && registerViewModel.isRequestButtonEnabled)
                                     Color(0xFFADB5BD) else Color(0xFFDEE2E6),
-                                RoundedCornerShape(maxW * 0.015f)
+                                RoundedCornerShape(dimensions.cornerRadiusSmall)
                             )
-                            .padding(horizontal = maxW * 0.03f, vertical = maxH * 0.01f),
+                            .padding(
+                                horizontal = dimensions.spacingMedium,
+                                vertical = dimensions.spacingSmall
+                            ),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text("중복 확인", color = Color.White, fontSize = (maxW * 0.03f).value.sp)
+                        Text(
+                            "중복 확인",
+                            color = Color.White,
+                            fontSize = dimensions.textSizeCaption
+                        )
                     }
-
                 }
 
-                Spacer(modifier = Modifier.height(maxH * 0.025f))
+                Spacer(modifier = Modifier.height(dimensions.spacingLarge))
 
-
+                // 인증 코드 입력 필드
                 if (registerViewModel.isAuthFieldVisible) {
                     CustomInputField(
-                        "인증 코드를 입력해주세요.",
-                        maxW,
+                        hint = "인증 코드를 입력해주세요.",
                         value = registerViewModel.authCode,
-                        onValueChange = registerViewModel::onAuthCodeChange
+                        onValueChange = registerViewModel::onAuthCodeChange,
+                        dimensions = dimensions
                     )
-                    Spacer(modifier = Modifier.height(maxH * 0.025f))
+                    Spacer(modifier = Modifier.height(dimensions.spacingLarge))
                 }
             } else {
+                // 개인정보 입력 단계
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     CompositionLocalProvider(
                         LocalTextSelectionColors provides TextSelectionColors(
-                            handleColor = BaseColor, // 드래그 핸들(물방울) 색상
-                            backgroundColor = BaseColor.copy(alpha = 0.3f) // 선택 영역 배경색 (투명도 적용)
+                            handleColor = BaseColor,
+                            backgroundColor = BaseColor.copy(alpha = 0.3f)
                         )
                     ) {
                         OutlinedTextField(
                             value = registerViewModel.nickname,
                             onValueChange = registerViewModel::onNicknameChange,
                             modifier = Modifier.weight(1f),
-                            placeholder = { Text("닉네임") },
+                            placeholder = {
+                                Text(
+                                    "닉네임",
+                                    fontSize = dimensions.textSizeBody
+                                )
+                            },
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = BaseColor, // 포커스 시 테두리 색상
+                                focusedBorderColor = BaseColor,
                                 cursorColor = BaseColor
                             ),
-                            enabled = !registerViewModel.isNicknameValid
+                            enabled = !registerViewModel.isNicknameValid,
+                            shape = RoundedCornerShape(dimensions.defaultCornerRadius),
+                            textStyle = MaterialTheme.typography.bodyMedium.copy(
+                                fontSize = dimensions.textSizeBody
+                            )
                         )
                     }
 
-                    Spacer(modifier = Modifier.width(maxW * 0.02f))
+                    Spacer(modifier = Modifier.width(dimensions.spacingSmall))
 
+                    // 닉네임 중복 확인 버튼
                     Box(
                         modifier = Modifier
                             .clickable(
@@ -190,28 +234,45 @@ fun RegisterScreen(navController: NavController, registerViewModel: RegisterView
                             }
                             .background(
                                 when {
-                                    registerViewModel.isNicknameValid -> Color(0xFF51CF66) // 초록
+                                    registerViewModel.isNicknameValid -> Color(0xFF51CF66)
                                     registerViewModel.nickname.isNotBlank() -> Color(0xFFADB5BD)
                                     else -> Color(0xFFDEE2E6)
                                 },
-                                RoundedCornerShape(maxW * 0.015f)
+                                RoundedCornerShape(dimensions.cornerRadiusSmall)
                             )
-                            .padding(horizontal = maxW * 0.03f, vertical = maxH * 0.01f),
+                            .padding(
+                                horizontal = dimensions.spacingMedium,
+                                vertical = dimensions.spacingSmall
+                            ),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = if (registerViewModel.isNicknameValid) "사용 가능" else "중복 확인",
                             color = Color.White,
-                            fontSize = (maxW * 0.03f).value.sp
+                            fontSize = dimensions.textSizeCaption
                         )
                     }
                 }
 
+                Spacer(modifier = Modifier.height(dimensions.formSpacing))
 
-                Spacer(modifier = Modifier.height(maxH * 0.015f))
-                CustomInputField("비밀번호", maxW, registerViewModel.password, onValueChange = registerViewModel::onPasswordChange, isPassword = true)
-                Spacer(modifier = Modifier.height(maxH * 0.015f))
-                CustomInputField("비밀번호 확인", maxW, registerViewModel.confirmPassword, onValueChange = registerViewModel::onConfirmPasswordChange, isPassword = true)
+                CustomInputField(
+                    hint = "비밀번호",
+                    value = registerViewModel.password,
+                    onValueChange = registerViewModel::onPasswordChange,
+                    isPassword = true,
+                    dimensions = dimensions
+                )
+
+                Spacer(modifier = Modifier.height(dimensions.formSpacing))
+
+                CustomInputField(
+                    hint = "비밀번호 확인",
+                    value = registerViewModel.confirmPassword,
+                    onValueChange = registerViewModel::onConfirmPasswordChange,
+                    isPassword = true,
+                    dimensions = dimensions
+                )
             }
 
             // 에러 메시지
@@ -219,32 +280,41 @@ fun RegisterScreen(navController: NavController, registerViewModel: RegisterView
                 Text(
                     text = it,
                     color = Color.Red,
-                    fontSize = (maxW * 0.03f).value.sp,
-                    modifier = Modifier.padding(top = maxH * 0.01f).padding(start = maxW * 0.01f)
+                    fontSize = dimensions.textSizeCaption,
+                    modifier = Modifier
+                        .padding(top = dimensions.spacingSmall)
+                        .padding(start = dimensions.spacingTiny)
                 )
             }
 
             Spacer(modifier = Modifier.weight(1f))
 
+            // 다음/회원가입 버튼
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(maxH * 0.065f)
-                    .background(Color(0xFFDED0BB), RoundedCornerShape(maxW * 0.02f))
+                    .height(dimensions.defaultButtonHeight)
+                    .background(Color(0xFFDED0BB), RoundedCornerShape(dimensions.defaultCornerRadius))
                     .clickable { registerViewModel.onNextOrSubmit() },
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = if (registerViewModel.step == RegisterStep.EMAIL) "다음" else "회원가입",
                     color = Color.White,
-                    fontSize = (maxW * 0.04f).value.sp
+                    fontSize = dimensions.textSizeSubtitle,
+                    fontWeight = FontWeight.Medium
                 )
             }
 
-            Spacer(modifier = Modifier.height(maxH * 0.005f))
+            Spacer(modifier = Modifier.height(dimensions.spacingTiny))
 
+            // 로그인 링크
             TextButton(onClick = { navController.popBackStack() }) {
-                Text("이미 계정이 있으신가요? 로그인", color = Color.Gray, fontSize = (maxW * 0.03f).value.sp)
+                Text(
+                    "이미 계정이 있으신가요? 로그인",
+                    color = Color.Gray,
+                    fontSize = dimensions.textSizeCaption
+                )
             }
         }
     }
@@ -257,52 +327,69 @@ fun isValidEmail(email: String): Boolean {
 @Composable
 fun CustomInputField(
     hint: String,
-    maxW: Dp,
     value: String,
     onValueChange: (String) -> Unit,
-    isPassword: Boolean = false
+    isPassword: Boolean = false,
+    dimensions: ResponsiveDimensions
 ) {
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
     var passwordVisible by remember { mutableStateOf(false) }
 
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        placeholder = { Text(hint) },
-        shape = RoundedCornerShape(maxW * 0.02f),
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Color(0xFFF1F3F5), RoundedCornerShape(maxW * 0.02f)),
-        colors = OutlinedTextFieldDefaults.colors(
-            unfocusedBorderColor = Color.Transparent,
-            focusedBorderColor = Color.Transparent,
-            unfocusedContainerColor = Color.Transparent,
-            focusedContainerColor = Color.Transparent,
-            cursorColor = BaseColor
-        ),
-        visualTransformation = if (isPassword && !passwordVisible) PasswordVisualTransformation() else VisualTransformation.None,
-        keyboardOptions = if (isPassword) KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done)
-        else KeyboardOptions(imeAction = ImeAction.Done),
-        keyboardActions = KeyboardActions(
-            onDone = {
-                focusManager.clearFocus()
-                keyboardController?.hide()
-            }
-        ),
-        trailingIcon = if (isPassword) {
-            {
-                IconButton(
-                    onClick = { passwordVisible = !passwordVisible }
-                ) {
-                    Icon(
-                        painterResource(if (passwordVisible) R.drawable.noneye else R.drawable.eye),
-                        contentDescription = if (passwordVisible) "비밀번호 숨기기" else "비밀번호 보이기",
-                        tint = Color(0xFF8D7E6E)
-                    )
+    CompositionLocalProvider(
+        LocalTextSelectionColors provides TextSelectionColors(
+            handleColor = BaseColor,
+            backgroundColor = BaseColor.copy(alpha = 0.3f)
+        )
+    ) {
+        OutlinedTextField(
+            value = value,
+            onValueChange = onValueChange,
+            placeholder = {
+                Text(
+                    hint,
+                    fontSize = dimensions.textSizeBody
+                )
+            },
+            shape = RoundedCornerShape(dimensions.defaultCornerRadius),
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color(0xFFF1F3F5), RoundedCornerShape(dimensions.defaultCornerRadius)),
+            colors = OutlinedTextFieldDefaults.colors(
+                unfocusedBorderColor = Color.Transparent,
+                focusedBorderColor = Color.Transparent,
+                unfocusedContainerColor = Color.Transparent,
+                focusedContainerColor = Color.Transparent,
+                cursorColor = BaseColor
+            ),
+            visualTransformation = if (isPassword && !passwordVisible) PasswordVisualTransformation() else VisualTransformation.None,
+            keyboardOptions = if (isPassword) KeyboardOptions(
+                keyboardType = KeyboardType.Password,
+                imeAction = ImeAction.Done
+            ) else KeyboardOptions(imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(
+                onDone = {
+                    focusManager.clearFocus()
+                    keyboardController?.hide()
                 }
-            }
-        } else null
-    )
+            ),
+            textStyle = MaterialTheme.typography.bodyMedium.copy(
+                fontSize = dimensions.textSizeBody
+            ),
+            trailingIcon = if (isPassword) {
+                {
+                    IconButton(
+                        onClick = { passwordVisible = !passwordVisible }
+                    ) {
+                        Icon(
+                            painterResource(if (passwordVisible) R.drawable.noneye else R.drawable.eye),
+                            contentDescription = if (passwordVisible) "비밀번호 숨기기" else "비밀번호 보이기",
+                            tint = Color(0xFF8D7E6E),
+                            modifier = Modifier.size(dimensions.defaultIconSize)
+                        )
+                    }
+                }
+            } else null
+        )
+    }
 }
-

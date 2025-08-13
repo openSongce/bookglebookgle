@@ -1,5 +1,6 @@
 package com.ssafy.bookglebookgle.ui.screen
 
+import android.annotation.SuppressLint
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -15,10 +16,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
@@ -31,7 +34,7 @@ import com.ssafy.bookglebookgle.R
 import com.ssafy.bookglebookgle.entity.MyGroupResponse
 import com.ssafy.bookglebookgle.navigation.Screen
 import com.ssafy.bookglebookgle.ui.component.CustomTopAppBar
-import com.ssafy.bookglebookgle.ui.theme.MainColor
+import com.ssafy.bookglebookgle.ui.theme.*
 import com.ssafy.bookglebookgle.viewmodel.GroupFilter
 import com.ssafy.bookglebookgle.viewmodel.MyGroupViewModel
 
@@ -52,12 +55,17 @@ enum class GroupCategory(val displayName: String, val backgroundColor: Color) :
     REVIEW("첨삭", Color(0xFFE8D5C4))
 }
 
+@SuppressLint("UnusedBoxWithConstraintsScope")
 @Composable
 fun MyGroupScreen(
     navController: NavHostController,
     viewModel: MyGroupViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    // 반응형 디멘션 사용
+    val dimensions = rememberResponsiveDimensions()
+    val configuration = LocalConfiguration.current
 
     LaunchedEffect(Unit) {
         viewModel.resetFilter()  // 필터를 전체로 리셋
@@ -78,9 +86,13 @@ fun MyGroupScreen(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    BoxWithConstraints(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = if (dimensions.isTablet) Alignment.TopCenter else Alignment.TopStart
+    ) {
         Column(
             modifier = Modifier
+                .widthIn(max = if (dimensions.isTablet) dimensions.contentMaxWidth * 1.5f else Dp.Infinity)
                 .fillMaxSize()
                 .background(Color.White)
         ) {
@@ -115,14 +127,14 @@ fun MyGroupScreen(
                         ) {
                             Text(
                                 text = "참여중인 모임이 없습니다",
-                                fontSize = 16.sp,
+                                fontSize = dimensions.textSizeBody,
                                 color = Color.Gray,
                                 textAlign = TextAlign.Center
                             )
-                            Spacer(modifier = Modifier.height(8.dp))
+                            Spacer(modifier = Modifier.height(dimensions.spacingTiny))
                             Text(
                                 text = "새로운 모임에 참여해보세요!",
-                                fontSize = 14.sp,
+                                fontSize = dimensions.textSizeCaption,
                                 color = Color.Gray,
                                 textAlign = TextAlign.Center
                             )
@@ -136,19 +148,22 @@ fun MyGroupScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(start = 16.dp)
+                                .padding(start = dimensions.defaultPadding)
                         ) {
                             Surface(
-                                shape = RoundedCornerShape(8.dp),
+                                shape = RoundedCornerShape(dimensions.cornerRadiusSmall),
                                 color = Color(0xFFEFE5D8),
                                 modifier = Modifier.wrapContentSize()
                             ) {
                                 Text(
                                     text = "${uiState.currentFilter.displayName} (${uiState.filteredGroups.size})",
                                     color = Color.DarkGray,
-                                    fontSize = 12.sp,
+                                    fontSize = dimensions.textSizeCaption,
                                     fontWeight = FontWeight.Medium,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                    modifier = Modifier.padding(
+                                        horizontal = dimensions.spacingSmall,
+                                        vertical = dimensions.spacingTiny
+                                    )
                                 )
                             }
                         }
@@ -158,11 +173,15 @@ fun MyGroupScreen(
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(start = 16.dp, end = 16.dp)
+                            .padding(
+                                start = dimensions.defaultPadding,
+                                end = dimensions.defaultPadding
+                            )
                     ) {
                         itemsIndexed(uiState.filteredGroups) { index, group ->
                             MyGroupCard(
                                 group = group,
+                                dimensions = dimensions,
                                 onClick = {
                                     navController.currentBackStackEntry?.savedStateHandle?.set(
                                         "groupId",
@@ -179,8 +198,8 @@ fun MyGroupScreen(
                             // 마지막 아이템이 아닌 경우 구분선 추가
                             if (index < uiState.filteredGroups.size - 1) {
                                 HorizontalDivider(
-                                    modifier = Modifier.padding(vertical = 8.dp),
-                                    thickness = 1.dp,
+                                    modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+                                    thickness = dimensions.dividerThickness,
                                     color = Color(0xFFE0E0E0)
                                 )
                             }
@@ -195,9 +214,21 @@ fun MyGroupScreen(
             FilterDropdown(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(top = 52.dp, end = 16.dp)
+                    .padding(
+                        top = 52.dp,
+                        end = if (dimensions.isTablet) {
+                            // 태블릿에서는 중앙 정렬된 컨텐츠의 오른쪽 끝에서 패딩 적용
+                            maxOf(
+                                dimensions.defaultPadding,
+                                (configuration.screenWidthDp.dp - dimensions.contentMaxWidth * 1.5f) / 2
+                            ) + dimensions.defaultPadding
+                        } else {
+                            dimensions.defaultPadding
+                        }
+                    )
                     .zIndex(10f),
                 currentFilter = uiState.currentFilter,
+                dimensions = dimensions,
                 onFilterSelected = { filter ->
                     viewModel.setFilter(filter)
                 },
@@ -226,24 +257,26 @@ fun MyGroupScreen(
 fun FilterDropdown(
     modifier: Modifier = Modifier,
     currentFilter: GroupFilter,
+    dimensions: ResponsiveDimensions,
     onFilterSelected: (GroupFilter) -> Unit,
     onDismiss: () -> Unit
 ) {
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(dimensions.cornerRadiusSmall),
         color = Color.White,
         shadowElevation = 8.dp
     ) {
         Column(
             modifier = Modifier
-                .width(160.dp)
-                .padding(vertical = 8.dp)
+                .width(dimensions.dropdownWidth)
+                .padding(vertical = dimensions.spacingTiny)
         ) {
             GroupFilter.values().forEach { filter ->
                 FilterDropdownItem(
                     filter = filter,
                     isSelected = filter == currentFilter,
+                    dimensions = dimensions,
                     onClick = {
                         onFilterSelected(filter)
                     }
@@ -257,6 +290,7 @@ fun FilterDropdown(
 fun FilterDropdownItem(
     filter: GroupFilter,
     isSelected: Boolean,
+    dimensions: ResponsiveDimensions,
     onClick: () -> Unit
 ) {
     Box(
@@ -280,13 +314,14 @@ fun FilterDropdownItem(
 @Composable
 fun MyGroupCard(
     group: MyGroupResponse,
+    dimensions: ResponsiveDimensions,
     onClick: () -> Unit
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() },
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(dimensions.defaultCornerRadius),
         colors = CardDefaults.cardColors(
             containerColor = Color.White
         ),
@@ -294,7 +329,7 @@ fun MyGroupCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 12.dp, end = 12.dp, top = 10.dp),
+                .padding(top = 10.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
 
@@ -302,20 +337,23 @@ fun MyGroupCard(
             Column(
                 modifier = Modifier.weight(1f)
             ) {
-                CategoryTag(category = group.category.toGroupCategory())
-                Spacer(modifier = Modifier.height(4.dp))
+                CategoryTag(
+                    category = group.category.toGroupCategory(),
+                    dimensions = dimensions
+                )
+                Spacer(modifier = Modifier.height(dimensions.spacingTiny))
 
                 // 제목
                 Text(
                     text = group.title,
-                    fontSize = 16.sp,
+                    fontSize = dimensions.textSizeBody,
                     fontWeight = FontWeight.Bold,
                     color = Color.Black,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
 
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(dimensions.spacingTiny))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -325,26 +363,26 @@ fun MyGroupCard(
                     // 설명
                     Text(
                         text = group.description,
-                        fontSize = 13.sp,
+                        fontSize = dimensions.textSizeCaption,
                         color = Color(0xFF666666),
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
-                        lineHeight = 16.sp
+                        lineHeight = (dimensions.textSizeCaption.value + 3).sp
                     )
 
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Spacer(modifier = Modifier.width(dimensions.spacingTiny))
 
                     // 하단에 참여 인원 표시
                     Text(
                         text = "${group.currentMembers}/${group.maxMembers}명",
-                        fontSize = 12.sp,
+                        fontSize = dimensions.textSizeCaption,
                         color = Color(0xFF888888)
                     )
                 }
 
             }
 
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(dimensions.spacingSmall))
 
             // 이미지
             if (group.imageUrl != null) {
@@ -352,10 +390,10 @@ fun MyGroupCard(
                     model = group.imageUrl,
                     contentDescription = "모임 이미지",
                     modifier = Modifier
-                        .size(80.dp)
+                        .size(dimensions.itemImageSize)
                         .background(
                             color = Color(0xFFF0F0F0),
-                            shape = RoundedCornerShape(12.dp)
+                            shape = RoundedCornerShape(dimensions.cornerRadiusSmall)
                         )
                 )
             } else {
@@ -370,8 +408,8 @@ fun MyGroupCard(
                     ),
                     contentDescription = "모임 이미지",
                     modifier = Modifier
-                        .size(70.dp)
-                        .clip(RoundedCornerShape(12.dp)),
+                        .size(dimensions.itemImageSize)
+                        .clip(RoundedCornerShape(dimensions.cornerRadiusSmall)),
                     contentScale = ContentScale.Crop
                 )
             }
@@ -380,18 +418,24 @@ fun MyGroupCard(
 }
 
 @Composable
-fun CategoryTag(category: GroupCategory) {
+fun CategoryTag(
+    category: GroupCategory,
+    dimensions: ResponsiveDimensions
+) {
     Surface(
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(dimensions.cornerRadiusSmall),
         color = Color(0xFFEFE5D8),
         modifier = Modifier.wrapContentSize()
     ) {
         Text(
             text = category.displayName,
             color = Color.DarkGray,
-            fontSize = 10.sp,
+            fontSize = dimensions.textSizeCaption,
             fontWeight = FontWeight.Medium,
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+            modifier = Modifier.padding(
+                horizontal = dimensions.spacingTiny,
+                vertical = dimensions.spacingTiny / 2
+            )
         )
     }
 }
