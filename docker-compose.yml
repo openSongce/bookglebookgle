@@ -94,7 +94,8 @@ services:
     volumes:
       - redis-data:/data
     networks:
-      - test-net
+      test-net:
+        aliases: ["bookgle-redis"]   
 
 volumes:
   grafana-storage:
