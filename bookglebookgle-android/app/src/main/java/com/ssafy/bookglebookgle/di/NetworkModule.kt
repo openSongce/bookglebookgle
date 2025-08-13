@@ -21,7 +21,9 @@ import javax.inject.Singleton
 import io.grpc.ManagedChannel
 import io.grpc.ManagedChannelBuilder
 import com.example.bookglebookgleserver.chat.ChatServiceGrpc
+import com.ssafy.bookglebookgle.BuildConfig
 import com.ssafy.bookglebookgle.network.api.ProfileApi
+import okhttp3.logging.HttpLoggingInterceptor
 import java.util.concurrent.TimeUnit
 
 @Module
@@ -74,15 +76,43 @@ object NetworkModule {
         loginApi: Provider<LoginApi>
     ): TokenAuthenticator = TokenAuthenticator(tokenManager, loginApi)
 
+//    @Provides
+//    @Singleton
+//    fun provideOkHttpClient(
+//        authInterceptor: AuthInterceptor,
+//        tokenAuthenticator: TokenAuthenticator
+//    ): OkHttpClient = OkHttpClient.Builder()
+//        .addInterceptor(authInterceptor)      // AccessToken 자동 첨부
+//        .authenticator(tokenAuthenticator)    // RefreshToken 자동 갱신
+//        .build()
+
     @Provides
     @Singleton
     fun provideOkHttpClient(
         authInterceptor: AuthInterceptor,
         tokenAuthenticator: TokenAuthenticator
-    ): OkHttpClient = OkHttpClient.Builder()
-        .addInterceptor(authInterceptor)      // AccessToken 자동 첨부
-        .authenticator(tokenAuthenticator)    // RefreshToken 자동 갱신
-        .build()
+    ): OkHttpClient {
+        val builder = OkHttpClient.Builder()
+            .addInterceptor(authInterceptor)      // AccessToken 자동 첨부
+            .authenticator(tokenAuthenticator)    // RefreshToken 자동 갱신
+            // 타임아웃 설정 추가 (OCR 처리를 위한 긴 타임아웃)
+            .connectTimeout(60, TimeUnit.SECONDS)        // 연결 타임아웃: 1분
+            .readTimeout(300, TimeUnit.SECONDS)          // 읽기 타임아웃: 5분 (OCR 처리용)
+            .writeTimeout(300, TimeUnit.SECONDS)         // 쓰기 타임아웃: 5분 (파일 업로드용)
+            .callTimeout(1200, TimeUnit.SECONDS)         // 전체 호출 타임아웃: 10분
+            .retryOnConnectionFailure(true)              // 연결 실패 시 재시도
+
+        // 디버그 모드에서만 로깅 추가
+        if (BuildConfig.DEBUG) {
+            val loggingInterceptor = HttpLoggingInterceptor().apply {
+                // 파일 업로드 시 BODY는 너무 커서 HEADERS만 로깅
+                level = HttpLoggingInterceptor.Level.HEADERS
+            }
+            builder.addInterceptor(loggingInterceptor)
+        }
+
+        return builder.build()
+    }
 
     @Provides
     @Singleton

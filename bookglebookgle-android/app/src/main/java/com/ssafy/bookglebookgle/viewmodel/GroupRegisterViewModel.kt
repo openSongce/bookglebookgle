@@ -1,5 +1,7 @@
 package com.ssafy.bookglebookgle.viewmodel
 
+import android.annotation.SuppressLint
+import android.content.Context
 import android.net.Uri
 import android.util.Log
 import androidx.compose.runtime.getValue
@@ -7,8 +9,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.work.BackoffPolicy
+import androidx.work.Constraints
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
 import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.PdfFile
 import com.ssafy.bookglebookgle.repository.GroupRepositoryImpl
+import com.ssafy.bookglebookgle.util.GroupCreationWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -21,6 +29,12 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.io.File
 import javax.inject.Inject
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.Data
+import androidx.work.CoroutineWorker
+import androidx.work.WorkerParameters
+import dagger.hilt.android.qualifiers.ApplicationContext
+import java.time.Duration
 
 private const val TAG = "싸피_GroupRegisterViewModel"
 data class GroupRegisterUiState(
@@ -42,7 +56,8 @@ enum class ReadingMode(val value: String) {
 
 @HiltViewModel
 class GroupRegisterViewModel @Inject constructor(
-    private val groupRepositoryImpl: GroupRepositoryImpl
+    private val groupRepositoryImpl: GroupRepositoryImpl,
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(GroupRegisterUiState())
@@ -140,6 +155,7 @@ class GroupRegisterViewModel @Inject constructor(
         return dateTime
     }
 
+
     // JSON 생성
     private fun createGroupInfoJson(isOcrRequired: Boolean): String {
         val json = JSONObject().apply {
@@ -153,6 +169,63 @@ class GroupRegisterViewModel @Inject constructor(
             put("imageBased", if (isOcrRequired) "true" else "false")
         }
         return json.toString()
+    }
+
+    /**
+     * 백그라운드에서 모임을 생성하는 새로운 함수
+     */
+    @SuppressLint("NewApi")
+    fun createGroupInBackground(isOcrRequired: Boolean) {
+        val currentPdfFile = pdfFile
+        if (currentPdfFile == null || !currentPdfFile.exists()) {
+            _uiState.value = _uiState.value.copy(
+                errorMessage = "PDF 파일이 선택되지 않았습니다."
+            )
+            return
+        }
+
+        try {
+            Log.d(TAG, "백그라운드 모임 생성 시작")
+
+            // 즉시 성공 상태로 변경하여 화면 이동 가능하게 함
+            _uiState.value = _uiState.value.copy(isSuccess = true)
+
+            // WorkManager 입력 데이터 준비
+            val inputData = Data.Builder()
+                .putString("groupInfo", createGroupInfoJson(isOcrRequired))
+                .putString("pdfFilePath", currentPdfFile.absolutePath)
+                .putBoolean("isOcrRequired", isOcrRequired)
+                .putString("groupName", groupName)
+                .build()
+
+            val constraints = Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .setRequiresBatteryNotLow(false) // 배터리 제약 완화
+                .setRequiresStorageNotLow(false) // 저장공간 제약 완화
+                .build()
+
+            // WorkManager 작업 생성
+            val workRequest = OneTimeWorkRequestBuilder<GroupCreationWorker>()
+                .setInputData(inputData)
+                .setConstraints(constraints)
+                .setBackoffCriteria(
+                    BackoffPolicy.EXPONENTIAL,  // 실패 시 재시도 정책
+                    Duration.ofSeconds(30) // 30초 후 재시도
+                )
+                .build()
+
+            // WorkManager에 작업 등록
+            WorkManager.getInstance(context).enqueue(workRequest)
+
+            Log.d(TAG, "백그라운드 작업이 큐에 등록되었습니다.")
+
+        } catch (e: Exception) {
+            Log.e(TAG, "백그라운드 작업 등록 실패", e)
+            _uiState.value = _uiState.value.copy(
+                isSuccess = false,
+                errorMessage = "작업 등록에 실패했습니다: ${e.message}"
+            )
+        }
     }
 
     // PDF 파일을 MultipartBody.Part로 변환
