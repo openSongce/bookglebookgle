@@ -3,25 +3,36 @@ package com.ssafy.bookglebookgle.ui.screen
 import android.content.Context
 import android.util.Log
 import android.widget.Toast
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -34,9 +45,11 @@ import com.google.gson.Gson
 import com.ssafy.bookglebookgle.R
 import com.ssafy.bookglebookgle.entity.GroupDetail
 import com.ssafy.bookglebookgle.entity.GroupMember
+import com.ssafy.bookglebookgle.navigation.BottomNavItem.Companion.items
 import com.ssafy.bookglebookgle.navigation.Screen
 import com.ssafy.bookglebookgle.ui.component.CustomTopAppBar
 import com.ssafy.bookglebookgle.ui.component.GroupEditDialog
+import com.ssafy.bookglebookgle.ui.theme.DeepMainColor
 import com.ssafy.bookglebookgle.ui.theme.MainColor
 import com.ssafy.bookglebookgle.util.ScreenSize
 import com.ssafy.bookglebookgle.util.UserInfoManager
@@ -75,9 +88,10 @@ fun GroupDetailScreen(
     val myUserId by viewModel.currentUserId.collectAsStateWithLifecycle()
     val rateState by viewModel.rateMemberState.collectAsStateWithLifecycle()
 
-    var showRateDialog by remember { mutableStateOf(false) }
-    var pendingToId by remember { mutableStateOf<Long?>(null) }
-    var pendingScore by remember { mutableStateOf(5f) } // 기본 5점
+
+    var rateTarget by remember { mutableStateOf<GroupMember?>(null) }    // ★ 평가 대상
+    var infoTarget by remember { mutableStateOf<GroupMember?>(null) }    // ★ 정보 보기 대상
+
 
 
     val context = LocalContext.current
@@ -85,33 +99,7 @@ fun GroupDetailScreen(
     // 수정 다이얼로그 상태
     var showEditDialog by remember { mutableStateOf(false) }
 
-    if (showRateDialog) {
-        val detail = (uiState as? GroupDetailUiState.Success)?.groupDetail
-        RateMemberDialog(
-            members = detail?.members.orEmpty(),
-            myUserId = myUserId,
-            onDismiss = { showRateDialog = false },
-            onConfirm = { toId, score ->
-                viewModel.rateMember(groupId, toId, score)
-            }
-        )
-    }
 
-    // 저장 결과 토스트/닫기
-    LaunchedEffect(rateState) {
-        when (rateState) {
-            is RateMemberUiState.Success -> {
-                Toast.makeText(context, "평가가 등록되었습니다.", Toast.LENGTH_SHORT).show()
-                showRateDialog = false
-                viewModel.resetRateMemberState()
-            }
-            is RateMemberUiState.Error -> {
-                Toast.makeText(context, (rateState as RateMemberUiState.Error).message, Toast.LENGTH_LONG).show()
-                viewModel.resetRateMemberState()
-            }
-            else -> Unit
-        }
-    }
 
     LaunchedEffect(groupId) {
         viewModel.setInitialMyGroupState(isMyGroup)
@@ -253,8 +241,22 @@ fun GroupDetailScreen(
                     navController = navController,
                     groupId = groupId,
                     viewModel = viewModel,
-                    hasRatedByMe = hasRatedByMe,                  // ★ 추가
-                    onOpenRateDialog = { showRateDialog = true },
+                    myUserId = myUserId,                            // ★ 추가
+                    onMemberClick = { member ->                     // ★ 추가
+                        if (currentIsMyGroup && currentState.groupDetail.isCompleted) {
+                            when {
+                                member.userId == myUserId -> {
+                                    Toast.makeText(context, "본인은 평가할 수 없습니다.", Toast.LENGTH_SHORT).show()
+                                }
+                                member.hasRated -> {
+                                    Toast.makeText(context, "이미 이 팀원을 평가했습니다.", Toast.LENGTH_SHORT).show()
+                                }
+                                else -> rateTarget = member
+                            }
+                        } else {
+                            infoTarget = member
+                        }
+                    },
                     onJoinClick = { viewModel.joinGroup(groupId) },
                     onDeleteClick = {
                         viewModel.deleteGroup(groupId)
@@ -285,6 +287,28 @@ fun GroupDetailScreen(
             }
         }
     }
+
+    // ★ 단일 대상 평점 다이얼로그
+    rateTarget?.let { target ->
+// 기존 AlertDialog 버전 삭제하고 아래로 교체
+        RateMemberBottomSheet(
+            member = rateTarget,
+            onDismiss = { rateTarget = null },
+            onConfirm = { score -> viewModel.rateMember(groupId, rateTarget!!.userId, score) }
+        )
+
+    }
+
+// ★ 멤버 정보 다이얼로그
+    infoTarget?.let { target ->
+        MemberInfoDialogWhite(
+            member = target,
+            pageCount = (uiState as? GroupDetailUiState.Success)?.groupDetail?.pageCount ?: 0,
+            illustrationRes = keyToResId(target.profileImageUrl) ?: R.drawable.ic_pdf, // 임시
+            onDismiss = { infoTarget = null }
+        )
+    }
+
 }
 
 @Composable
@@ -296,8 +320,8 @@ private fun GroupDetailContent(
     navController: NavHostController,
     groupId: Long,
     viewModel: GroupDetailViewModel,
-    hasRatedByMe: Boolean,
-    onOpenRateDialog: () -> Unit,
+    myUserId: Long?,                         // ★ 추가
+    onMemberClick: (GroupMember) -> Unit,    // ★ 추가
     onJoinClick: () -> Unit,
     onDeleteClick: () -> Unit,
     onLeaveClick: () -> Unit
@@ -438,32 +462,24 @@ private fun GroupDetailContent(
             }
             Row(horizontalArrangement = Arrangement.spacedBy(ScreenSize.width * 0.02f)) {
                 membersSorted.forEach { m ->
-                    MemberAvatar(m.userNickName, m.profileColor, m.isHost, m.profileImageUrl)
+                    MemberAvatar(
+                        nickname = m.userNickName,
+                        colorHex = m.profileColor,
+                        isHost = m.isHost,
+                        profileImgKey = m.profileImageUrl,
+                        rated = if (isMyGroup && groupDetail.isCompleted) m.hasRated else null, // ★ 완료된 모임이면 '평가됨' 표시
+                        onClick = { onMemberClick(m) }                                           // ★ 아바타 클릭
+                    )
                 }
             }
 
             if (isMyGroup && groupDetail.isCompleted) {
-                Spacer(Modifier.height(ScreenSize.height * 0.02f))
-                val enabled = hasRatedByMe == false
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(ScreenSize.height * 0.065f)
-                        .clip(RoundedCornerShape(ScreenSize.width * 0.03f))
-                        .background(if (enabled) Color(0xFF4CAF50) else Color(0xFF9E9E9E))
-                        .clickable(enabled = enabled) {
-                            // 다이얼로그 열기
-                            onOpenRateDialog()
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = if (enabled) "팀원 평점 남기기" else "평가 완료됨",
-                        color = Color.White,
-                        fontSize = ScreenSize.width.value.times(0.04f).sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
+                Spacer(Modifier.height(ScreenSize.height * 0.014f))
+                Text(
+                    text = "모임이 완료되었습니다. 팀원 아바타를 눌러 평점을 남겨주세요. (본인은 제외)",
+                    color = Color(0xFF2E7D32),
+                    fontSize = 12.sp
+                )
             }
 
 
@@ -666,8 +682,10 @@ private fun MemberAvatar(
     nickname: String,
     colorHex: String?,
     isHost: Boolean,
+    rated: Boolean? = null,
     profileImgKey: String? = null,
-    size: Dp = ScreenSize.width * 0.12f
+    size: Dp = ScreenSize.width * 0.12f,
+    onClick: (() -> Unit)? = null
 ) {
     val bg = remember(colorHex) { hexToColor(colorHex) }
     val resId = remember(profileImgKey) { keyToResId(profileImgKey) }
@@ -680,6 +698,7 @@ private fun MemberAvatar(
             .size(size)
             .clip(CircleShape)
             .background(bg)
+            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
             .then(
                 if (isHost) Modifier.border(2.dp, Color(0xFFFFC107), CircleShape) // 금색 테두리
                 else Modifier
@@ -718,68 +737,242 @@ private fun MemberAvatar(
                 Text("👑", fontSize = (size.value * 0.3f).sp)
             }
         }
+
+        if (rated == true) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .offset(x = (-2).dp, y = (-2).dp)
+                    .size(size * 0.28f)
+                    .clip(CircleShape)
+                    .background(Color(0xFF4CAF50)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("★", color = Color.White, fontSize = (size.value * 0.22f).sp)
+            }
+        }
     }
 }
 
+/** 책 등(spine) 5개로 표현하는 평점 바 — 0.5 단위 탭 지원 */
 @Composable
-private fun RateMemberDialog(
-    members: List<GroupMember>,
-    myUserId: Long?,
-    onDismiss: () -> Unit,
-    onConfirm: (toId: Long, score: Float) -> Unit
+private fun BookRatingBar(
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+    books: Int = 5,
+    allowHalf: Boolean = true,
+    bookWidth: Dp = 24.dp,
+    bookHeight: Dp = 24.dp,
+    gap: Dp = 12.dp,
+    activeColor: Color = MainColor,                     // 프로젝트 메인 컬러
+    inactiveColor: Color = Color(0xFFE5E7EB),
+    outlineColor: Color = Color(0xFFCBD5E1)
 ) {
-    if (myUserId == null) return
-
-    val candidates = remember(members, myUserId) {
-        members.filter { it.userId != myUserId } // 본인 제외
+    Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(gap)) {
+        repeat(books) { i ->
+            val fill = (value - i).coerceIn(0f, 1f) // 0~1: 해당 책의 채움 비율
+            Box(
+                modifier = Modifier
+                    .size(bookWidth, bookHeight)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(inactiveColor)
+                    .border(1.dp, outlineColor, RoundedCornerShape(4.dp))
+                    .pointerInput(allowHalf, value) {
+                        detectTapGestures { offset ->
+                            val half = offset.x < size.width / 2f
+                            val newVal = when {
+                                allowHalf && half -> i + 0.5f
+                                else -> i + 1f
+                            }
+                            onValueChange(newVal.coerceIn(0f, books.toFloat()))
+                        }
+                    },
+                contentAlignment = Alignment.BottomStart
+            ) {
+                // 채워지는 책 등 (좌→우)
+                Box(
+                    Modifier
+                        .fillMaxHeight()
+                        .fillMaxWidth(fill)
+                        .background(activeColor)
+                )
+                // 책 등 느낌의 얇은 띠(디테일)
+                Spacer(
+                    Modifier
+                        .matchParentSize()
+                        .padding(horizontal = 6.dp)
+                        .background(Color.Transparent)
+                )
+            }
+        }
     }
-    var selectedToId by remember { mutableStateOf<Long?>(candidates.firstOrNull()?.userId) }
-    var score by remember { mutableStateOf(5f) } // 기본 5점
+}
+
+/** 빠른 선택 칩 */
+@Composable
+private fun QuickPickChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    val bg = if (selected) Color(0xFFDED0BB).copy(alpha = 0.18f) else Color(0xFFF3F4F6)
+    val stroke = if (selected) Color(0xFFDED0BB) else Color(0xFFE5E7EB)
+    Text(
+        text = label,
+        modifier = Modifier
+            .clip(RoundedCornerShape(999.dp))
+            .background(bg)
+            .border(1.dp, stroke, RoundedCornerShape(999.dp))
+            .clickable { onClick() }
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        fontSize = 12.sp,
+        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+        color = Color(0xFF374151)
+    )
+}
+
+
+@Composable
+private fun MemberInfoDialogWhite(
+    member: GroupMember,
+    pageCount: Int,
+    onDismiss: () -> Unit,
+    illustrationRes: Int? = null          // 우하단 이미지(없으면 생략)
+) {
+    val percent = remember(member, pageCount) {
+        when {
+            member.progressPercent in 0..100 -> member.progressPercent
+            pageCount > 0 -> (((member.lastPageRead + 1).coerceAtLeast(0).toFloat() / pageCount) * 100f)
+                .toInt().coerceIn(0, 100)
+            else -> 0
+        }
+    }
 
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("팀원 평점 남기기", fontWeight = FontWeight.Bold) },
+        containerColor = Color(0xFFF2F4F7),      // 흰 배경
+        shape = RoundedCornerShape(16.dp),
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                MemberAvatar(
+                    nickname = member.userNickName,
+                    colorHex = member.profileColor,
+                    isHost = member.isHost,
+                    profileImgKey = member.profileImageUrl,
+                    size = 44.dp
+                )
+                Spacer(Modifier.width(10.dp))
+                Column {
+                    Text(member.userNickName, fontWeight = FontWeight.Bold)
+                    if (member.isHost) Text("모임장", color = Color(0xFFFFA000), fontSize = 12.sp)
+                }
+            }
+        },
         text = {
-            Column {
-                Text("대상 선택")
-                Spacer(Modifier.height(6.dp))
-                candidates.forEach { m ->
-                    val selected = selectedToId == m.userId
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (selected) Color(0xFFE8F5E9) else Color(0xFFF8FAFC))
-                            .border(1.dp, if (selected) Color(0xFF4CAF50) else Color(0xFFE2E8F0), RoundedCornerShape(8.dp))
-                            .clickable { selectedToId = m.userId }
-                            .padding(10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(m.userNickName, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal)
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 120.dp)
+            ) {
+                Column(Modifier.fillMaxWidth().padding(end = 8.dp)) {
+                    Text("진도 정보", fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.height(6.dp))
+                    Text("읽은 페이지: ${member.lastPageRead + 1}${if (pageCount > 0) " / $pageCount" else ""}")
+                    Text("진도율: $percent%")
+                    if (member.hasRated) {
+                        Spacer(Modifier.height(6.dp))
+                        Text("이 멤버는 이미 다른 사람에게서 평가를 받았습니다.", color = Color.Gray, fontSize = 12.sp)
                     }
-                    Spacer(Modifier.height(8.dp))
                 }
 
-                Spacer(Modifier.height(6.dp))
-                Text("점수: ${"%.1f".format(score)}")
-                androidx.compose.material3.Slider(
-                    value = score,
-                    onValueChange = { score = it },
-                    valueRange = 1f..5f,
-                    steps = 8 // 0.5 단위로 주고 싶으면 8~; 아니면 steps=3(정수) 등
-                )
+                // 우하단 캐릭터/일러스트
+                illustrationRes?.let {
+                    Image(
+                        painter = painterResource(id = it),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(88.dp)
+                            .align(Alignment.BottomEnd)
+                    )
+                }
             }
         },
         confirmButton = {
-            val enabled = selectedToId != null
-            androidx.compose.material3.TextButton(
-                enabled = enabled,
-                onClick = { selectedToId?.let { onConfirm(it, score) } }
-            ) { Text("저장") }
-        },
-        dismissButton = {
-            androidx.compose.material3.TextButton(onClick = onDismiss) { Text("취소") }
+            androidx.compose.material3.TextButton(onClick = onDismiss) { Text("닫기", color = DeepMainColor) }
         }
     )
+}
+
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun RateMemberBottomSheet(
+    member: GroupMember?,                 // null이면 표시 안 함
+    onDismiss: () -> Unit,
+    onConfirm: (score: Float) -> Unit
+) {
+    if (member == null) return
+    var score by remember { mutableStateOf(5f) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        dragHandle = { BottomSheetDefaults.DragHandle() },
+        containerColor = Color(0xFFFEFBF4),            // 종이 느낌 살짝
+        tonalElevation = 0.dp
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 16.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                MemberAvatar(
+                    nickname = member.userNickName,
+                    colorHex = member.profileColor,
+                    isHost = member.isHost,
+                    profileImgKey = member.profileImageUrl,
+                    size = 46.dp
+                )
+                Spacer(Modifier.width(12.dp))
+                Column {
+                    Text("평점 남기기", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    Text(member.userNickName, color = Color.Gray, fontSize = 12.sp)
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+            val full = score.toInt()
+            val half = (score - full) >= 0.5f
+            Text("📚".repeat(full) + if (half) "📖" else "", fontSize = 28.sp)
+
+            Spacer(Modifier.height(12.dp))
+            BookRatingBar(value = score, onValueChange = { score = it }, allowHalf = true)
+
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf(1f, 2f, 3f, 4f, 5f).forEach { v ->
+                    QuickPickChip(
+                        label = "${v.toInt()}권",
+                        selected = kotlin.math.abs(score - v) < 0.01f,
+                        onClick = { score = v }
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                androidx.compose.material3.TextButton(onClick = onDismiss) { Text("취소", color = Color.Gray) }
+                androidx.compose.material3.TextButton(onClick = {
+                    onConfirm(score.coerceIn(0f, 5f))
+                }) {
+                    Text("저장 (${String.format("%.1f", score)}권)", color = DeepMainColor)
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+        }
+    }
 }
 
