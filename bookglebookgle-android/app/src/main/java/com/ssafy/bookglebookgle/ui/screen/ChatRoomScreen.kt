@@ -1518,8 +1518,8 @@ fun QuizControlPanel(
                                 )
                             ),
                             contentPadding = PaddingValues(horizontal = 12.dp),
-                            enabled = !isQuizConnecting && averageProgress >= 50 && !isLoadingProgress
-                        ) {
+//                            enabled = !isQuizConnecting && averageProgress >= 50 && !isLoadingProgress
+                        ) {5
                             Icon(
                                 imageVector = Icons.Default.PlayArrow,
                                 contentDescription = null,
@@ -1542,7 +1542,7 @@ fun QuizControlPanel(
                                 )
                             ),
                             contentPadding = PaddingValues(horizontal = 12.dp),
-                            enabled = !isQuizConnecting && averageProgress >= 100 && !isLoadingProgress
+//                            enabled = !isQuizConnecting && averageProgress >= 100 && !isLoadingProgress
                         ) {
                             Icon(
                                 imageVector = Icons.Default.PlayArrow,

@@ -141,6 +141,8 @@ class ChatGrpcRepository @Inject constructor(
         // 양방향 스트리밍 시작
         requestObserver = chatStub.chat(responseObserver)  // 의존성 주입받은 스텁 사용
 
+        sendSystemMessage("$currentUserName 님이 채팅방에 입장했습니다.")
+
         Log.d(TAG, "채팅방 입장 완료")
     }
 
