@@ -8,6 +8,7 @@ import com.example.bookglebookgleserver.chat.entity.ChatRoomMember;
 import com.example.bookglebookgleserver.chat.repository.ChatMessageRepository;
 import com.example.bookglebookgleserver.chat.repository.ChatRoomMemberRepository;
 import com.example.bookglebookgleserver.chat.repository.ChatRoomRepository;
+import com.example.bookglebookgleserver.global.exception.ForbiddenException;
 import com.example.bookglebookgleserver.global.exception.NotFoundException;
 import com.example.bookglebookgleserver.user.entity.User;
 import jakarta.transaction.Transactional;
@@ -61,9 +62,12 @@ public class ChatRoomService {
         }).collect(Collectors.toList());
     }
 
-    public List<ChatMessageDto> getMessagesByRoomIdAndBeforeId(Long roomId, Long beforeId, int size) {
+    public List<ChatMessageDto> getMessagesByRoomIdAndBeforeId(User currentUser,Long roomId, Long beforeId, int size) {
         ChatRoom chatRoom = chatRoomRepository.findById(roomId)
                 .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
+
+        chatRoomMemberRepository.findByChatRoomAndUser(chatRoom, currentUser)
+                .orElseThrow(() -> new ForbiddenException("채팅방 멤버가 아닙니다."));
 
         List<ChatMessage> messages;
         PageRequest pageRequest = PageRequest.of(0, size); // 첫 페이지, size개

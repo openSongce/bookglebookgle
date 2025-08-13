@@ -13,6 +13,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -21,6 +22,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/chat")
 @RequiredArgsConstructor
+@Validated
 public class ChatRoomController {
 
     private final ChatRoomService chatRoomService;
@@ -70,8 +72,11 @@ public class ChatRoomController {
             @Parameter(description = "한 번에 불러올 메시지 개수", example = "20") @RequestParam(defaultValue = "20") int size,
             @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails customUser
     ) {
-        // (필요 시 customUser.getUser()로 권한 검증)
-        return chatRoomService.getMessagesByRoomIdAndBeforeId(roomId, beforeId, size);
+        if (customUser == null) { // 401 가드
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.UNAUTHORIZED, "로그인이 필요합니다.");
+        }
+        User me = customUser.getUser();
+        return chatRoomService.getMessagesByRoomIdAndBeforeId(me, roomId, beforeId, size); //  현재 유저 전달
     }
 
     @Operation(
