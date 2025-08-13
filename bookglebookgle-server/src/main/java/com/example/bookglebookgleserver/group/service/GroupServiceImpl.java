@@ -223,25 +223,18 @@ public class GroupServiceImpl implements GroupService {
         int pageCount = resolvePageCount(group);
         boolean requesterIsHost = group.getHostUser().getId().equals(requester.getId());
 
-        // 기본 멤버 정보 + (기존 쿼리) 진도
-        List<GroupMemberDetailDto> baseMembers =
-                groupMemberRepository.findMemberDetailsByGroupId(groupId);
+        List<GroupMemberDetailDto> base = groupMemberRepository.findMemberDetailsByGroupId(groupId);
 
-        // 이 그룹에서 '평가를 1건이라도 남긴(from_member)'의 group_member.id 집합
+        // 평가 제출자 집합 조회
         Set<Long> raterMemberIds = groupMemberRatingRepository.findAllRaterMemberIdsByGroupId(groupId);
 
-        // userId -> memberId 매핑 (group_member_rating은 memberId 기준이라 필요)
-        List<GroupMember> gmEntities = groupMemberRepository.findByGroup_Id(groupId);
-        Map<Long, Long> userIdToMemberId = gmEntities.stream()
-                .collect(Collectors.toMap(gm -> gm.getUser().getId(), GroupMember::getId));
+        List<GroupMemberDetailDto> members = base.stream().map(m -> {
+            int progressPercent = calcProgressPercent(m.maxReadPage(), pageCount);
 
-        // 최종 DTO: ratingSubmitted 세팅 + 진행률 보정(0-based → +1)
-        List<GroupMemberDetailDto> members = baseMembers.stream().map(m -> {
-            Long memberId = userIdToMemberId.get(m.userId());
-            boolean ratingSubmitted = memberId != null && raterMemberIds.contains(memberId);
+            // 새로운 코드 (간단한 방식)
+            boolean ratingSubmitted = groupMemberRatingRepository.existsByGroup_IdAndFromMember_Id(groupId, m.userId());
 
-            int progressPercent = Math.max(0, Math.min(100, m.progressPercent()));
-
+            log.info("🔍 User {} - RatingSubmitted: {}", m.userId(), ratingSubmitted);
 
             return new GroupMemberDetailDto(
                     m.userId(),
@@ -250,14 +243,12 @@ public class GroupServiceImpl implements GroupService {
                     m.maxReadPage(),
                     progressPercent,
                     m.isHost(),
-                    /* 마지막 필드 이름이 바뀌었으면 여기 맞춰주세요 */
-                    ratingSubmitted // ← ratingSubmitted
+                    ratingSubmitted
             );
         }).toList();
 
-        // 전원 100% 진도면 완료
-        boolean allMemberCompleted = !members.isEmpty()
-                && members.stream().allMatch(mm -> mm.progressPercent() >= 100);
+        boolean allMemberCompleted = !members.isEmpty() &&
+                members.stream().allMatch(mm -> mm.progressPercent() >= 100);
 
         String readableSchedule = cronToReadable(group.getSchedule());
 
@@ -276,43 +267,6 @@ public class GroupServiceImpl implements GroupService {
                 allMemberCompleted
         );
     }
-
-//    @Transactional(readOnly = true)
-//    public GroupDetailResponse getGroupDetail(Long groupId, User requester) {
-//        Group group = groupRepository.findById(groupId)
-//                .orElseThrow(() -> new NotFoundException("해당 모임이 존재하지 않습니다."));
-//
-//        int pageCount = resolvePageCount(group);
-//        boolean requesterIsHost = group.getHostUser().getId().equals(requester.getId());
-//
-//        // 한 쿼리로 DTO 바로 받아오기
-//        List<GroupMemberDetailDto> members =
-//                groupMemberRepository.findMemberDetailsByGroupId(groupId, pageCount);
-//
-//        // 요청자 완독 여부
-//        boolean requesterCompleted = members.stream()
-//                .filter(m -> Objects.equals(m.userId(), requester.getId()))
-//                .findFirst()
-//                .map(GroupMemberDetailDto::isCompleted)
-//                .orElse(false);
-//
-//        String readableSchedule = cronToReadable(group.getSchedule());
-//
-//        return new GroupDetailResponse(
-//                group.getRoomTitle(),
-//                group.getCategory().name(),
-//                readableSchedule,
-//                members.size(),
-//                group.getGroupMaxNum(),
-//                group.getDescription(),
-//                null,
-//                requesterIsHost,
-//                group.getMinRequiredRating(),
-//                pageCount,
-//                members,
-//                requesterCompleted
-//        );
-//    }
 
 
 
@@ -497,6 +451,7 @@ public class GroupServiceImpl implements GroupService {
             throw new ForbiddenException("그룹 수정 권한이 없습니다.");
         }
 
+        // 그룹 정보 업데이트 (기존 로직과 동일)
         if (dto.getRoomTitle() != null) group.setRoomTitle(dto.getRoomTitle());
         if (dto.getDescription() != null) group.setDescription(dto.getDescription());
         if (dto.getCategory() != null) group.setCategory(Group.Category.valueOf(dto.getCategory().toUpperCase()));
@@ -504,7 +459,7 @@ public class GroupServiceImpl implements GroupService {
         if (dto.getMinRequiredRating() > 0) group.setMinRequiredRating(dto.getMinRequiredRating());
         if (dto.getReadingMode() != null) group.setReadingMode(Group.ReadingMode.valueOf(dto.getReadingMode().toUpperCase()));
 
-        // 스케줄 업데이트
+        // 스케줄 업데이트 (기존 로직과 동일)
         if (dto.getSchedule() != null) {
             String input = dto.getSchedule();
             if (input.isBlank()) {
@@ -524,55 +479,43 @@ public class GroupServiceImpl implements GroupService {
             }
         }
 
-        // 변경사항을 반영한 최신 상태를 fetch join으로 다시 조회
-        Group loaded = groupRepository.findByIdWithPdfAndMembers(groupId)
-                .orElseThrow(() -> new NotFoundException("해당 모임이 존재하지 않습니다."));
+        groupRepository.save(group);
 
-        boolean isHost = loaded.getHostUser().getId().equals(user.getId());
-        int pageCount = resolvePageCount(loaded);
-        List<GroupMember> gmList = loaded.getGroupMembers();
+        // 응답 생성 (getGroupDetail과 동일한 로직)
+        boolean isHost = group.getHostUser().getId().equals(user.getId());
+        int pageCount = resolvePageCount(group);
 
-        // 이 그룹에서 '평가를 1건이라도 남긴(from_member)'의 group_member.id 집합
-        Set<Long> raterMemberIds = groupMemberRatingRepository.findAllRaterMemberIdsByGroupId(groupId);
+        List<GroupMemberDetailDto> base = groupMemberRepository.findMemberDetailsByGroupId(groupId);
 
-        // 멤버 DTO 구성 (0‑based 진행률 보정 + ratingSubmitted 세팅)
-        List<GroupMemberDetailDto> members = gmList.stream().map(gm -> {
-            var u = gm.getUser();
-            int max = Math.max(0, gm.getMaxReadPage());
+        List<GroupMemberDetailDto> members = base.stream().map(m -> {
+            int progressPercent = calcProgressPercent(m.maxReadPage(), pageCount);
 
-            int progress = 0;
-            if (pageCount > 0) {
-                double ratio = ((double) (max + 1)) / pageCount; // 0-based 보정
-                progress = (int) Math.round(Math.min(Math.max(ratio, 0.0), 1.0) * 100.0);
-            }
-
-            boolean ratingSubmitted = raterMemberIds.contains(gm.getId());
+            boolean ratingSubmitted = groupMemberRatingRepository.existsByGroup_IdAndFromMember_Id(groupId, m.userId());
 
             return new GroupMemberDetailDto(
-                    u.getId(),
-                    u.getNickname(),
-                    u.getProfileColor(),
-                    max,
-                    progress,
-                    gm.isHost(),
+                    m.userId(),
+                    m.userNickName(),
+                    m.profileColor(),
+                    m.maxReadPage(),
+                    progressPercent,
+                    m.isHost(),
                     ratingSubmitted
             );
         }).toList();
 
-        // 그룹 전체 읽기 완료(전원 100%)
         boolean allReadCompleted = !members.isEmpty()
                 && members.stream().allMatch(m -> m.progressPercent() >= 100);
 
         return new GroupDetailResponse(
-                loaded.getRoomTitle(),
-                loaded.getCategory().name(),
-                loaded.getSchedule(),
-                gmList.size(),
-                loaded.getGroupMaxNum(),
-                loaded.getDescription(),
+                group.getRoomTitle(),
+                group.getCategory().name(),
+                group.getSchedule(),
+                members.size(),
+                group.getGroupMaxNum(),
+                group.getDescription(),
                 null,
                 isHost,
-                loaded.getMinRequiredRating(),
+                group.getMinRequiredRating(),
                 pageCount,
                 members,
                 allReadCompleted

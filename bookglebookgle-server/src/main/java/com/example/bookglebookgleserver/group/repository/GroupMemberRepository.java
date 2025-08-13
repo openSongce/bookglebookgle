@@ -93,5 +93,10 @@ order by u.id
     List<GroupMemberProgressDto> findAllMemberProgressByGroupId(@Param("groupId") Long groupId);
 
 
+    @Query("SELECT gm.id FROM GroupMember gm WHERE gm.user.id = :userId AND gm.group.id = :groupId")
+    Optional<Long> findGroupMemberIdByUserIdAndGroupId(@Param("userId") Long userId, @Param("groupId") Long groupId);
+
+
+
     List<GroupMember> findByGroup(Group group);
 }
