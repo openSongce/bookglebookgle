@@ -1172,9 +1172,9 @@ fun GroupRegisterScreen(
                         )
                     }
                     // 그룹 생성 실행
-                    viewModel.createGroupWithPdf(
-                        isOcrRequired = ocrRequired
-                    )
+//                    viewModel.createGroupWithPdf(
+//                        isOcrRequired = ocrRequired
+//                    )
                 },
                 modifier = Modifier
                     .fillMaxWidth()
