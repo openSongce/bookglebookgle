@@ -45,24 +45,18 @@ select new com.example.bookglebookgleserver.group.dto.GroupMemberDetailDto(
   u.nickname,
   u.profileColor,
   coalesce(gm.maxReadPage, 0),
-  0,
+  cast(round(coalesce(gm.progressPercent, 0)) as integer),
   gm.isHost,
-  case
-    when (
-      select count(r.id)
-      from GroupMemberRating r
-      where r.group.id = gm.group.id
-        and r.fromMember.id = gm.id
-    ) > 0
-    then true else false
-  end
+  case when exists(
+    select 1 from GroupMemberRating gmr 
+    where gmr.group.id = :groupId 
+    and gmr.fromMember.id = gm.id
+  ) then true else false end
 )
-from GroupMember gm
-join gm.user u
+from GroupMember gm join gm.user u
 where gm.group.id = :groupId
 """)
     List<GroupMemberDetailDto> findMemberDetailsByGroupId(@Param("groupId") Long groupId);
-
 
     @Modifying
     @Query("""
