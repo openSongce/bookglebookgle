@@ -200,7 +200,7 @@ class TextSelectionOptionsWindow(
     @Composable
     private fun ColorContainer() {
         Column(
-            modifier = Modifier.padding(8.dp)
+            modifier = Modifier.width(350.dp).padding(8.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -234,7 +234,7 @@ class TextSelectionOptionsWindow(
             // XML 버전과 동일한 색상 처리 로직
             LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(7.dp),
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.width(350.dp),
                 contentPadding = PaddingValues(horizontal = 8.dp)
             ) {
                 items(colorsList.size) { index ->
