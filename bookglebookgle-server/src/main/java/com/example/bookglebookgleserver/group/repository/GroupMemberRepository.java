@@ -47,11 +47,7 @@ select new com.example.bookglebookgleserver.group.dto.GroupMemberDetailDto(
   coalesce(gm.maxReadPage, 0),
   cast(round(coalesce(gm.progressPercent, 0)) as integer),
   gm.isHost,
-  case when exists(
-    select 1 from GroupMemberRating gmr 
-    where gmr.group.id = :groupId 
-    and gmr.fromMember.id = gm.id
-  ) then true else false end
+  false
 )
 from GroupMember gm join gm.user u
 where gm.group.id = :groupId
@@ -95,6 +91,11 @@ where gm.group.id = :groupId
 order by u.id
 """)
     List<GroupMemberProgressDto> findAllMemberProgressByGroupId(@Param("groupId") Long groupId);
+
+
+    @Query("SELECT gm.id FROM GroupMember gm WHERE gm.user.id = :userId AND gm.group.id = :groupId")
+    Optional<Long> findGroupMemberIdByUserIdAndGroupId(@Param("userId") Long userId, @Param("groupId") Long groupId);
+
 
 
     List<GroupMember> findByGroup(Group group);
