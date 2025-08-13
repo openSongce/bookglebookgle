@@ -1140,6 +1140,9 @@ fun GroupRegisterScreen(
                     // OCR 필요 여부 확인 (null인 경우 안전하게 true로 설정)
                     val ocrRequired = isOcrRequired ?: true
 
+                    // 백그라운드에서 모임 생성 (기존의 createGroupWithPdf 대신)
+                    viewModel.createGroupInBackground(isOcrRequired = ocrRequired)
+
                     Log.d(
                         TAG, """
             모임 개설 시작:
@@ -1195,7 +1198,7 @@ fun GroupRegisterScreen(
                 }
             ) {
                 Text(
-                    text = if (uiState.isLoading) "생성 중..." else "모임 개설하기",
+                    text = "모임 개설하기",
                     color = Color.White,
                     fontWeight = FontWeight.Bold,
                     fontSize = 16.sp

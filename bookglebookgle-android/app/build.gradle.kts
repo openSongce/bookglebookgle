@@ -86,6 +86,7 @@ dependencies {
     implementation(libs.material)
     implementation(libs.androidx.runtime.livedata)
     implementation(libs.androidx.core.i18n)
+    implementation(libs.androidx.hilt.common)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -170,6 +171,13 @@ dependencies {
 
     // ⬇️ 토큰 async 사용
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
+
+    // WorkManager
+    implementation("androidx.work:work-runtime-ktx:2.9.0")
+
+    // Hilt WorkManager
+    implementation("androidx.hilt:hilt-work:1.1.0")
+    kapt("androidx.hilt:hilt-compiler:1.1.0")
 }
 
 kapt {
