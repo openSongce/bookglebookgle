@@ -1,18 +1,25 @@
 package com.ssafy.bookglebookgle.ui.screen
 
 import android.util.Log
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.LocalTextSelectionColors
+import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -36,10 +43,26 @@ import com.ssafy.bookglebookgle.R
 import com.ssafy.bookglebookgle.navigation.NavKeys
 import com.ssafy.bookglebookgle.navigation.Screen
 import com.ssafy.bookglebookgle.ui.component.CustomTopAppBar
+import com.ssafy.bookglebookgle.ui.theme.BaseColor
+import com.ssafy.bookglebookgle.ui.theme.DeepMainColor
 import com.ssafy.bookglebookgle.util.ScreenSize
 import com.ssafy.bookglebookgle.viewmodel.ProfileUiState
 import com.ssafy.bookglebookgle.viewmodel.ProfileViewModel
+import kotlinx.coroutines.launch
 import java.util.Locale
+
+// 키 문자열 ↔ 로컬 드로어블 매핑
+private val AVATAR_RES_MAP = mapOf(
+    "whitebear" to R.drawable.whitebear_no_bg,
+    "penguin"   to R.drawable.penguin_no_bg,
+    "squirrel"  to R.drawable.squirrel_no_bg,
+    "rabbit"    to R.drawable.rabbit_no_bg,
+    "dog"       to R.drawable.dog_no_bg,
+    "cat"       to R.drawable.cat_no_bg
+)
+
+private fun keyToResId(key: String?): Int? = key?.let { AVATAR_RES_MAP[it] }
+
 
 @Composable
 fun RatingStatisticItem(label: String, rating: Float, modifier: Modifier = Modifier) {
@@ -107,7 +130,19 @@ fun ProfileScreen(navController: NavHostController, viewModel: ProfileViewModel 
         }
 
         LaunchedEffect(Unit) {
-            viewModel.events.collect { snackbar.showSnackbar(it) }
+            viewModel.events.collect { message ->
+                launch {
+                    try {
+                        snackbar.currentSnackbarData?.dismiss() // 기존 스낵바 즉시 종료
+                        snackbar.showSnackbar(
+                            message = message,
+                            duration = SnackbarDuration.Short // 짧은 duration 설정
+                        )
+                    } catch (e: Exception) {
+                        Log.e("ProfileScreen", "Snackbar error: ${e.message}")
+                    }
+                }
+            }
         }
 
         LaunchedEffect(Unit) {
@@ -148,29 +183,23 @@ fun ProfileScreen(navController: NavHostController, viewModel: ProfileViewModel 
                     modifier = Modifier.size(profileImageSize),
                     contentAlignment = Alignment.BottomEnd
                 ) {
-                    // 프로필 이미지가 없다면 서버의 profileColor로 배경
-//                    val bgColor = try {
-//                        data.profileColor?.let { Color(android.graphics.Color.parseColor(it)) }
-//                            ?: Color(0xFFE0E0E0)
-//                    } catch (_: Exception) { Color(0xFFE0E0E0) }
-
                     val avatarSize = ScreenSize.width * 0.3f
 
                     MemberAvatar(
                         nickname = data.nickname,
                         colorHex = data.profileColor,
+                        profileImgKey = data.profileImgUrl,
                         size = avatarSize
                     )
 
 
-                    // 우측 하단 편집 아이콘(동작은 추후 연결)
+                    // 우측 하단 편집 아이콘
                     Box(
                         modifier = Modifier
                             .size(iconSize)
                             .clip(CircleShape)
-                            .background(Color.White)
-                            .padding(iconSize * 0.2f)
                             .border(1.dp, Color(0x11000000), CircleShape)
+                            .background(Color.White)
                             .clickable { showEditor.value = true },
                         contentAlignment = Alignment.Center
                     ) {
@@ -178,7 +207,7 @@ fun ProfileScreen(navController: NavHostController, viewModel: ProfileViewModel 
                             painter = painterResource(id = R.drawable.ic_edit),
                             contentDescription = "수정",
                             tint = Color.Black,
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier.size(iconSize * 0.6f) // fillMaxSize 대신 적절한 크기로
                         )
                     }
                 }
@@ -283,11 +312,12 @@ fun ProfileScreen(navController: NavHostController, viewModel: ProfileViewModel 
                         EditProfileSheetContent(
                             currentNickname = data.nickname,
                             currentColorHex = data.profileColor,
+                            currentImageKey = data.profileImgUrl,
                             saving = saving,
                             nicknameError = nicknameError,
                             onCancel = { showEditor.value = false },
-                            onSave = { newNick, newHex ->
-                                viewModel.updateProfile(newNick, newHex)
+                            onSave = { newNick, newHex, imageKey ->
+                                viewModel.updateProfile(newNick, newHex, imageKey)
                             }
                         )
                     }
@@ -463,9 +493,11 @@ fun SimpleStatisticItem(label: String, value: String, modifier: Modifier = Modif
 private fun MemberAvatar(
     nickname: String,
     colorHex: String?,
+    profileImgKey: String? = null,
     size: Dp = ScreenSize.width * 0.12f
 ) {
     val bg = remember(colorHex) { hexToColorOrDefault(colorHex) }
+    val resId = remember(profileImgKey) { keyToResId(profileImgKey) }
 
     Box(
         modifier = Modifier
@@ -474,19 +506,22 @@ private fun MemberAvatar(
             .background(bg),
         contentAlignment = Alignment.Center
     ) {
-//        val initial = nickname.firstOrNull()?.uppercaseChar()?.toString() ?: "?"
-//        Text(
-//            text = initial,
-//            color = Color.White,
-//            fontWeight = FontWeight.Bold,
-//            fontSize = (size.value * 0.45f).sp
-//        )
-        Icon(
-            painter = painterResource(id = R.drawable.cat_no_bg),
-            contentDescription = "Rating Icon",
-            tint = Color.Unspecified,
-            modifier = Modifier.size((size.value * 0.8f).dp)
-        )
+        if (resId != null) {
+            Icon(
+                painter = painterResource(id = resId),
+                contentDescription = "avatar",
+                tint = Color.Unspecified,
+                modifier = Modifier.size(size * 0.8f)
+            )
+        } else {
+            val initial = nickname.firstOrNull()?.uppercaseChar()?.toString() ?: "?"
+            Text(
+                text = initial,
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = (size.value * 0.45f).sp
+            )
+        }
     }
 }
 
@@ -496,70 +531,147 @@ private fun EditProfileSheetContent(
     currentColorHex: String?,
     saving: Boolean,
     nicknameError: String?,
+    currentImageKey: String?,
     onCancel: () -> Unit,
-    onSave: (String, String?) -> Unit
+    onSave: (String, String?, String?) -> Unit
 ) {
-    var nickname by remember { androidx.compose.runtime.mutableStateOf(currentNickname) }
-    var colorInput by remember { androidx.compose.runtime.mutableStateOf(currentColorHex ?: "") }
+    var nickname by remember { mutableStateOf(currentNickname) }
+    var colorInput by remember { mutableStateOf(currentColorHex ?: "") }
+    var selectedImageKey by remember { mutableStateOf(currentImageKey) }
+
     val previewColor = hexToColorOrDefault(colorInput)
+    val avatarPreviewSize = ScreenSize.width * 0.12f
+    val chipSize = ScreenSize.width * 0.16f
+    val chipGap  = ScreenSize.width * 0.03f
+    val borderW  = ScreenSize.width * 0.0025f  // ≈ 1dp 느낌
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(20.dp),
+            .padding(start = 20.dp, end = 20.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Text("프로필 수정", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+        Row{
+            Text("프로필 수정", fontSize = 18.sp, color = DeepMainColor)
+            Spacer(modifier = Modifier.width(6.dp))
+            Icon(
+                painter = painterResource(id = R.drawable.ic_edit),
+                contentDescription = "Edit Icon",
+                tint = DeepMainColor,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+
 
         // 미리보기
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .background(previewColor),
-                contentAlignment = Alignment.Center
-            ) {
-                val initial = nickname.firstOrNull()?.uppercaseChar()?.toString() ?: "?"
-                Text(initial, color = Color.White, fontWeight = FontWeight.Bold)
-            }
-            Spacer(Modifier.width(12.dp))
+            MemberAvatar(
+                nickname = nickname,
+                colorHex = colorInput,
+                profileImgKey = selectedImageKey,
+                size = avatarPreviewSize
+            )
+            Spacer(Modifier.width(ScreenSize.width * 0.03f))
             Text(nickname, fontWeight = FontWeight.SemiBold)
         }
 
         // 닉네임
-        OutlinedTextField(
-            value = nickname,
-            onValueChange = { nickname = it },
-            label = { Text("닉네임") },
-            singleLine = true,
-            isError = nicknameError != null,
-            supportingText = {
-                if (nicknameError != null) {
-                    Text(nicknameError, color = MaterialTheme.colorScheme.error)
-                }
-            },
-            modifier = Modifier.fillMaxWidth()
-        )
+        CompositionLocalProvider(
+            LocalTextSelectionColors provides TextSelectionColors(
+                handleColor = BaseColor,
+                backgroundColor = BaseColor.copy(alpha = 0.3f)
+            )
+        ) {
+            OutlinedTextField(
+                value = nickname,
+                onValueChange = { if (!saving) nickname = it },
+                label = { Text("닉네임") },
+                singleLine = true,
+                enabled = !saving,
+                isError = nicknameError != null,
+                supportingText = {
+                    if (nicknameError != null) {
+                        Text(nicknameError, color = MaterialTheme.colorScheme.error)
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = BaseColor,
+                    focusedLabelColor = BaseColor,
+                    cursorColor = BaseColor
+                )
+            )
+        }
 
         // 컬러 HEX
-        OutlinedTextField(
-            value = colorInput,
-            onValueChange = { colorInput = it },
-            label = { Text("프로필 색상 (예: #5B7FFF)") },
-            singleLine = true,
-            supportingText = {
-                val valid = isValidHex(colorInput)
-                Text(if (valid) "유효한 색상입니다" else "형식: #RRGGBB 또는 RRGGBB", color = if (valid) Color(0xFF4CAF50) else Color(0xFFD32F2F))
-            },
-            modifier = Modifier.fillMaxWidth()
-        )
+        CompositionLocalProvider(
+            LocalTextSelectionColors provides TextSelectionColors(
+                handleColor = BaseColor,
+                backgroundColor = BaseColor.copy(alpha = 0.3f)
+            )
+        ) {
+            OutlinedTextField(
+                value = colorInput,
+                onValueChange = { if (!saving) colorInput = it },
+                label = { Text("프로필 색상 (예: #5B7FFF)") },
+                singleLine = true,
+                enabled = !saving,
+                supportingText = {
+                    val valid = isValidHex(colorInput)
+                    Text(
+                        if (valid) "유효한 색상입니다" else "형식: #RRGGBB 또는 RRGGBB",
+                        color = if (valid) Color(0xFF4CAF50) else Color(0xFFD32F2F)
+                    )
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = BaseColor,
+                    focusedLabelColor = BaseColor,
+                    cursorColor = BaseColor
+                )
+            )
+        }
 
         // 팔레트(선택 사항)
         val palette = listOf("#5B7FFF", "#FF6B6B", "#7DDA58", "#FFB74D", "#9C27B0", "#00897B")
         FlowRowMainAxisWrap {
             palette.forEach { hex ->
-                ColorChip(hex) { colorInput = hex }
+                ColorChip(
+                    hex = hex,
+                    enabled = !saving, // 저장 중일 때 비활성화
+                    onClick = {
+                        if (!saving) colorInput = hex
+                    }
+                )
+            }
+        }
+
+        Text("프로필 이미지 (선택)", fontWeight = FontWeight.SemiBold)
+
+        Row(
+            modifier = Modifier.fillMaxWidth() .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(chipGap),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 없음(이니셜)
+            AvatarChoiceNone(
+                nickname = nickname,
+                colorHex = colorInput,
+                selected = selectedImageKey == null,
+                size = chipSize,
+                borderW = borderW
+            ) { if (!saving) selectedImageKey = null }
+
+            // 6개 이미지
+            AVATAR_RES_MAP.forEach { (key, resId) ->
+                AvatarChoiceImage(
+                    resId = resId,
+                    selected = selectedImageKey == key,
+                    size = chipSize,
+                    borderW = borderW
+                ) { if (!saving) selectedImageKey = key }
             }
         }
 
@@ -570,19 +682,43 @@ private fun EditProfileSheetContent(
             OutlinedButton(
                 onClick = onCancel,
                 modifier = Modifier.weight(1f),
-                enabled = !saving
-            ) { Text("취소") }
+                enabled = !saving,
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = BaseColor,
+                    disabledContentColor = BaseColor.copy(alpha = 0.6f)
+                ),
+                border = BorderStroke(1.dp, BaseColor)
+            ) {
+                Text("취소")
+            }
 
             Button(
                 onClick = {
-                    val normalized = normalizeHexOrNull(colorInput) // null 허용
-                    onSave(nickname.trim(), normalized)
+                    if (!saving) { // 추가 안전장치
+                        val normalized = normalizeHexOrNull(colorInput)
+                        onSave(nickname.trim(), normalized, selectedImageKey)
+                    }
                 },
                 modifier = Modifier.weight(1f),
-                enabled = !saving && nickname.isNotBlank()
+                enabled = !saving && nickname.isNotBlank(),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = BaseColor,
+                    contentColor = Color.White,
+                    disabledContainerColor = BaseColor.copy(alpha = 0.6f),
+                    disabledContentColor = Color.White.copy(alpha = 0.7f)
+                )
             ) {
-                if (saving) CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
-                else Text("저장")
+                if (saving) {
+                    CircularProgressIndicator(
+                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(18.dp),
+                        color = Color.White
+                    )
+                } else {
+                    Text("저장")
+                }
             }
         }
         Spacer(Modifier.height(12.dp))
@@ -590,15 +726,15 @@ private fun EditProfileSheetContent(
 }
 
 @Composable
-private fun ColorChip(hex: String, onClick: () -> Unit) {
+private fun ColorChip(hex: String, enabled: Boolean = true, onClick: () -> Unit) {
     val color = hexToColorOrDefault(hex)
     Box(
         modifier = Modifier
             .size(32.dp)
             .clip(CircleShape)
-            .background(color)
+            .background(if (enabled) color else color.copy(alpha = 0.5f))
             .border(1.dp, Color(0x11000000), CircleShape)
-            .clickable { onClick() }
+            .clickable(enabled = enabled) { onClick() }
     )
 }
 
@@ -630,3 +766,59 @@ private fun hexToColorOrDefault(input: String?): Color =
         val s = normalizeHexOrNull(input) ?: "#E0E0E0"
         Color(android.graphics.Color.parseColor(s))
     }.getOrDefault(Color(0xFFE0E0E0))
+
+@Composable
+private fun AvatarChoiceNone(
+    nickname: String,
+    colorHex: String?,
+    selected: Boolean,
+    size: Dp,
+    borderW: Dp,
+    onClick: () -> Unit
+) {
+    val borderColor = if (selected) BaseColor else Color(0x11000000)
+    Box(
+        modifier = Modifier
+            .size(size)
+            .clip(CircleShape)
+            .background(hexToColorOrDefault(colorHex))
+            .border(borderW, borderColor, CircleShape)
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        val initial = nickname.firstOrNull()?.uppercaseChar()?.toString() ?: "?"
+        Text(
+            text = initial,
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
+            fontSize = (size.value * 0.4f).sp
+        )
+    }
+}
+
+@Composable
+private fun AvatarChoiceImage(
+    resId: Int,
+    selected: Boolean,
+    size: Dp,
+    borderW: Dp,
+    onClick: () -> Unit
+) {
+    val borderColor = if (selected) BaseColor else Color(0x11000000)
+    Box(
+        modifier = Modifier
+            .size(size)
+            .clip(CircleShape)
+            .border(borderW, borderColor, CircleShape)
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            painter = painterResource(id = resId),
+            contentDescription = null,
+            tint = Color.Unspecified,
+            modifier = Modifier.size(size * 0.9f)
+        )
+    }
+}
+

@@ -202,6 +202,7 @@ fun CustomTopAppBar(
                     textAlign = TextAlign.Center,
                     modifier = Modifier
                         .fillMaxWidth()
+                        .padding(start = 40.dp)
                 )
             } else if (ismygroup && isHost) {
                 Text(

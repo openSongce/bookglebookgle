@@ -223,7 +223,7 @@ fun MainScreen(navController: NavHostController, viewModel: MainViewModel = hilt
 
                             if(!isInSearchMode){
                                 Icon(
-                                    imageVector = Icons.Default.Add,
+                                    painter = painterResource(id = R.drawable.ic_group_register),
                                     contentDescription = "모임생성",
                                     modifier = Modifier
                                         .size(ScreenSize.width.value.times(0.06f).dp)

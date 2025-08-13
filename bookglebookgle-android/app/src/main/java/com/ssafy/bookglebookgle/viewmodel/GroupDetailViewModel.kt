@@ -133,8 +133,12 @@ class GroupDetailViewModel @Inject constructor(
      * 초기 상태 설정
      */
     fun setInitialMyGroupState(isMyGroup: Boolean) {
-        _isMyGroup.value = isMyGroup
-        Log.d(TAG, "초기 내 그룹 상태 설정: $isMyGroup")
+        if (_uiState.value is GroupDetailUiState.Loading) {
+            _isMyGroup.value = isMyGroup
+            Log.d(TAG, "초기 상태 설정 (서버 데이터 로드 전): $isMyGroup")
+        } else {
+            Log.d(TAG, "서버 데이터가 이미 있어서 초기 상태 설정 무시")
+        }
     }
 
     /**
@@ -157,6 +161,16 @@ class GroupDetailViewModel @Inject constructor(
                     false
                 }
 
+                val currentUserId = _currentUserId.value
+                val isUserInGroup = if (currentUserId != null) {
+                    detail.members.any { it.userId == currentUserId }
+                } else {
+                    false
+                }
+
+
+                _isMyGroup.value = isUserInGroup
+                Log.d(TAG, "서버 데이터 기준 isMyGroup 설정: $isUserInGroup (userId: $currentUserId)")
                 _uiState.value = GroupDetailUiState.Success(detail)
             } catch (e: Exception) {
                 _uiState.value = GroupDetailUiState.Error(
@@ -189,56 +203,65 @@ class GroupDetailViewModel @Inject constructor(
 
                 if (response.isSuccessful) {
                     Log.d(TAG, "그룹 참여 성공 - 코드: ${response.code()}")
-
                     _joinGroupState.value = JoinGroupUiState.Success
-
-                    // 가입 성공 시 내 그룹 상태를 true로 변경
                     _isMyGroup.value = true
-
-                    // 그룹 상세 정보를 다시 조회하여 최신 정보 반영 (멤버 수 등)
-                    getGroupDetail(groupId)
-
+                    _joinGroupState.value = JoinGroupUiState.Success
+//                    getGroupDetail(groupId)
                 } else {
                     val errorBody = response.errorBody()?.string()
                     Log.e(TAG, "그룹 참여 실패 - 코드: ${response.code()}, 메시지: $errorBody")
 
-                    // 서버에서 보내는 실제 에러 메시지를 그대로 전달
+                    // 서버 응답 코드와 현재 그룹 상태를 기반으로 에러 메시지 결정
                     val errorMessage = when (response.code()) {
                         400 -> {
-                            // 400 에러의 경우 서버에서 보내는 구체적인 메시지 사용
+                            // errorBody 내용을 우선적으로 체크
                             when {
-                                errorBody?.contains("이미 참가한 그룹") == true -> {
-                                    Log.e(TAG, "이미 참가한 그룹으로 인한 가입 실패")
-                                    "이미 참가한 그룹입니다."
-                                }
-                                errorBody?.contains("그룹 정원이 초과되었습니다") == true -> {
-                                    Log.e(TAG, "정원 초과로 인한 가입 실패")
-                                    "그룹 정원이 초과되었습니다."
-                                }
-                                errorBody?.contains("평점이 낮아") == true -> {
-                                    Log.e(TAG, "평점 부족으로 인한 가입 실패")
-                                    "평점이 낮아 그룹에 참가할 수 없습니다."
+                                !errorBody.isNullOrBlank() -> {
+                                    when {
+                                        errorBody.contains("이미 참가한 그룹") -> "이미 참가한 그룹입니다."
+                                        errorBody.contains("그룹 정원이 초과되었습니다") ||
+                                                errorBody.contains("정원이 초과") ||
+                                                errorBody.contains("정원") && errorBody.contains("초과") -> "그룹 정원이 초과되었습니다."
+                                        errorBody.contains("평점이 낮아") ||
+                                                errorBody.contains("평점") && errorBody.contains("참가할 수 없습니다") ||
+                                                errorBody.contains("최소 요구 평점") ||
+                                                errorBody.contains("평점이 부족") -> {
+                                            // 현재 그룹 정보에서 최소 요구 평점 가져오기
+                                            val currentState = _uiState.value
+                                            if (currentState is GroupDetailUiState.Success) {
+                                                val requiredRating = currentState.groupDetail.minRequiredRating
+                                                "평점이 낮아 가입할 수 없습니다."
+                                            } else {
+                                                "평점이 낮아 가입할 수 없습니다."
+                                            }
+                                        }
+                                        else -> errorBody
+                                    }
                                 }
                                 else -> {
-                                    Log.e(TAG, "기타 400 에러: $errorBody")
-                                    errorBody ?: "잘못된 요청입니다."
+                                    // errorBody가 비어있을 때는 현재 그룹 상태를 확인해서 추론
+                                    val currentState = _uiState.value
+                                    if (currentState is GroupDetailUiState.Success) {
+                                        val groupDetail = currentState.groupDetail
+                                        when {
+                                            groupDetail.memberCount >= groupDetail.maxMemberCount -> {
+                                                Log.e(TAG, "정원 초과로 추정됨 - 현재: ${groupDetail.memberCount}/${groupDetail.maxMemberCount}")
+                                                "그룹 정원이 초과되었습니다"
+                                            }
+                                            else -> "평점이 낮아 가입할 수 없습니다."
+                                        }
+                                    } else {
+                                        "가입 요청이 거부되었습니다"
+                                    }
                                 }
                             }
                         }
-                        404 -> {
-                            Log.e(TAG, "존재하지 않는 그룹")
-                            "해당 그룹이 존재하지 않습니다."
-                        }
-                        500 -> {
-                            Log.e(TAG, "서버 오류")
-                            "서버 오류가 발생했습니다."
-                        }
-                        else -> {
-                            Log.e(TAG, "기타 HTTP 에러: ${response.code()}")
-                            errorBody ?: "그룹 참여에 실패했습니다."
-                        }
+                        404 -> "해당 그룹이 존재하지 않습니다."
+                        500 -> "서버 오류가 발생했습니다."
+                        else -> errorBody ?: "그룹 참여에 실패했습니다."
                     }
 
+                    Log.e(TAG, "최종 에러 메시지: $errorMessage")
                     _joinGroupState.value = JoinGroupUiState.Error(errorMessage)
                 }
             } catch (e: Exception) {

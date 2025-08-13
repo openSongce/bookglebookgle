@@ -27,5 +27,6 @@ class LoginRepositoryImpl @Inject constructor(
 
     override suspend fun logout(refreshToken: String) {
         loginApi.logout(LogoutRequest(refreshToken))
+        loginApi.unregisterFcmToken(LogoutRequest(refreshToken))
     }
 }

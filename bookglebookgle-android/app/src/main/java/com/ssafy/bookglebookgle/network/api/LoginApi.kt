@@ -24,4 +24,7 @@ interface LoginApi {
 
     @POST("auth/logout")
     suspend fun logout(@Body request: LogoutRequest)
+
+    @POST("fcm/unregister")
+    suspend fun unregisterFcmToken(@Body request: LogoutRequest)
 }
