@@ -80,6 +80,8 @@ class ChatGrpcRepository @Inject constructor(
     }
 
     fun joinChatRoom(groupId: Long, userId: Long, userName: String) {
+        Log.d(TAG, "joinChatRoom 호출됨")
+        Log.d(TAG, "전달받은 값: groupId=$groupId, userId=$userId, userName=$userName")
         currentGroupId = groupId
         currentUserId = userId
         currentUserName = userName
@@ -273,7 +275,8 @@ class ChatGrpcRepository @Inject constructor(
 
         try {
             requestObserver?.onNext(grpcMessage)
-            Log.d(TAG, "메시지 전송 성공: [${type.value}] $content")
+            Log.d(TAG, "메시지 전송: groupId=$currentGroupId, senderId=$currentUserId, senderName=$currentUserName, type=${type.value}")
+
         } catch (e: Exception) {
             Log.e(TAG, "메시지 전송 실패", e)
             _connectionStatus.value = GrpcConnectionStatus.ERROR("메시지 전송 실패")

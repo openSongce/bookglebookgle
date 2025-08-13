@@ -319,7 +319,7 @@ private fun GroupDetailContent(
                 "REVIEW" -> "첨삭"
                 else -> groupDetail.category
             })
-            InfoRow("시작 시간", "매주 ${groupDetail.schedule}")
+            InfoRow("시작 시간", groupDetail.schedule)
             InfoRow("참여 인원", "${groupDetail.memberCount}/${groupDetail.maxMemberCount}명")
             InfoRow("모임 설명", groupDetail.description)
             InfoRow("최소 평점", "${groupDetail.minRequiredRating}점")
