@@ -231,10 +231,17 @@ public class GroupServiceImpl implements GroupService {
         List<GroupMemberDetailDto> members = base.stream().map(m -> {
             int progressPercent = calcProgressPercent(m.maxReadPage(), pageCount);
 
-            // 새로운 코드 (간단한 방식)
-            boolean ratingSubmitted = groupMemberRatingRepository.existsByGroup_IdAndFromMember_Id(groupId, m.userId());
+            // 이 사용자가 평가해야 할 다른 멤버들의 수 (자신 제외)
+            long otherMembersCount = base.stream().filter(other -> !other.userId().equals(m.userId())).count();
 
-            log.info("🔍 User {} - RatingSubmitted: {}", m.userId(), ratingSubmitted);
+            // 이 사용자가 실제로 평가한 다른 멤버들의 수
+            long ratedCount = groupMemberRatingRepository.countRatingsByUserInGroup(groupId, m.userId());
+
+            // 모든 다른 멤버를 평가했는지 확인
+            boolean ratingSubmitted = (ratedCount >= otherMembersCount);
+
+            log.info("🔍 User {} - Rated: {}/{}, RatingSubmitted: {}",
+                    m.userId(), ratedCount, otherMembersCount, ratingSubmitted);
 
             return new GroupMemberDetailDto(
                     m.userId(),
@@ -246,6 +253,7 @@ public class GroupServiceImpl implements GroupService {
                     ratingSubmitted
             );
         }).toList();
+
 
         boolean allMemberCompleted = !members.isEmpty() &&
                 members.stream().allMatch(mm -> mm.progressPercent() >= 100);
