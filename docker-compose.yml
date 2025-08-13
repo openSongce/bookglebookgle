@@ -63,7 +63,7 @@ services:
     depends_on:
       - loki
     volumes:
-      - grafana-storage:/var/lib/grafana            # ← 외부 볼륨 재사용(아래 volumes:에서 external 지정)
+      - grafana-storage:/var/lib/grafana
       - ./grafana-provisioning:/etc/grafana/provisioning
     environment:
       - GF_SECURITY_ADMIN_USER=admin
@@ -99,12 +99,13 @@ services:
 volumes:
   grafana-storage:
     external: true
-    name: springboot-deploy_grafana-storage     # ← 예전 데이터가 있는 실제 볼륨 이름
+    name: springboot-deploy_grafana-storage
   redis-data:
 
 networks:
   test-net:
     driver: bridge
+    name: test-net           # ← 이름 고정(검사 편의)
   monitoring:
     external: true
   bgbg-network:
