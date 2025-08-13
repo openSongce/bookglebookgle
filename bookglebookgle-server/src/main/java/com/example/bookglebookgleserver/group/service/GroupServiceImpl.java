@@ -252,6 +252,7 @@ public class GroupServiceImpl implements GroupService {
                     m.maxReadPage(),
                     progressPercent,
                     m.isHost(),
+                    m.profileImageUrl(),
                     ratingSubmitted
             );
         }).toList();
@@ -570,6 +571,7 @@ public class GroupServiceImpl implements GroupService {
                     m.maxReadPage(),
                     progressPercent,
                     m.isHost(),
+                    m.profileImageUrl(),
                     ratingSubmitted
             );
         }).toList();

@@ -17,6 +17,9 @@ public record GroupMemberDetailDto(
         @Schema(description = "방장 여부", example = "false")
         boolean isHost,
 
+        @Schema(description = "프로필 이미지 URL", example = "https://example.com/profile.jpg")
+        String profileImageUrl,
+
         @Schema(description = "이 멤버가 그룹 평점을 제출(완료)했는지", example = "true")
         boolean ratingSubmitted
 ) {}

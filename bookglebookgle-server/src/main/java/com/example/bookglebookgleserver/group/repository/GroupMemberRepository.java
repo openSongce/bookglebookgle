@@ -47,10 +47,13 @@ select new com.example.bookglebookgleserver.group.dto.GroupMemberDetailDto(
   coalesce(gm.maxReadPage, 0),
   cast(round(coalesce(gm.progressPercent, 0)) as integer),
   gm.isHost,
+  u.profileImageUrl,
   false
 )
-from GroupMember gm join gm.user u
-where gm.group.id = :groupId
+from GroupMember gm
+join gm.user u
+join gm.group g
+where g.id = :groupId
 """)
     List<GroupMemberDetailDto> findMemberDetailsByGroupId(@Param("groupId") Long groupId);
 
