@@ -116,7 +116,7 @@ class GroupDetailViewModel @Inject constructor(
                 userId = it.userId.toString(),
                 nickname = it.userNickName,     // 도메인 필드명이 다르면 여기를 맞춰주세요
                 color = it.profileColor,
-                imageUrl = it.photoUrl,
+                imageUrl = it.profileImageUrl,
                 isHost = it.isHost,
                 maxReadPage1Based = (it.lastPageRead + 1).coerceAtLeast(0)
             )

@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -338,7 +339,7 @@ private fun GroupDetailContent(
             InfoRow("최소 평점", "${groupDetail.minRequiredRating}점")
             Spacer(modifier = Modifier.height(ScreenSize.height * 0.01f))
             // 구분선 추가
-            Divider(
+            HorizontalDivider(
                 modifier = Modifier.fillMaxWidth(),
                 thickness = 1.dp,
                 color = Color(0xFFE0E0E0)
@@ -437,7 +438,7 @@ private fun GroupDetailContent(
             }
             Row(horizontalArrangement = Arrangement.spacedBy(ScreenSize.width * 0.02f)) {
                 membersSorted.forEach { m ->
-                    MemberAvatar(m.userNickName, m.profileColor, m.isHost, m.photoUrl)
+                    MemberAvatar(m.userNickName, m.profileColor, m.isHost, m.profileImageUrl)
                 }
             }
 
@@ -707,20 +708,14 @@ private fun MemberAvatar(
         if (isHost) {
             Box(
                 modifier = Modifier
-                    .size(badgeSize)
                     .align(Alignment.TopEnd)
-                    .offset(x = badgeSize * 0.15f, y = -badgeSize * 0.55f), // 👉 밖으로!
+                    .offset(x = (-11).dp, y = (-1).dp) // 바깥으로 살짝
+                    .clip(CircleShape)
+                    .background(Color.Transparent)
+                    .size(size * 0.5f),
                 contentAlignment = Alignment.Center
             ) {
-                // 배지 배경/테두리 (원하면)
-                Box(
-                    modifier = Modifier
-                        .matchParentSize()
-                        .clip(CircleShape)
-                        .background(Color(0xFFFFF8E1))
-                        .border(borderW, Color(0xFFFFC107), CircleShape)
-                )
-                Text("👑", fontSize = (badgeSize.value * 0.55f).sp)
+                Text("👑", fontSize = (size.value * 0.3f).sp)
             }
         }
     }

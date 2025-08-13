@@ -130,7 +130,7 @@ class GroupRepositoryImpl @Inject constructor(
                 TAG,
                 "모임 상세 조회 성공 - 제목=${body.roomTitle}, 카테고리=${body.category}, " +
                         "isCompleted=${body.allMembersCompleted}, 멤버수=${body.members.size}, " +
-                        "평점제출완료멤버=${body.members.count { it.ratingSubmitted }}"
+                        "평점제출완료멤버=${body.members.count { it.ratingSubmitted }}, ${body.members}"
             )
 
             // ★ 도메인으로 매핑해서 반환

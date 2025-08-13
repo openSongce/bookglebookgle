@@ -27,7 +27,9 @@ data class ChatMessage(
     val quizAnswer: QuizAnswerSubmit? = null,
     val quizReveal: QuizReveal? = null,
     val quizSummary: QuizSummary? = null,
-    val quizEnd: QuizEnd? = null
+    val quizEnd: QuizEnd? = null,
+
+    val avatarBgColor: String? = null
 )
 
 enum class MessageType(val value: String) {
