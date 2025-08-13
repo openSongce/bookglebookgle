@@ -15,6 +15,7 @@ sealed class Screen(val route: String) {
     object GroupRegisterScreen : Screen("group_register")
     object GroupDetailScreen : Screen("group_detail")
     object ChatRoomScreen : Screen("chat_room")
+    object MyBookShelfScreen : Screen("my_book_shelf")
 }
 
 // 화면간에 데이터를 전달하기위한 키
@@ -32,4 +33,5 @@ object NavKeys {
     const val SELECTED_COMMENT = "selected_comment"
     const val SELECTED_HIGHLIGHT = "selected_highlight"
     const val SELECTED_BOOKMARK = "selected_bookmark"
+    const val USER_ID = "userId"
 }

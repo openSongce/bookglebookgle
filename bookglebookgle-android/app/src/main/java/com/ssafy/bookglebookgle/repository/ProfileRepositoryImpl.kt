@@ -11,10 +11,10 @@ class ProfileRepositoryImpl @Inject constructor(
 ): ProfileRepository {
     override suspend fun fetchMyProfile(): UserProfile = api.getMyProfile().toDomain()
 
-    override suspend fun updateProfile(nickname: String?, colorHex: String?) {
+    override suspend fun updateProfile(nickname: String?, colorHex: String?, imageUrl: String?) {
         val normalized = colorHex?.let { normalizeHex(it) } // "#xxxxxx" & uppercase
         api.updateProfile(
-            UserProfileUpdateRequest(nickname = nickname, profileColor = normalized)
+            UserProfileUpdateRequest(nickname = nickname, profileColor = normalized, profileImgUrl = imageUrl)
         )
     }
 

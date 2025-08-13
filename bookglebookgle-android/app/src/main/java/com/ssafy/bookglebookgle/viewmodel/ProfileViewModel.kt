@@ -69,12 +69,12 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
-    fun updateProfile(nickname: String?, colorHex: String?) {
+    fun updateProfile(nickname: String?, colorHex: String?, imageUrl: String?) {
         viewModelScope.launch {
             _saving.value = true
             _nicknameError.value = null
             try {
-                updateProfileUseCase(nickname, colorHex)
+                updateProfileUseCase(nickname, colorHex, imageUrl)
                 _events.emit("프로필이 저장됐어요")
                 _saved.emit(Unit)
                 loadProfile()

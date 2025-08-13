@@ -33,11 +33,13 @@ import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.ssafy.bookglebookgle.R
+import com.ssafy.bookglebookgle.navigation.NavKeys
 import com.ssafy.bookglebookgle.navigation.Screen
 import com.ssafy.bookglebookgle.ui.component.CustomTopAppBar
 import com.ssafy.bookglebookgle.util.ScreenSize
 import com.ssafy.bookglebookgle.viewmodel.ProfileUiState
 import com.ssafy.bookglebookgle.viewmodel.ProfileViewModel
+import java.util.Locale
 
 @Composable
 fun RatingStatisticItem(label: String, rating: Float, modifier: Modifier = Modifier) {
@@ -71,7 +73,7 @@ fun RatingStatisticItem(label: String, rating: Float, modifier: Modifier = Modif
         Spacer(modifier = Modifier.height(screenH * 0.005f))
 
         Text(
-            text = rating.toString(),
+            text = String.format(Locale.getDefault(), "%.2f", rating), // 두 자리 반올림 + 0 채움
             fontSize = screenW.value.times(0.065f).sp,
             fontWeight = FontWeight.Bold,
             color = Color.Black
@@ -214,7 +216,15 @@ fun ProfileScreen(navController: NavHostController, viewModel: ProfileViewModel 
                         .padding(horizontal = ScreenSize.width * 0.08f),
                     horizontalArrangement = Arrangement.spacedBy(ScreenSize.width * 0.04f)
                 ) {
-                    ProfileItemHorizontal("내 책장", Modifier.weight(1f)) { /* TODO */ }
+                    ProfileItemHorizontal("내 책장", Modifier.weight(1f)) {
+                        val userId: Long = viewModel.userId.value
+                            navController.currentBackStackEntry
+                                ?.savedStateHandle
+                                ?.set(NavKeys.USER_ID, userId)
+
+                        navController.navigate(Screen.MyBookShelfScreen.route)
+                    }
+
                     ProfileItemHorizontal("로그아웃", Modifier.weight(1f)) {
                         viewModel.logout()
                     }
@@ -464,12 +474,18 @@ private fun MemberAvatar(
             .background(bg),
         contentAlignment = Alignment.Center
     ) {
-        val initial = nickname.firstOrNull()?.uppercaseChar()?.toString() ?: "?"
-        Text(
-            text = initial,
-            color = Color.White,
-            fontWeight = FontWeight.Bold,
-            fontSize = (size.value * 0.45f).sp
+//        val initial = nickname.firstOrNull()?.uppercaseChar()?.toString() ?: "?"
+//        Text(
+//            text = initial,
+//            color = Color.White,
+//            fontWeight = FontWeight.Bold,
+//            fontSize = (size.value * 0.45f).sp
+//        )
+        Icon(
+            painter = painterResource(id = R.drawable.cat_no_bg),
+            contentDescription = "Rating Icon",
+            tint = Color.Unspecified,
+            modifier = Modifier.size((size.value * 0.8f).dp)
         )
     }
 }

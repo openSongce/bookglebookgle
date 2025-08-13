@@ -14,6 +14,8 @@ import com.ssafy.bookglebookgle.repository.PdfRepository
 import com.ssafy.bookglebookgle.repository.PdfRepositoryImpl
 import com.ssafy.bookglebookgle.repository.ProfileRepository
 import com.ssafy.bookglebookgle.repository.ProfileRepositoryImpl
+import com.ssafy.bookglebookgle.repository.ShelfRepository
+import com.ssafy.bookglebookgle.repository.ShelfRepositoryImpl
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -67,4 +69,10 @@ abstract class RepositoryModule {
     abstract fun bindProfileRepository(
         impl: ProfileRepositoryImpl
     ): ProfileRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindShelfRepositroy(
+        impl: ShelfRepositoryImpl
+    ): ShelfRepository
 }

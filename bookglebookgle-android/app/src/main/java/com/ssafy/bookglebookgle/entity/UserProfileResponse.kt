@@ -3,6 +3,7 @@ package com.ssafy.bookglebookgle.entity
 data class UserProfileResponse(
     val email: String,
     val nickname: String,
+    val profileImgUrl: String? = null,
     val profileColor: String?,     // 예: "#AABBCC" (없을 수도)
     val avgRating: Float,          // 평균 평점
     val participatedGroups: Int,   // 총 참여 모임 수
@@ -18,6 +19,7 @@ data class UserProfileResponse(
 data class UserProfile(
     val email: String,
     val nickname: String,
+    val profileImgUrl: String? = null,
     val profileColor: String?,
     val avgRating: Float,
     val participatedGroups: Int,
@@ -39,6 +41,7 @@ fun UserProfileResponse.toDomain(): UserProfile {
     return UserProfile(
         email = email,
         nickname = nickname,
+        profileImgUrl = profileImgUrl,
         profileColor = profileColor,
         avgRating = avgRating,
         participatedGroups = participatedGroups,

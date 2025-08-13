@@ -37,6 +37,7 @@ import com.ssafy.bookglebookgle.ui.screen.ProfileScreen
 import com.ssafy.bookglebookgle.ui.screen.RegisterScreen
 import com.ssafy.bookglebookgle.ui.screen.SplashScreen
 import com.ssafy.bookglebookgle.ui.screen.GroupDetailScreen
+import com.ssafy.bookglebookgle.ui.screen.MyBookShelfScreen
 import com.ssafy.bookglebookgle.viewmodel.ProfileViewModel
 
 @SuppressLint("ContextCastToActivity")
@@ -266,6 +267,18 @@ fun MainNavigation(
                     }
                 )
             }
+
+
+            composable(Screen.MyBookShelfScreen.route) {
+                val userId: Long = navController.previousBackStackEntry
+                    ?.savedStateHandle
+                    ?.get<Long>(NavKeys.USER_ID)
+                    ?: -1L
+
+                MyBookShelfScreen(userId = userId)
+            }
+
+
 
         }
     }
