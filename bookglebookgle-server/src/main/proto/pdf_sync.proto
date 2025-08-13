@@ -38,6 +38,7 @@ message Participant {
   bool   isCurrentHost  = 4;
   bool   isOnline       = 5;
   int32  maxReadPage    = 6;
+  string avatarKey      = 7;
 }
 
 enum ActionType {

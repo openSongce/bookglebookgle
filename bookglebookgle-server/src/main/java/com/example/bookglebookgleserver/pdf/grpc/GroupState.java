@@ -32,6 +32,7 @@ class GroupState {
      final String userId;
      String userName = "";
      boolean isOriginalHost = false;
+     String avatarKey = "";
      ParticipantMeta(String userId) { this.userId = userId; }
 
      Participant toProto(boolean isCurrentHost) {
@@ -40,6 +41,7 @@ class GroupState {
                  .setUserName(userName)
                  .setIsOriginalHost(isOriginalHost)
                  .setIsCurrentHost(isCurrentHost)
+                 .setAvatarKey(avatarKey)
                  .build();
      }
  }

@@ -533,28 +533,42 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
                         .map(pm -> Long.valueOf(pm.userId))
                         .collect(Collectors.toSet());
 
-                Map<Long, String> names = idSet.isEmpty()
+                // ✅ 한 번에 User를 맵으로 가져오기
+                Map<Long, User> usersById = idSet.isEmpty()
                         ? Collections.emptyMap()
                         : userRepository.findAllById(idSet).stream()
-                          .collect(Collectors.toMap(User::getId, u ->
-                              Optional.ofNullable(u.getNickname()).filter(s -> !s.isBlank()).orElse(u.getId().toString())
-                          ));
+                            .collect(Collectors.toMap(User::getId, u -> u));
 
                 List<Participant> list = state.participants.values().stream()
                         .map(pm -> {
                             boolean isOnline = state.onlineByUser.getOrDefault(pm.userId, false);
                             int maxRead = state.progressByUser.getOrDefault(pm.userId, 0);
+
+                            User u = usersById.get(Long.valueOf(pm.userId));
+
+                            // 이름(닉네임 → 없으면 userId)
+                            String resolvedName =
+                                    Optional.ofNullable(pm.userName).filter(s -> !s.isBlank())
+                                            .orElseGet(() ->
+                                                    (u != null && u.getNickname() != null && !u.getNickname().isBlank())
+                                                            ? u.getNickname()
+                                                            : pm.userId
+                                            );
+
+                            // avatarKey (없으면 빈 문자열)
+                            String resolvedAvatarKey =
+                                    (u != null && u.getAvatarKey() != null)
+                                            ? u.getAvatarKey()
+                                            : "";
+
                             return Participant.newBuilder()
                                     .setUserId(pm.userId)
-                                    .setUserName(
-                                        Optional.ofNullable(pm.userName).filter(s -> !s.isBlank())
-                                           .orElse(names.getOrDefault(Long.valueOf(pm.userId), pm.userId))
-                                    )
+                                    .setUserName(resolvedName)
                                     .setIsOriginalHost(pm.isOriginalHost)
                                     .setIsCurrentHost(Objects.equals(pm.userId, state.currentLeaderId))
-                                    // 선택이지만 채워두면 좋음
-                                    .setIsOnline(isOnline)
+                                    .setIsOnline(isOnline)       // 선택 필드지만 채워두면 좋아요
                                     .setMaxReadPage(maxRead)
+                                    .setAvatarKey(resolvedAvatarKey) // ✅ 추가
                                     .build();
                         })
                         .sorted(Comparator
@@ -566,14 +580,14 @@ public class PdfSyncServiceImpl extends PdfSyncServiceGrpc.PdfSyncServiceImplBas
                 ParticipantsSnapshot.Builder b = ParticipantsSnapshot.newBuilder()
                         .addAllParticipants(list)
                         .setCurrentPage(state.currentPage)
-                        .setReadingMode(state.readingMode);;
+                        .setReadingMode(state.readingMode);
 
-                // ★ 맵 필수
-                state.progressByUser.forEach((k, v) -> b.putProgressByUser(k, v));
-                state.onlineByUser.forEach((k, v) -> b.putOnlineByUser(k, v));
+                state.progressByUser.forEach(b::putProgressByUser);
+                state.onlineByUser.forEach(b::putOnlineByUser);
 
                 return b.build();
             }
+
 
 
 

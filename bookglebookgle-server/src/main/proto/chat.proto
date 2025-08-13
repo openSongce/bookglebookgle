@@ -17,6 +17,8 @@ message ChatMessage {
   string type = 6; // "NORMAL", "AI_RESPONSE", "DISCUSSION_START", "DISCUSSION_END"
   string aiResponse = 7; // AI 응답(있을 때만)
   repeated string suggestedTopics = 8; // AI가 추천한 토론 주제(있을 때만)
+  string avatarKey = 9;
+  string avatarBgColor = 10;
 
     oneof quiz_payload {
         QuizStart quiz_start = 20;

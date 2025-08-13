@@ -48,6 +48,17 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
     private final ConcurrentHashMap<Long, String> userNickCache = new ConcurrentHashMap<>();
 
 
+ // ChatGrpcService 내부
+    private static String safeStr(String s) { return (s == null) ? "" : s; }
+
+    private ChatMessage enrichWithAvatar(ChatMessage in, User sender) {
+        return in.toBuilder()
+                .setSenderName(safeStr(sender.getNickname()))          // 닉네임 보정
+                .setAvatarKey(safeStr(sender.getProfileImageUrl()))    // 이미지 URL(없으면 "")
+                .setAvatarBgColor(safeStr(sender.getProfileColor()))   // DB 저장값 그대로(없으면 "")
+                .build();
+    }
+
 
 
     @Override
@@ -225,7 +236,8 @@ public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
                     log.error("[gRPC-Chat] 메시지 저장 에러: {}", ex.getMessage(), ex);
                 }
                 // 브로드캐스트
-                ChatGrpcService.this.broadcastToRoom(groupId, message);
+                ChatMessage outMsg = enrichWithAvatar(message, sender);
+                ChatGrpcService.this.broadcastToRoom(groupId, outMsg);
                 try {
                     // 바디 길이가 너무 길면 잘라 주는 게 UX에 좋아요(선택)
                     String text = message.getContent();
