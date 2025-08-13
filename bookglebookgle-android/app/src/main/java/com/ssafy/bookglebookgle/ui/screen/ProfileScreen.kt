@@ -6,7 +6,9 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.LocalTextSelectionColors
@@ -38,6 +40,7 @@ import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.ssafy.bookglebookgle.R
+import com.ssafy.bookglebookgle.navigation.NavKeys
 import com.ssafy.bookglebookgle.navigation.Screen
 import com.ssafy.bookglebookgle.ui.component.CustomTopAppBar
 import com.ssafy.bookglebookgle.ui.theme.BaseColor
@@ -46,6 +49,20 @@ import com.ssafy.bookglebookgle.util.ScreenSize
 import com.ssafy.bookglebookgle.viewmodel.ProfileUiState
 import com.ssafy.bookglebookgle.viewmodel.ProfileViewModel
 import kotlinx.coroutines.launch
+import java.util.Locale
+
+// 키 문자열 ↔ 로컬 드로어블 매핑
+private val AVATAR_RES_MAP = mapOf(
+    "whitebear" to R.drawable.whitebear_no_bg,
+    "penguin"   to R.drawable.penguin_no_bg,
+    "squirrel"  to R.drawable.squirrel_no_bg,
+    "rabbit"    to R.drawable.rabbit_no_bg,
+    "dog"       to R.drawable.dog_no_bg,
+    "cat"       to R.drawable.cat_no_bg
+)
+
+private fun keyToResId(key: String?): Int? = key?.let { AVATAR_RES_MAP[it] }
+
 
 @Composable
 fun RatingStatisticItem(label: String, rating: Float, modifier: Modifier = Modifier) {
@@ -79,7 +96,7 @@ fun RatingStatisticItem(label: String, rating: Float, modifier: Modifier = Modif
         Spacer(modifier = Modifier.height(screenH * 0.005f))
 
         Text(
-            text = rating.toString(),
+            text = String.format(Locale.getDefault(), "%.2f", rating), // 두 자리 반올림 + 0 채움
             fontSize = screenW.value.times(0.065f).sp,
             fontWeight = FontWeight.Bold,
             color = Color.Black
@@ -171,6 +188,7 @@ fun ProfileScreen(navController: NavHostController, viewModel: ProfileViewModel 
                     MemberAvatar(
                         nickname = data.nickname,
                         colorHex = data.profileColor,
+                        profileImgKey = data.profileImgUrl,
                         size = avatarSize
                     )
 
@@ -227,7 +245,15 @@ fun ProfileScreen(navController: NavHostController, viewModel: ProfileViewModel 
                         .padding(horizontal = ScreenSize.width * 0.08f),
                     horizontalArrangement = Arrangement.spacedBy(ScreenSize.width * 0.04f)
                 ) {
-                    ProfileItemHorizontal("내 책장", Modifier.weight(1f)) { /* TODO */ }
+                    ProfileItemHorizontal("내 책장", Modifier.weight(1f)) {
+                        val userId: Long = viewModel.userId.value
+                            navController.currentBackStackEntry
+                                ?.savedStateHandle
+                                ?.set(NavKeys.USER_ID, userId)
+
+                        navController.navigate(Screen.MyBookShelfScreen.route)
+                    }
+
                     ProfileItemHorizontal("로그아웃", Modifier.weight(1f)) {
                         viewModel.logout()
                     }
@@ -286,11 +312,12 @@ fun ProfileScreen(navController: NavHostController, viewModel: ProfileViewModel 
                         EditProfileSheetContent(
                             currentNickname = data.nickname,
                             currentColorHex = data.profileColor,
+                            currentImageKey = data.profileImgUrl,
                             saving = saving,
                             nicknameError = nicknameError,
                             onCancel = { showEditor.value = false },
-                            onSave = { newNick, newHex ->
-                                viewModel.updateProfile(newNick, newHex)
+                            onSave = { newNick, newHex, imageKey ->
+                                viewModel.updateProfile(newNick, newHex, imageKey)
                             }
                         )
                     }
@@ -466,9 +493,11 @@ fun SimpleStatisticItem(label: String, value: String, modifier: Modifier = Modif
 private fun MemberAvatar(
     nickname: String,
     colorHex: String?,
+    profileImgKey: String? = null,
     size: Dp = ScreenSize.width * 0.12f
 ) {
     val bg = remember(colorHex) { hexToColorOrDefault(colorHex) }
+    val resId = remember(profileImgKey) { keyToResId(profileImgKey) }
 
     Box(
         modifier = Modifier
@@ -477,13 +506,22 @@ private fun MemberAvatar(
             .background(bg),
         contentAlignment = Alignment.Center
     ) {
-        val initial = nickname.firstOrNull()?.uppercaseChar()?.toString() ?: "?"
-        Text(
-            text = initial,
-            color = Color.White,
-            fontWeight = FontWeight.Bold,
-            fontSize = (size.value * 0.45f).sp
-        )
+        if (resId != null) {
+            Icon(
+                painter = painterResource(id = resId),
+                contentDescription = "avatar",
+                tint = Color.Unspecified,
+                modifier = Modifier.size(size * 0.8f)
+            )
+        } else {
+            val initial = nickname.firstOrNull()?.uppercaseChar()?.toString() ?: "?"
+            Text(
+                text = initial,
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = (size.value * 0.45f).sp
+            )
+        }
     }
 }
 
@@ -493,13 +531,19 @@ private fun EditProfileSheetContent(
     currentColorHex: String?,
     saving: Boolean,
     nicknameError: String?,
+    currentImageKey: String?,
     onCancel: () -> Unit,
-    onSave: (String, String?) -> Unit
+    onSave: (String, String?, String?) -> Unit
 ) {
     var nickname by remember { mutableStateOf(currentNickname) }
     var colorInput by remember { mutableStateOf(currentColorHex ?: "") }
+    var selectedImageKey by remember { mutableStateOf(currentImageKey) }
 
     val previewColor = hexToColorOrDefault(colorInput)
+    val avatarPreviewSize = ScreenSize.width * 0.12f
+    val chipSize = ScreenSize.width * 0.16f
+    val chipGap  = ScreenSize.width * 0.03f
+    val borderW  = ScreenSize.width * 0.0025f  // ≈ 1dp 느낌
 
     Column(
         modifier = Modifier
@@ -521,17 +565,13 @@ private fun EditProfileSheetContent(
 
         // 미리보기
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .background(previewColor),
-                contentAlignment = Alignment.Center
-            ) {
-                val initial = nickname.firstOrNull()?.uppercaseChar()?.toString() ?: "?"
-                Text(initial, color = Color.White, fontWeight = FontWeight.Bold)
-            }
-            Spacer(Modifier.width(12.dp))
+            MemberAvatar(
+                nickname = nickname,
+                colorHex = colorInput,
+                profileImgKey = selectedImageKey,
+                size = avatarPreviewSize
+            )
+            Spacer(Modifier.width(ScreenSize.width * 0.03f))
             Text(nickname, fontWeight = FontWeight.SemiBold)
         }
 
@@ -608,6 +648,33 @@ private fun EditProfileSheetContent(
             }
         }
 
+        Text("프로필 이미지 (선택)", fontWeight = FontWeight.SemiBold)
+
+        Row(
+            modifier = Modifier.fillMaxWidth() .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(chipGap),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 없음(이니셜)
+            AvatarChoiceNone(
+                nickname = nickname,
+                colorHex = colorInput,
+                selected = selectedImageKey == null,
+                size = chipSize,
+                borderW = borderW
+            ) { if (!saving) selectedImageKey = null }
+
+            // 6개 이미지
+            AVATAR_RES_MAP.forEach { (key, resId) ->
+                AvatarChoiceImage(
+                    resId = resId,
+                    selected = selectedImageKey == key,
+                    size = chipSize,
+                    borderW = borderW
+                ) { if (!saving) selectedImageKey = key }
+            }
+        }
+
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.fillMaxWidth()
@@ -630,7 +697,7 @@ private fun EditProfileSheetContent(
                 onClick = {
                     if (!saving) { // 추가 안전장치
                         val normalized = normalizeHexOrNull(colorInput)
-                        onSave(nickname.trim(), normalized)
+                        onSave(nickname.trim(), normalized, selectedImageKey)
                     }
                 },
                 modifier = Modifier.weight(1f),
@@ -699,3 +766,59 @@ private fun hexToColorOrDefault(input: String?): Color =
         val s = normalizeHexOrNull(input) ?: "#E0E0E0"
         Color(android.graphics.Color.parseColor(s))
     }.getOrDefault(Color(0xFFE0E0E0))
+
+@Composable
+private fun AvatarChoiceNone(
+    nickname: String,
+    colorHex: String?,
+    selected: Boolean,
+    size: Dp,
+    borderW: Dp,
+    onClick: () -> Unit
+) {
+    val borderColor = if (selected) BaseColor else Color(0x11000000)
+    Box(
+        modifier = Modifier
+            .size(size)
+            .clip(CircleShape)
+            .background(hexToColorOrDefault(colorHex))
+            .border(borderW, borderColor, CircleShape)
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        val initial = nickname.firstOrNull()?.uppercaseChar()?.toString() ?: "?"
+        Text(
+            text = initial,
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
+            fontSize = (size.value * 0.4f).sp
+        )
+    }
+}
+
+@Composable
+private fun AvatarChoiceImage(
+    resId: Int,
+    selected: Boolean,
+    size: Dp,
+    borderW: Dp,
+    onClick: () -> Unit
+) {
+    val borderColor = if (selected) BaseColor else Color(0x11000000)
+    Box(
+        modifier = Modifier
+            .size(size)
+            .clip(CircleShape)
+            .border(borderW, borderColor, CircleShape)
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            painter = painterResource(id = resId),
+            contentDescription = null,
+            tint = Color.Unspecified,
+            modifier = Modifier.size(size * 0.9f)
+        )
+    }
+}
+

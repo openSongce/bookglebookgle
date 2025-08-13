@@ -74,7 +74,7 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
-    fun updateProfile(nickname: String?, colorHex: String?) {
+    fun updateProfile(nickname: String?, colorHex: String?, imageUrl : String?) {
         // 이미 저장 중이면 중복 실행 방지
         if (_saving.value) {
             Log.d("ProfileVM", "Already saving, ignoring duplicate request")
@@ -85,7 +85,7 @@ class ProfileViewModel @Inject constructor(
             _saving.value = true
             _nicknameError.value = null
             try {
-                updateProfileUseCase(nickname, colorHex)
+                updateProfileUseCase(nickname, colorHex, imageUrl)
 
 
                 Log.d("ProfileVM", "updateProfile: 윤수")
@@ -96,7 +96,8 @@ class ProfileViewModel @Inject constructor(
                     // 성공 상태인 경우 현재 데이터를 업데이트
                     val updatedProfile = currentState.data.copy(
                         nickname = nickname ?: currentState.data.nickname,
-                        profileColor = colorHex ?: currentState.data.profileColor
+                        profileColor = colorHex ?: currentState.data.profileColor,
+                        profileImgUrl = imageUrl ?: currentState.data.profileImgUrl
                     )
 
                     _uiState.value = ProfileUiState.Success(updatedProfile)

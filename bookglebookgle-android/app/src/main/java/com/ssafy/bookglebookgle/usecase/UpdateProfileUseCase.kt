@@ -6,6 +6,6 @@ import javax.inject.Inject
 class UpdateProfileUseCase @Inject constructor(
     private val repo: ProfileRepository
 ) {
-    suspend operator fun invoke(nickname: String?, colorHex: String?) =
-        repo.updateProfile(nickname, colorHex)
+    suspend operator fun invoke(nickname: String?, colorHex: String?, imageUrl: String?) =
+        repo.updateProfile(nickname, colorHex, imageUrl)
 }
