@@ -213,8 +213,6 @@ public class GroupServiceImpl implements GroupService {
                 .collect(Collectors.toList());
     }
 
-
-
     @Transactional(readOnly = true)
     public GroupDetailResponse getGroupDetail(Long groupId, User requester) {
         Group group = groupRepository.findById(groupId)
@@ -223,25 +221,29 @@ public class GroupServiceImpl implements GroupService {
         int pageCount = resolvePageCount(group);
         boolean requesterIsHost = group.getHostUser().getId().equals(requester.getId());
 
+        // 기본 멤버 정보
         List<GroupMemberDetailDto> base = groupMemberRepository.findMemberDetailsByGroupId(groupId);
 
-        // 평가 제출자 집합 조회
-        Set<Long> raterMemberIds = groupMemberRatingRepository.findAllRaterMemberIdsByGroupId(groupId);
+        // userId -> memberId 매핑 (rating 테이블은 group_member_id를 씀)
+        List<GroupMember> gmEntities = groupMemberRepository.findByGroup_Id(groupId);
+        Map<Long, Long> userIdToMemberId = gmEntities.stream()
+                .collect(Collectors.toMap(gm -> gm.getUser().getId(), GroupMember::getId));
 
+        // “자기 제외 인원 수” (모든 멤버를 평가해야 true)
+        long requiredCountPerUser = Math.max(0, gmEntities.size() - 1);
+
+        // DTO 가공
         List<GroupMemberDetailDto> members = base.stream().map(m -> {
             int progressPercent = calcProgressPercent(m.maxReadPage(), pageCount);
 
-            // 이 사용자가 평가해야 할 다른 멤버들의 수 (자신 제외)
-            long otherMembersCount = base.stream().filter(other -> !other.userId().equals(m.userId())).count();
+            Long memberId = userIdToMemberId.get(m.userId()); // 이 유저의 group_member_id
+            long ratedCount = (memberId == null) ? 0
+                    : groupMemberRatingRepository.countDistinctTargetsByMemberInGroup(groupId, memberId);
 
-            // 이 사용자가 실제로 평가한 다른 멤버들의 수
-            long ratedCount = groupMemberRatingRepository.countRatingsByUserInGroup(groupId, m.userId());
+            boolean ratingSubmitted = ratedCount >= requiredCountPerUser;
 
-            // 모든 다른 멤버를 평가했는지 확인
-            boolean ratingSubmitted = (ratedCount >= otherMembersCount);
-
-            log.info("🔍 User {} - Rated: {}/{}, RatingSubmitted: {}",
-                    m.userId(), ratedCount, otherMembersCount, ratingSubmitted);
+            log.info("🔍 userId={}, memberId={}, rated {}/{} → submitted={}",
+                    m.userId(), memberId, ratedCount, requiredCountPerUser, ratingSubmitted);
 
             return new GroupMemberDetailDto(
                     m.userId(),
@@ -253,7 +255,6 @@ public class GroupServiceImpl implements GroupService {
                     ratingSubmitted
             );
         }).toList();
-
 
         boolean allMemberCompleted = !members.isEmpty() &&
                 members.stream().allMatch(mm -> mm.progressPercent() >= 100);
@@ -275,6 +276,68 @@ public class GroupServiceImpl implements GroupService {
                 allMemberCompleted
         );
     }
+
+
+//    @Transactional(readOnly = true)
+//    public GroupDetailResponse getGroupDetail(Long groupId, User requester) {
+//        Group group = groupRepository.findById(groupId)
+//                .orElseThrow(() -> new NotFoundException("해당 모임이 존재하지 않습니다."));
+//
+//        int pageCount = resolvePageCount(group);
+//        boolean requesterIsHost = group.getHostUser().getId().equals(requester.getId());
+//
+//        List<GroupMemberDetailDto> base = groupMemberRepository.findMemberDetailsByGroupId(groupId);
+//
+//        // 평가 제출자 집합 조회
+//        Set<Long> raterMemberIds = groupMemberRatingRepository.findAllRaterMemberIdsByGroupId(groupId);
+//
+//        List<GroupMemberDetailDto> members = base.stream().map(m -> {
+//            int progressPercent = calcProgressPercent(m.maxReadPage(), pageCount);
+//
+//            // 이 사용자가 평가해야 할 다른 멤버들의 수 (자신 제외)
+//            long otherMembersCount = base.stream().filter(other -> !other.userId().equals(m.userId())).count();
+//
+//            // 이 사용자가 실제로 평가한 다른 멤버들의 수
+//            long ratedCount = groupMemberRatingRepository.countRatingsByUserInGroup(groupId, m.userId());
+//
+//            // 모든 다른 멤버를 평가했는지 확인
+//            boolean ratingSubmitted = (ratedCount >= otherMembersCount);
+//
+//            log.info("🔍 User {} - Rated: {}/{}, RatingSubmitted: {}",
+//                    m.userId(), ratedCount, otherMembersCount, ratingSubmitted);
+//
+//            return new GroupMemberDetailDto(
+//                    m.userId(),
+//                    m.userNickName(),
+//                    m.profileColor(),
+//                    m.maxReadPage(),
+//                    progressPercent,
+//                    m.isHost(),
+//                    ratingSubmitted
+//            );
+//        }).toList();
+//
+//
+//        boolean allMemberCompleted = !members.isEmpty() &&
+//                members.stream().allMatch(mm -> mm.progressPercent() >= 100);
+//
+//        String readableSchedule = cronToReadable(group.getSchedule());
+//
+//        return new GroupDetailResponse(
+//                group.getRoomTitle(),
+//                group.getCategory().name(),
+//                readableSchedule,
+//                members.size(),
+//                group.getGroupMaxNum(),
+//                group.getDescription(),
+//                null,
+//                requesterIsHost,
+//                group.getMinRequiredRating(),
+//                pageCount,
+//                members,
+//                allMemberCompleted
+//        );
+//    }
 
 
 

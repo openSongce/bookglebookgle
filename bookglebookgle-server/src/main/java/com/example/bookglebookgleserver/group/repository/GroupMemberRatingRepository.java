@@ -29,14 +29,21 @@ public interface GroupMemberRatingRepository extends JpaRepository<GroupMemberRa
     //  특정 from_member가 이 그룹에서 평가를 남겼는지 단건 체크
     boolean existsByGroup_IdAndFromMember_Id(Long groupId, Long fromMemberId);
 
-    @Query("""
-    SELECT COUNT(gmr) 
-    FROM GroupMemberRating gmr 
-    JOIN gmr.fromMember fm
-    WHERE gmr.group.id = :groupId 
-    AND fm.user.id = :userId
-""")
-    long countRatingsByUserInGroup(@Param("groupId") Long groupId, @Param("userId") Long userId);
+//    @Query("""
+//    select count(r)
+//    from GroupMemberRating r
+//    where r.group.id = :groupId
+//      and r.fromMember.id = :memberId
+//    """)
+//    long countRatingsByMemberInGroup(@Param("groupId") Long groupId, @Param("memberId") Long memberId);
 
+    @Query("""
+        select count(distinct r.toMember.id)
+        from GroupMemberRating r
+        where r.group.id = :groupId
+          and r.fromMember.id = :memberId
+    """)
+    long countDistinctTargetsByMemberInGroup(@Param("groupId") Long groupId,
+                                             @Param("memberId") Long memberId);
 
 }
