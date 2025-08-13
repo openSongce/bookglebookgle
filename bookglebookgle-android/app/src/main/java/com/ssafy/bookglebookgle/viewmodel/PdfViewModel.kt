@@ -198,6 +198,9 @@ class PdfViewModel @Inject constructor(
     private val _onlineByUser = MutableStateFlow<Map<String, Boolean>>(emptyMap())
     val onlineByUser: StateFlow<Map<String, Boolean>> = _onlineByUser.asStateFlow()
 
+    private val _avatarKeyByUser = kotlinx.coroutines.flow.MutableStateFlow<Map<String, String?>>(emptyMap())
+    val avatarKeyByUser: kotlinx.coroutines.flow.StateFlow<Map<String, String?>> = _avatarKeyByUser
+
 
     fun isRead(userId: String, page1Based: Int): Boolean =
         (progressByUser.value[userId] ?: 0) >= page1Based
@@ -243,6 +246,10 @@ class PdfViewModel @Inject constructor(
 
         _colorByUser.value = initialMembers.associate { m ->
             m.userId to (m.color?.takeIf { it.isNotBlank() } ?: "#E5E7EB")
+        }
+
+        _avatarKeyByUser.value = initialMembers.associate { m ->
+            m.userId to m.imageUrl
         }
     }
 
@@ -775,6 +782,7 @@ class PdfViewModel @Inject constructor(
         _isLoading.value = false
         _pdfLoadError.value = null
         _pdfReady.value = false
+        _avatarKeyByUser.value = emptyMap()
 
         // 렌더링 상태도 초기화
         _isPdfRenderingComplete.value = false
@@ -1096,6 +1104,12 @@ class PdfViewModel @Inject constructor(
             val snapById = snapshot.participantsList.associateBy { it.userId }
             val hostId   = snapshot.participantsList.firstOrNull { it.isCurrentHost }?.userId
 
+
+            val avatarKeyMapFromSnap: Map<String, String?> =
+                snapshot.participantsList.associate { p ->
+                    p.userId to p.avatarKey.takeIf { it.isNotBlank() }
+                }
+
             // 1) 기존 모임원 리스트를 '삭제 없이' 필드만 업데이트(merge)
             val merged = base.map { p ->
                 val snap = snapById[p.userId]
@@ -1144,6 +1158,8 @@ class PdfViewModel @Inject constructor(
                 _currentPage.value = page
                 _showPageInfo.value = true
             }
+
+            _avatarKeyByUser.update { prev -> prev + avatarKeyMapFromSnap }
         }
 
 

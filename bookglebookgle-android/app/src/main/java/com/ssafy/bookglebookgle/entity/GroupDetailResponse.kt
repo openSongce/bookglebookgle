@@ -7,7 +7,6 @@ data class GroupDetailResponse(
     val memberCount: Int,
     val maxMemberCount: Int,
     val description: String,
-    val photoUrl: String?,
     val isHost: Boolean,
     val minRequiredRating: Int,
     val pageCount: Int,
@@ -22,7 +21,8 @@ data class GroupMemberDetailDto(
     val lastPageRead: Int,   // 서버: 0-based
     val progressPercent: Int,
     val isHost: Boolean,
-    val ratingSubmitted: Boolean
+    val ratingSubmitted: Boolean,
+    val profileImageUrl: String?
 )
 
 data class GroupDetail(
@@ -32,7 +32,6 @@ data class GroupDetail(
     val memberCount: Int,
     val maxMemberCount: Int,
     val description: String,
-    val photoUrl: String?,
     val isHost: Boolean,
     val isCompleted: Boolean,          // 모임 종료 여부
     val minRequiredRating: Int,
@@ -47,7 +46,8 @@ data class GroupMember(
     val lastPageRead: Int,     // 서버 0-based 유지
     val progressPercent: Int,
     val isHost: Boolean,
-    val hasRated: Boolean      // 내가 보기 좋게 이름 변경(서버: isCompleted)
+    val hasRated: Boolean,
+    val profileImageUrl: String?
 )
 
 fun GroupDetailResponse.toDomain(): GroupDetail = GroupDetail(
@@ -57,7 +57,6 @@ fun GroupDetailResponse.toDomain(): GroupDetail = GroupDetail(
     memberCount = memberCount,
     maxMemberCount = maxMemberCount,
     description = description,
-    photoUrl = photoUrl,
     isCompleted = allMembersCompleted,
     minRequiredRating = minRequiredRating,
     isHost = isHost,
@@ -72,5 +71,6 @@ fun GroupMemberDetailDto.toDomain(): GroupMember = GroupMember(
     lastPageRead = lastPageRead,
     progressPercent = progressPercent,
     isHost = isHost,
-    hasRated = ratingSubmitted   // ★ 서버 필드명은 isCompleted지만 의미는 "평가 완료"
+    hasRated = ratingSubmitted,   // ★ 서버 필드명은 isCompleted지만 의미는 "평가 완료"
+    profileImageUrl = profileImageUrl
 )

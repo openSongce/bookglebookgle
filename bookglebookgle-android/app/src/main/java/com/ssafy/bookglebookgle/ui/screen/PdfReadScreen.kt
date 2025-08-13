@@ -74,7 +74,20 @@ import com.google.gson.reflect.TypeToken
 import com.ssafy.bookglebookgle.entity.Participant
 import com.ssafy.bookglebookgle.viewmodel.GroupDetailViewModel
 import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.unit.Dp
 import com.ssafy.bookglebookgle.viewmodel.ChatRoomViewModel
+
+// 키 문자열 ↔ 로컬 드로어블
+private val AVATAR_RES_MAP = mapOf(
+    "whitebear" to R.drawable.whitebear_no_bg,
+    "penguin"   to R.drawable.penguin_no_bg,
+    "squirrel"  to R.drawable.squirrel_no_bg,
+    "rabbit"    to R.drawable.rabbit_no_bg,
+    "dog"       to R.drawable.dog_no_bg,
+    "cat"       to R.drawable.cat_no_bg
+)
+private fun keyToResId(key: String?): Int? = key?.let { AVATAR_RES_MAP[it] }
+
 
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalComposeUiApi::class)
@@ -145,6 +158,7 @@ fun PdfReadScreen(
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
 
     val userColors by viewModel.colorByUser.collectAsState()
+    val avatarKeys by viewModel.avatarKeyByUser.collectAsState()
 
     val selectedHighlights by viewModel.selectedHighlights.collectAsState()
     val highlightPopupPoint by viewModel.highlightPopupPoint.collectAsState()
@@ -966,7 +980,8 @@ fun PdfReadScreen(
                     onClearFilter = { viewModel.clearHighlightFilter() },
                     readingMode = readingMode,
                     onChangeMode = { mode -> viewModel.setReadingMode(mode) },
-                    userColors = userColors
+                    userColors = userColors,
+                    avatarKeys = avatarKeys
                 )
 
             }
@@ -1110,7 +1125,8 @@ private fun ParticipantsBottomSheet(
     onClearFilter: () -> Unit,                           // <- 전체 해제
     readingMode: PdfViewModel.ReadingMode,
     onChangeMode: (PdfViewModel.ReadingMode) -> Unit,
-    userColors: Map<String, String>
+    userColors: Map<String, String>,
+    avatarKeys: Map<String, String?>
 
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -1190,9 +1206,11 @@ private fun ParticipantsBottomSheet(
 
             Spacer(Modifier.height(4.dp))
 
+
             sorted.forEach { p ->
                 val read = p.maxReadPage >= currentPage   // ← 현재 페이지 기준 읽음/안읽음
                 val colorHex = userColors[p.userId]
+                val key = avatarKeys[p.userId]
                 ParticipantRow(
                     me = (p.userId == currentUserId),
                     isLeader = p.isCurrentHost,
@@ -1202,7 +1220,8 @@ private fun ParticipantsBottomSheet(
                     userName = p.userName.ifBlank { p.userId },
                     onClick = { if (p.userId != currentUserId) onTransferClick(p.userId) },
                     enabled = isCurrentLeader && p.userId != currentUserId,
-                    avatarColorHex = colorHex
+                    avatarColorHex = colorHex,
+                    avatarKey = key
                 )
                 Spacer(Modifier.height(8.dp))
             }
@@ -1247,7 +1266,8 @@ private fun ParticipantRow(
     userName: String,
     enabled: Boolean,
     onClick: () -> Unit,
-    avatarColorHex: String?
+    avatarColorHex: String?,
+    avatarKey: String?
 ) {
     val rowAlpha = if (readingMode == PdfViewModel.ReadingMode.FREE && !online) 0.5f else 1f
     val nameWeight = when {
@@ -1270,41 +1290,14 @@ private fun ParticipantRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
 
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(avatarBg)
-                .then(
-                    if (isLeader) Modifier.border(2.dp, Color(0xFFFFC107), CircleShape) // 금색 테두리
-                    else Modifier
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            val initial = userName.firstOrNull()?.uppercaseChar()?.toString() ?: "🙂"
-            Text(
-                text = initial,
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
-                fontSize = (40 * 0.45f).sp
-            )
+        AvatarBubble(
+            name = userName,
+            isLeader = isLeader,
+            bgColor = avatarBg,
+            avatarKey = avatarKey,      // 키 있으면 이미지, 없으면 이니셜
+            size = 40.dp
+        )
 
-            if (isLeader) {
-                // 오른쪽 위 왕관 배지
-                Box(
-                    modifier = Modifier
-                        .size((40 * 0.38f).dp)                 // 배지 크기
-                        .align(Alignment.TopEnd)
-                        .offset(x = (40 * 0.04f).dp, y = -(40 * 0.04f).dp) // 살짝 밖으로
-                        .clip(CircleShape)
-                        .background(Color(0xFFFFF8E1))      // 밝은 배경
-                        .border(1.dp, Color(0xFFFFC107), CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("👑", fontSize = (40 * 0.22f).sp)
-                }
-            }
-        }
 
         Spacer(Modifier.width(12.dp))
 
@@ -1594,6 +1587,63 @@ private fun CommentPopupDialogMini(
                         Divider(color = Color(0xFFE2E8F0))
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AvatarBubble(
+    name: String,
+    isLeader: Boolean,
+    bgColor: Color,
+    avatarKey: String?,
+    size: Dp
+) {
+    // 바깥 래퍼는 clip 하지 않아 왕관이 밖으로 나갈 수 있게
+    Box(modifier = Modifier.size(size + 12.dp)) { // 여유 공간 조금
+        // 원형 아바타
+        Box(
+            modifier = Modifier
+                .size(size)
+                .align(Alignment.CenterStart)
+                .clip(CircleShape)
+                .background(bgColor)
+                .then(
+                    if (isLeader) Modifier.border(2.dp, Color(0xFFFFC107), CircleShape) else Modifier
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            val resId = keyToResId(avatarKey)
+            if (resId != null) {
+                Image(
+                    painter = painterResource(id = resId),
+                    contentDescription = null,
+                    modifier = Modifier.size(size * 0.70f)
+                )
+            } else {
+                val initial = name.firstOrNull()?.uppercaseChar()?.toString() ?: "?"
+                Text(
+                    text = initial,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = (size.value * 0.45f).sp
+                )
+            }
+        }
+
+        // 왕관을 원 '밖'으로
+        if (isLeader) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .offset(x = (-22).dp, y = 5.dp) // 바깥으로 살짝
+                    .clip(CircleShape)
+                    .background(Color.Transparent)
+                    .size(size * 0.5f),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("👑", fontSize = (size.value * 0.3f).sp)
             }
         }
     }

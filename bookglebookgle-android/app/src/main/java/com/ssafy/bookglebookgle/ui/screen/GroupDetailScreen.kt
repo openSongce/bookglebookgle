@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -44,6 +45,19 @@ import com.ssafy.bookglebookgle.viewmodel.GroupDetailUiState
 import com.ssafy.bookglebookgle.viewmodel.GroupDetailViewModel
 import com.ssafy.bookglebookgle.viewmodel.JoinGroupUiState
 import com.ssafy.bookglebookgle.viewmodel.RateMemberUiState
+
+// 키 문자열 ↔ 로컬 드로어블
+private val AVATAR_RES_MAP = mapOf(
+    "whitebear" to R.drawable.whitebear_no_bg,
+    "penguin"   to R.drawable.penguin_no_bg,
+    "squirrel"  to R.drawable.squirrel_no_bg,
+    "rabbit"    to R.drawable.rabbit_no_bg,
+    "dog"       to R.drawable.dog_no_bg,
+    "cat"       to R.drawable.cat_no_bg
+)
+
+private fun keyToResId(key: String?): Int? = key?.let { AVATAR_RES_MAP[it] }
+
 
 @Composable
 fun GroupDetailScreen(
@@ -325,7 +339,7 @@ private fun GroupDetailContent(
             InfoRow("최소 평점", "${groupDetail.minRequiredRating}점")
             Spacer(modifier = Modifier.height(ScreenSize.height * 0.01f))
             // 구분선 추가
-            Divider(
+            HorizontalDivider(
                 modifier = Modifier.fillMaxWidth(),
                 thickness = 1.dp,
                 color = Color(0xFFE0E0E0)
@@ -424,7 +438,7 @@ private fun GroupDetailContent(
             }
             Row(horizontalArrangement = Arrangement.spacedBy(ScreenSize.width * 0.02f)) {
                 membersSorted.forEach { m ->
-                    MemberAvatar(m.userNickName, m.profileColor, m.isHost)
+                    MemberAvatar(m.userNickName, m.profileColor, m.isHost, m.profileImageUrl)
                 }
             }
 
@@ -652,9 +666,14 @@ private fun MemberAvatar(
     nickname: String,
     colorHex: String?,
     isHost: Boolean,
+    profileImgKey: String? = null,
     size: Dp = ScreenSize.width * 0.12f
 ) {
     val bg = remember(colorHex) { hexToColor(colorHex) }
+    val resId = remember(profileImgKey) { keyToResId(profileImgKey) }
+
+    val borderW   = size * 0.016f                  // ≈ 2dp 비율
+    val badgeSize = size * 0.36f                   // 왕관 배지 크기
 
     Box(
         modifier = Modifier
@@ -667,27 +686,36 @@ private fun MemberAvatar(
             ),
         contentAlignment = Alignment.Center
     ) {
-        val initial = nickname.firstOrNull()?.uppercaseChar()?.toString() ?: "?"
-        Text(
-            text = initial,
-            color = Color.White,
-            fontWeight = FontWeight.Bold,
-            fontSize = (size.value * 0.45f).sp
-        )
+        if (resId != null) {
+            // 키가 유효하면 로컬 드로어블 표시
+            androidx.compose.material3.Icon(
+                painter = painterResource(id = resId),
+                contentDescription = "avatar",
+                tint = Color.Unspecified,
+                modifier = Modifier.size(size * 0.8f)
+            )
+        } else {
+            // 키가 없거나 매핑 실패 → 이니셜
+            val initial = nickname.firstOrNull()?.uppercaseChar()?.toString() ?: "?"
+            Text(
+                text = initial,
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = (size.value * 0.45f).sp
+            )
+        }
 
         if (isHost) {
-            // 오른쪽 위 왕관 배지
             Box(
                 modifier = Modifier
-                    .size(size * 0.38f)                 // 배지 크기
                     .align(Alignment.TopEnd)
-                    .offset(x = size * 0.04f, y = -(size * 0.04f)) // 살짝 밖으로
+                    .offset(x = (-11).dp, y = (-1).dp) // 바깥으로 살짝
                     .clip(CircleShape)
-                    .background(Color(0xFFFFF8E1))      // 밝은 배경
-                    .border(1.dp, Color(0xFFFFC107), CircleShape),
+                    .background(Color.Transparent)
+                    .size(size * 0.5f),
                 contentAlignment = Alignment.Center
             ) {
-                Text("👑", fontSize = (size.value * 0.22f).sp)
+                Text("👑", fontSize = (size.value * 0.3f).sp)
             }
         }
     }

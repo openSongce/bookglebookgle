@@ -71,6 +71,16 @@ import kotlinx.coroutines.launch
 
 private const val TAG = "싸피_ChatRoomScreen"
 
+private val AVATAR_RES_MAP = mapOf(
+    "whitebear" to R.drawable.whitebear_no_bg,
+    "penguin"   to R.drawable.penguin_no_bg,
+    "squirrel"  to R.drawable.squirrel_no_bg,
+    "rabbit"    to R.drawable.rabbit_no_bg,
+    "dog"       to R.drawable.dog_no_bg,
+    "cat"       to R.drawable.cat_no_bg
+)
+private fun keyToResId(key: String?): Int? = key?.let { AVATAR_RES_MAP[it] }
+
 @SuppressLint("NewApi")
 @Composable
 fun ChatRoomScreen(
@@ -1341,22 +1351,27 @@ fun RegularMessageItem(
                 MessageType.QUIZ_END
             )
 
-            if (message.profileImage != null && !isQuizMessage) {
+            val avatarBg: Color =
+                parseColorOrNull(message.avatarBgColor) ?: MainColor.copy(alpha = 0.3f)
+            val localRes = keyToResId(message.profileImage)
+
+            if (message.profileImage != null && message.profileImage.isNotBlank() && !isQuizMessage) {
                 AsyncImage(
-                    model = message.profileImage,
+                    model = localRes,
                     contentDescription = "프로필 이미지",
                     modifier = Modifier
                         .size(40.dp)
                         .clip(CircleShape)
-                        .background(Color.Gray.copy(alpha = 0.3f)),
+                        .background(avatarBg), // 배경색 살짝 깔아줘도 OK (투명 PNG 대비)
                     contentScale = ContentScale.Crop
                 )
+
             } else {
                 Box(
                     modifier = Modifier
                         .size(40.dp)
                         .clip(CircleShape)
-                        .background(MainColor.copy(alpha = 0.3f)),
+                        .background(avatarBg),
                     contentAlignment = Alignment.Center
                 ) {
                     if (isQuizMessage || message.nickname.isEmpty()) {
@@ -1519,7 +1534,8 @@ fun QuizControlPanel(
                             ),
                             contentPadding = PaddingValues(horizontal = 12.dp),
                             enabled = !isQuizConnecting && averageProgress >= 50 && !isLoadingProgress
-                        ) {5
+                        ) {
+            
                             Icon(
                                 imageVector = Icons.Default.PlayArrow,
                                 contentDescription = null,
@@ -2219,3 +2235,7 @@ fun QuizSystemMessageItem(message: ChatMessage) {
         }
     }
 }
+
+private fun parseColorOrNull(hex: String?): Color? = try {
+    hex?.let { Color(android.graphics.Color.parseColor(it)) }
+} catch (_: IllegalArgumentException) { null }
