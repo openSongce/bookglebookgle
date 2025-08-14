@@ -28,7 +28,7 @@ class TokenAuthenticator @Inject constructor(
             mutex.withLock {
                 val refreshToken = tokenManager.getRefreshToken() ?: return@withLock null
 
-                Log.d("JWT", "⚠️ accessToken 만료 감지. refreshToken = $refreshToken")
+                Log.d("JWT", "accessToken 만료 감지. refreshToken = $refreshToken")
 
                 try {
                     val newToken = loginApiProvider.get().refreshToken(RefreshRequest(refreshToken))

@@ -1,5 +1,6 @@
 package com.ssafy.bookglebookgle.ui.screen
 
+import android.annotation.SuppressLint
 import android.util.Log
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
@@ -106,6 +107,7 @@ fun RatingStatisticItem(label: String, rating: Float, modifier: Modifier = Modif
 
 
 
+@SuppressLint("SuspiciousIndentation")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(navController: NavHostController, viewModel: ProfileViewModel = hiltViewModel()) {
@@ -238,29 +240,6 @@ fun ProfileScreen(navController: NavHostController, viewModel: ProfileViewModel 
 
                 Spacer(modifier = Modifier.height(ScreenSize.height * 0.03f))
 
-                // 버튼들
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = ScreenSize.width * 0.08f),
-                    horizontalArrangement = Arrangement.spacedBy(ScreenSize.width * 0.04f)
-                ) {
-                    ProfileItemHorizontal("내 책장", Modifier.weight(1f)) {
-                        val userId: Long = viewModel.userId.value
-                            navController.currentBackStackEntry
-                                ?.savedStateHandle
-                                ?.set(NavKeys.USER_ID, userId)
-
-                        navController.navigate(Screen.MyBookShelfScreen.route)
-                    }
-
-                    ProfileItemHorizontal("로그아웃", Modifier.weight(1f)) {
-                        viewModel.logout()
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(ScreenSize.height * 0.04f))
-
                 // 내 통계
                 Column(
                     modifier = Modifier
@@ -300,6 +279,25 @@ fun ProfileScreen(navController: NavHostController, viewModel: ProfileViewModel 
                                 value = "${data.prettyActiveTime}"
                             )
                         }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(ScreenSize.height * 0.1f))
+
+                // 버튼들
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = ScreenSize.width * 0.08f),
+                    horizontalArrangement = Arrangement.spacedBy(ScreenSize.width * 0.04f)
+                ) {
+                    ProfileItemHorizontal("회원탈퇴", Modifier.weight(1f)) {
+                       viewModel.deleteAccount()
+                        navController.navigate(Screen.LoginScreen.route)
+                    }
+
+                    ProfileItemHorizontal("로그아웃", Modifier.weight(1f)) {
+                        viewModel.logout()
                     }
                 }
 
@@ -457,7 +455,7 @@ fun ProfileItemHorizontal(label: String, modifier: Modifier = Modifier, onClick:
             text = label,
             fontSize = screenW.value.times(0.04f).sp,
             fontWeight = FontWeight.Medium,
-            color = Color.Black
+            color = if(label == "회원탈퇴") Color.Red else Color.Black
         )
     }
 }
