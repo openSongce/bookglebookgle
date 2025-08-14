@@ -8,6 +8,8 @@ data class ChatMessagesResponse(
     val userNickname: String,
     val message: String,
     val createdAt: String,
+    val profileImgUrl : String?,
+    val profileColor : String?
 )
 
 // gRPC 채팅 메시지
