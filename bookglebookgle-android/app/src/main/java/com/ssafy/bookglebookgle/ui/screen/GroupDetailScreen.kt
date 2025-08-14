@@ -51,6 +51,10 @@ import com.ssafy.bookglebookgle.ui.component.CustomTopAppBar
 import com.ssafy.bookglebookgle.ui.component.GroupEditDialog
 import com.ssafy.bookglebookgle.ui.theme.DeepMainColor
 import com.ssafy.bookglebookgle.ui.theme.MainColor
+import com.ssafy.bookglebookgle.ui.theme.ResponsiveDimensions
+import com.ssafy.bookglebookgle.ui.theme.defaultButtonHeight
+import com.ssafy.bookglebookgle.ui.theme.defaultPadding
+import com.ssafy.bookglebookgle.ui.theme.rememberResponsiveDimensions
 import com.ssafy.bookglebookgle.util.ScreenSize
 import com.ssafy.bookglebookgle.util.UserInfoManager
 import com.ssafy.bookglebookgle.viewmodel.EditGroupUiState
@@ -71,7 +75,6 @@ private val AVATAR_RES_MAP = mapOf(
 
 private fun keyToResId(key: String?): Int? = key?.let { AVATAR_RES_MAP[it] }
 
-
 @Composable
 fun GroupDetailScreen(
     navController: NavHostController,
@@ -79,6 +82,9 @@ fun GroupDetailScreen(
     isMyGroup: Boolean,
     viewModel: GroupDetailViewModel = hiltViewModel()
 ) {
+    val dimensions = rememberResponsiveDimensions() // ✅ 반응형 치수
+    val sectionTitleSize = if (dimensions.isTablet) 18.sp else ScreenSize.width.value.times(0.04f).sp
+
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val joinGroupState by viewModel.joinGroupState.collectAsStateWithLifecycle()
     val editGroupState by viewModel.editGroupState.collectAsStateWithLifecycle()
@@ -88,18 +94,13 @@ fun GroupDetailScreen(
     val myUserId by viewModel.currentUserId.collectAsStateWithLifecycle()
     val rateState by viewModel.rateMemberState.collectAsStateWithLifecycle()
 
-
-    var rateTarget by remember { mutableStateOf<GroupMember?>(null) }    // ★ 평가 대상
-    var infoTarget by remember { mutableStateOf<GroupMember?>(null) }    // ★ 정보 보기 대상
-
-
+    var rateTarget by remember { mutableStateOf<GroupMember?>(null) }    // 평가 대상
+    var infoTarget by remember { mutableStateOf<GroupMember?>(null) }    // 정보 보기 대상
 
     val context = LocalContext.current
 
     // 수정 다이얼로그 상태
     var showEditDialog by remember { mutableStateOf(false) }
-
-
 
     LaunchedEffect(groupId) {
         viewModel.setInitialMyGroupState(isMyGroup)
@@ -108,13 +109,10 @@ fun GroupDetailScreen(
 
     val userInfoManager : UserInfoManager
 
-    // 가입 성공 시 처리
-    // GroupDetailScreen.kt의 LaunchedEffect(joinGroupState) 부분을 다음과 같이 수정하세요
-
+    // 가입 결과 처리
     LaunchedEffect(joinGroupState) {
         when (joinGroupState) {
             is JoinGroupUiState.Success -> {
-                Log.d("GroupDetailScreen", "그룹 가입 성공!")
                 Toast.makeText(context, "그룹에 성공적으로 가입했습니다!", Toast.LENGTH_SHORT).show()
                 viewModel.resetJoinGroupState()
                 kotlinx.coroutines.delay(100)
@@ -122,61 +120,24 @@ fun GroupDetailScreen(
             }
             is JoinGroupUiState.Error -> {
                 val errorMessage = (joinGroupState as JoinGroupUiState.Error).message
-                Log.e("GroupDetailScreen", "그룹 가입 실패: $errorMessage")
-
-                // 에러 메시지에 따른 토스트 메시지 분류
                 val toastMessage = when {
-                    // 이미 참가한 그룹
-                    errorMessage.contains("이미 참가한 그룹") -> {
-                        "이미 가입된 모임입니다."
-                    }
-
-                    // 그룹 정원 초과 (여러 패턴 추가)
+                    errorMessage.contains("이미 참가한 그룹") -> "이미 가입된 모임입니다."
                     errorMessage.contains("그룹 정원이 초과되었습니다") ||
                             errorMessage.contains("정원이 초과") ||
-                            errorMessage.contains("정원") && errorMessage.contains("초과") -> {
-                        "모임 정원이 가득 찼습니다."
-                    }
-
-                    // 평점 부족
+                            (errorMessage.contains("정원") && errorMessage.contains("초과")) -> "모임 정원이 가득 찼습니다."
                     errorMessage.contains("평점이 낮아") ||
-                            errorMessage.contains("평점") && errorMessage.contains("참가할 수 없습니다") -> {
-                        if (uiState is GroupDetailUiState.Success) {
-                            val requiredRating = (uiState as GroupDetailUiState.Success).groupDetail.minRequiredRating
-                            "평점이 부족해 가입할 수 없습니다.\n(최소 요구 평점: ${requiredRating}점)"
-                        } else {
-                            "평점이 부족해 가입할 수 없습니다."
-                        }
+                            (errorMessage.contains("평점") && errorMessage.contains("참가할 수 없습니다")) -> {
+                        val requiredRating = (uiState as? GroupDetailUiState.Success)?.groupDetail?.minRequiredRating
+                        if (requiredRating != null) "평점이 부족해 가입할 수 없습니다.\n(최소 요구 평점: ${requiredRating}점)"
+                        else "평점이 부족해 가입할 수 없습니다."
                     }
-
-                    // 가입 조건 불만족
-                    errorMessage.contains("가입 조건을 만족하지 않습니다") -> {
-                        "가입 조건을 만족하지 않습니다."
-                    }
-
-                    // 가입 요청 거부
-                    errorMessage.contains("가입 요청이 거부되었습니다") -> {
-                        "가입 요청이 거부되었습니다."
-                    }
-
-                    // 해당 그룹이 존재하지 않음
+                    errorMessage.contains("가입 조건을 만족하지 않습니다") -> "가입 조건을 만족하지 않습니다."
+                    errorMessage.contains("가입 요청이 거부되었습니다") -> "가입 요청이 거부되었습니다."
                     errorMessage.contains("해당 그룹이 존재하지 않습니다") ||
-                            errorMessage.contains("존재하지 않") -> {
-                        "존재하지 않는 모임입니다."
-                    }
-
-                    // 서버 오류
-                    errorMessage.contains("서버 오류") -> {
-                        "서버 오류가 발생했습니다.\n잠시 후 다시 시도해주세요."
-                    }
-
-                    // 기본 에러 메시지
-                    else -> {
-                        errorMessage.ifBlank { "모임 가입에 실패했습니다.\n다시 시도해주세요." }
-                    }
+                            errorMessage.contains("존재하지 않") -> "존재하지 않는 모임입니다."
+                    errorMessage.contains("서버 오류") -> "서버 오류가 발생했습니다.\n잠시 후 다시 시도해주세요."
+                    else -> errorMessage.ifBlank { "모임 가입에 실패했습니다.\n다시 시도해주세요." }
                 }
-
-                Log.d("GroupDetailScreen", "최종 토스트 메시지: $toastMessage")
                 Toast.makeText(context, toastMessage, Toast.LENGTH_LONG).show()
                 viewModel.resetJoinGroupState()
             }
@@ -184,27 +145,23 @@ fun GroupDetailScreen(
         }
     }
 
+    // 수정 결과 처리
     LaunchedEffect(editGroupState) {
         when (editGroupState) {
             is EditGroupUiState.Success -> {
-                Log.d("GroupDetailScreen", "그룹 수정 성공!")
                 Toast.makeText(context, "모임 정보가 성공적으로 수정되었습니다!", Toast.LENGTH_SHORT).show()
                 viewModel.resetEditGroupState()
                 showEditDialog = false
-                // 수정 완료 후 화면 새로고침
                 viewModel.getGroupDetail(groupId)
             }
             is EditGroupUiState.Error -> {
-                Log.e("GroupDetailScreen", "그룹 수정 실패: ${(editGroupState as EditGroupUiState.Error).message}")
                 viewModel.resetEditGroupState()
             }
             else -> {}
         }
     }
 
-    Column(
-        modifier = Modifier.fillMaxSize()
-    ) {
+    Column(modifier = Modifier.fillMaxSize()) {
         val title = when (val currentState = uiState) {
             is GroupDetailUiState.Success -> currentState.groupDetail.roomTitle
             else -> "모임 상세"
@@ -216,9 +173,7 @@ fun GroupDetailScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator(
-                        color = Color(0xFFDED0BB)
-                    )
+                    CircularProgressIndicator(color = Color(0xFFDED0BB))
                 }
             }
 
@@ -233,47 +188,57 @@ fun GroupDetailScreen(
                         { showEditDialog = true }
                     } else null
                 )
-                GroupDetailContent(
-                    context = context,
-                    groupDetail = currentState.groupDetail,
-                    isMyGroup = currentIsMyGroup,
-                    isJoining = joinGroupState is JoinGroupUiState.Loading,
-                    navController = navController,
-                    groupId = groupId,
-                    viewModel = viewModel,
-                    myUserId = myUserId,                            // ★ 추가
-                    onMemberClick = { member ->                     // ★ 추가
-                        if (currentIsMyGroup && currentState.groupDetail.isCompleted) {
-                            when {
-                                member.userId == myUserId -> {
-                                    Toast.makeText(context, "본인은 평가할 수 없습니다.", Toast.LENGTH_SHORT).show()
-                                }
-                                member.hasRated -> {
-                                    Toast.makeText(context, "이미 이 팀원을 평가했습니다.", Toast.LENGTH_SHORT).show()
-                                }
-                                else -> rateTarget = member
-                            }
-                        } else {
-                            infoTarget = member
-                        }
-                    },
-                    onJoinClick = { viewModel.joinGroup(groupId) },
-                    onDeleteClick = {
-                        viewModel.deleteGroup(groupId)
-                        navController.popBackStack() },
-                    onLeaveClick = {
-                        viewModel.leaveGroup(groupId)
-                        navController.popBackStack()
-                    }
-                )
 
-                // 수정 다이얼로그 - 항상 렌더링되도록 수정
+                // ✅ 태블릿 최적화 컨테이너: 중앙 정렬 + 최대 폭 제한 + 좌우 패딩
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .widthIn(
+                            max = if (dimensions.isTablet) dimensions.contentMaxWidth * 1.5f
+                            else Dp.Infinity
+                        )
+                        .padding(horizontal = dimensions.defaultPadding) // 좌우 여백
+                        .align(Alignment.CenterHorizontally)
+                ) {
+                    GroupDetailContent(
+                        context = context,
+                        groupDetail = currentState.groupDetail,
+                        isMyGroup = currentIsMyGroup,
+                        isJoining = joinGroupState is JoinGroupUiState.Loading,
+                        navController = navController,
+                        groupId = groupId,
+                        viewModel = viewModel,
+                        myUserId = myUserId,
+                        onMemberClick = { member ->
+                            if (currentIsMyGroup && currentState.groupDetail.isCompleted) {
+                                when {
+                                    member.userId == myUserId ->
+                                        Toast.makeText(context, "본인은 평가할 수 없습니다.", Toast.LENGTH_SHORT).show()
+                                    member.hasRated ->
+                                        Toast.makeText(context, "이미 이 팀원을 평가했습니다.", Toast.LENGTH_SHORT).show()
+                                    else -> rateTarget = member
+                                }
+                            } else {
+                                infoTarget = member
+                            }
+                        },
+                        onJoinClick = { viewModel.joinGroup(groupId) },
+                        onDeleteClick = {
+                            viewModel.deleteGroup(groupId)
+                            navController.popBackStack()
+                        },
+                        onLeaveClick = {
+                            viewModel.leaveGroup(groupId)
+                            navController.popBackStack()
+                        },
+                        dimensions = dimensions // ✅ 전달
+                    )
+                }
+
                 if (showEditDialog) {
                     GroupEditDialog(
                         groupDetail = currentState.groupDetail,
-                        onDismiss = {
-                            showEditDialog = false
-                        },
+                        onDismiss = { showEditDialog = false },
                         onSave = { editData ->
                             Log.d("GroupDetailScreen", "모임 수정 데이터: $editData")
                             viewModel.updateGroup(groupId, editData)
@@ -288,18 +253,16 @@ fun GroupDetailScreen(
         }
     }
 
-    // ★ 단일 대상 평점 다이얼로그
-    rateTarget?.let { target ->
-// 기존 AlertDialog 버전 삭제하고 아래로 교체
+    // ★ 단일 대상 평점 다이얼로그 (BottomSheet)
+    rateTarget?.let {
         RateMemberBottomSheet(
             member = rateTarget,
             onDismiss = { rateTarget = null },
             onConfirm = { score -> viewModel.rateMember(groupId, rateTarget!!.userId, score) }
         )
-
     }
 
-// ★ 멤버 정보 다이얼로그
+    // ★ 멤버 정보 다이얼로그
     infoTarget?.let { target ->
         MemberInfoDialogWhite(
             member = target,
@@ -308,7 +271,6 @@ fun GroupDetailScreen(
             onDismiss = { infoTarget = null }
         )
     }
-
 }
 
 @Composable
@@ -320,25 +282,21 @@ private fun GroupDetailContent(
     navController: NavHostController,
     groupId: Long,
     viewModel: GroupDetailViewModel,
-    myUserId: Long?,                         // ★ 추가
-    onMemberClick: (GroupMember) -> Unit,    // ★ 추가
+    myUserId: Long?,
+    onMemberClick: (GroupMember) -> Unit,
     onJoinClick: () -> Unit,
     onDeleteClick: () -> Unit,
-    onLeaveClick: () -> Unit
+    onLeaveClick: () -> Unit,
+    dimensions: ResponsiveDimensions // ✅ 추가
 ) {
-    val dummyMembers = listOf(
-        "허지명" to 80,
-        "송진우" to 70,
-        "송하윤" to 40,
-        "홍은솔" to 60
-    )
-
     val listState = rememberLazyListState()
+    // 공용 섹션 제목 크기: 태블릿은 18.sp, 모바일은 약간 줄인 비율로
+    val sectionTitleSize = if (dimensions.isTablet) 18.sp else ScreenSize.width.value.times(0.04f).sp
+
 
     LazyColumn(
         modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = ScreenSize.width * 0.08f),
+            .fillMaxSize(),
         state = listState
     ) {
         item {
@@ -347,7 +305,8 @@ private fun GroupDetailContent(
             Text(
                 "모임 정보",
                 fontWeight = FontWeight.Bold,
-                fontSize = ScreenSize.width.value.times(0.045f).sp
+                // 헤더 크기는 태블릿에서 약간 키움
+                fontSize = sectionTitleSize
             )
 
             Spacer(modifier = Modifier.height(ScreenSize.height * 0.015f))
@@ -356,13 +315,13 @@ private fun GroupDetailContent(
                 "READING" -> "독서"
                 "REVIEW" -> "첨삭"
                 else -> groupDetail.category
-            })
-            InfoRow("시작 시간", groupDetail.schedule)
-            InfoRow("참여 인원", "${groupDetail.memberCount}/${groupDetail.maxMemberCount}명")
-            InfoRow("모임 설명", groupDetail.description)
-            InfoRow("최소 평점", "${groupDetail.minRequiredRating}점")
+            }, dimensions)
+            InfoRow("시작 시간", groupDetail.schedule, dimensions)
+            InfoRow("참여 인원", "${groupDetail.memberCount}/${groupDetail.maxMemberCount}명", dimensions)
+            InfoRow("모임 설명", groupDetail.description, dimensions)
+            InfoRow("최소 평점", "${groupDetail.minRequiredRating}점", dimensions)
+
             Spacer(modifier = Modifier.height(ScreenSize.height * 0.01f))
-            // 구분선 추가
             HorizontalDivider(
                 modifier = Modifier.fillMaxWidth(),
                 thickness = 1.dp,
@@ -374,45 +333,31 @@ private fun GroupDetailContent(
             Text(
                 "문서 보기",
                 fontWeight = FontWeight.Bold,
-                fontSize = ScreenSize.width.value.times(0.045f).sp
+                fontSize = if (dimensions.isTablet) 20.sp else ScreenSize.width.value.times(0.045f).sp
             )
 
             Spacer(modifier = Modifier.height(ScreenSize.height * 0.01f))
             Row(
                 modifier = Modifier.clickable {
                     if (isMyGroup) {
-                        // 가입된 모임인 경우 PDF 화면으로 이동
-                        // 1) 현재 상세 데이터 꺼내기
                         val success = (viewModel.uiState.value as? GroupDetailUiState.Success)
                         val detail = success?.groupDetail
 
-                        // 2) 초기 멤버/진도 가공 (뷰모델의 헬퍼 사용)
                         val initialMembers = detail?.let { viewModel.run { it.toInitialMembers() } } ?: emptyList()
                         val initialProgress = detail?.let { viewModel.run { it.toInitialProgressMap() } } ?: emptyMap()
-
-                        // 3) (있으면) 페이지 수 — 필드명은 프로젝트에 맞게 바꿔줘요 (예: detail.totalPageCount)
                         val pageCount = detail?.pageCount ?: 0
 
-
-                        // 4) 다음 화면에서 꺼내 쓸 값들 저장
                         val gson = Gson()
                         navController.currentBackStackEntry?.savedStateHandle?.apply {
                             set("groupId", groupId)
                             set("isHost", detail?.isHost == true)
-                            set("pageCount", pageCount) // 없으면 0으로 두고, PDF 렌더 후 갱신돼도 OK
+                            set("pageCount", pageCount)
                             set("initialMembersJson", gson.toJson(initialMembers))
                             set("initialProgressJson", gson.toJson(initialProgress))
                         }
-
-                        // 5) 이동
                         navController.navigate(Screen.PdfReadScreen.route)
                     } else {
-                        // 미가입 모임인 경우 토스트 메시지 표시
-                        Toast.makeText(
-                            context,
-                            "모임에 가입해야 문서를 볼 수 있습니다.",
-                            Toast.LENGTH_SHORT
-                        ).show()
+                        Toast.makeText(context, "모임에 가입해야 문서를 볼 수 있습니다.", Toast.LENGTH_SHORT).show()
                     }
                 },
                 verticalAlignment = Alignment.CenterVertically
@@ -421,27 +366,24 @@ private fun GroupDetailContent(
                     Text(
                         "PDF",
                         color = Color.Gray,
-                        fontSize = ScreenSize.width.value.times(0.035f).sp
+                        fontSize = if (dimensions.isTablet) 16.sp else ScreenSize.width.value.times(0.035f).sp
                     )
                     Text("스크립트 문서", fontWeight = FontWeight.Medium)
                     Text(
                         "${groupDetail.pageCount} 페이지",
-                        fontSize = ScreenSize.width.value.times(0.03f).sp,
+                        fontSize = if (dimensions.isTablet) 14.sp else ScreenSize.width.value.times(0.03f).sp,
                         color = Color.Gray
                     )
-
                 }
                 Spacer(modifier = Modifier.weight(1f))
-
-                // photoUrl이 있을 경우 처리 (현재는 기본 이미지 사용)
                 Image(
                     painter = painterResource(id = R.drawable.ic_pdf),
                     contentDescription = null,
                     modifier = Modifier.size(ScreenSize.width * 0.15f)
                 )
             }
+
             Spacer(modifier = Modifier.height(ScreenSize.height * 0.01f))
-            // 구분선 추가
             Divider(
                 modifier = Modifier.fillMaxWidth(),
                 thickness = 1.dp,
@@ -453,7 +395,7 @@ private fun GroupDetailContent(
             Text(
                 "참여자 목록",
                 fontWeight = FontWeight.Bold,
-                fontSize = ScreenSize.width.value.times(0.045f).sp
+                fontSize = if (dimensions.isTablet) 20.sp else ScreenSize.width.value.times(0.045f).sp
             )
 
             Spacer(modifier = Modifier.height(ScreenSize.height * 0.01f))
@@ -467,8 +409,8 @@ private fun GroupDetailContent(
                         colorHex = m.profileColor,
                         isHost = m.isHost,
                         profileImgKey = m.profileImageUrl,
-                        rated = if (isMyGroup && groupDetail.isCompleted) m.hasRated else null, // ★ 완료된 모임이면 '평가됨' 표시
-                        onClick = { onMemberClick(m) }                                           // ★ 아바타 클릭
+                        rated = if (isMyGroup && groupDetail.isCompleted) m.hasRated else null, // 완료된 모임이면 '평가됨' 표시
+                        onClick = { onMemberClick(m) }                                           // 아바타 클릭
                     )
                 }
             }
@@ -478,40 +420,30 @@ private fun GroupDetailContent(
                 Text(
                     text = "모임이 완료되었습니다. 팀원 아바타를 눌러 평점을 남겨주세요. (본인은 제외)",
                     color = Color(0xFF2E7D32),
-                    fontSize = 12.sp
+                    fontSize = if (dimensions.isTablet) 13.sp else 12.sp
                 )
             }
 
-
-
-
-
             if(isMyGroup){
                 Spacer(modifier = Modifier.height(ScreenSize.height * 0.02f))
-                // 구분선 추가
                 Divider(
                     modifier = Modifier.fillMaxWidth(),
                     thickness = 1.dp,
                     color = Color(0xFFE0E0E0)
                 )
-
                 Spacer(modifier = Modifier.height(ScreenSize.height * 0.03f))
-            }
-            else{
+            } else {
                 Spacer(modifier = Modifier.height(ScreenSize.height * 0.04f))
             }
-
 
             if (!isMyGroup) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(ScreenSize.height * 0.065f)
+                        .height(60.dp)
                         .clip(RoundedCornerShape(ScreenSize.width * 0.03f))
                         .background(Color(0xFFDED0BB))
-                        .clickable(enabled = !isJoining) {
-                            onJoinClick()
-                        },
+                        .clickable(enabled = !isJoining) { onJoinClick() },
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -525,13 +457,13 @@ private fun GroupDetailContent(
                 Text(
                     "진도 현황",
                     fontWeight = FontWeight.Bold,
-                    fontSize = ScreenSize.width.value.times(0.045f).sp
+                    fontSize = if (dimensions.isTablet) 20.sp else ScreenSize.width.value.times(0.045f).sp
                 )
                 ProgressStatusCard(
                     pageCount = groupDetail.pageCount,
-                    members = groupDetail.members
+                    members = groupDetail.members,
+                    dimensions
                 )
-
 
                 Spacer(modifier = Modifier.height(ScreenSize.height * 0.05f))
 
@@ -539,17 +471,11 @@ private fun GroupDetailContent(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(ScreenSize.height * 0.065f)
+                        .height(60.dp)
                         .clip(RoundedCornerShape(ScreenSize.width * 0.03f))
-                        .background(
-                            Color(0xFFD32F2F)
-                        )
+                        .background(Color(0xFFD32F2F))
                         .clickable {
-                            if (groupDetail.isHost) {
-                                onDeleteClick()
-                            } else {
-                                onLeaveClick()
-                            }
+                            if (groupDetail.isHost) onDeleteClick() else onLeaveClick()
                         },
                     contentAlignment = Alignment.Center
                 ) {
@@ -567,9 +493,12 @@ private fun GroupDetailContent(
 }
 
 @Composable
-fun InfoRow(label: String, value: String) {
+fun InfoRow(label: String, value: String, dimensions: ResponsiveDimensions) {
     val screenW = ScreenSize.width
     val screenH = ScreenSize.height
+    // 공용 섹션 제목 크기: 태블릿은 18.sp, 모바일은 약간 줄인 비율로
+    val sectionTitleSize = if (dimensions.isTablet) 18.sp else ScreenSize.width.value.times(0.04f).sp
+
 
     Row(
         modifier = Modifier
@@ -577,8 +506,8 @@ fun InfoRow(label: String, value: String) {
             .padding(vertical = screenH * 0.005f),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(label, fontSize = screenW.value.times(0.035f).sp, color = Color.Gray)
-        Text(value, fontSize = screenW.value.times(0.035f).sp, fontWeight = FontWeight.Medium)
+        Text(label, fontSize = sectionTitleSize, color = Color.Gray)
+        Text(value, fontSize = sectionTitleSize, fontWeight = FontWeight.Medium)
     }
 }
 
@@ -586,13 +515,14 @@ fun InfoRow(label: String, value: String) {
 fun ProgressStatusCard(
     pageCount: Int,
     members: List<GroupMember>,
+    dimensions: ResponsiveDimensions
 ) {
     val barColor = Color(0xFFDDDDDD)
     val barWidth = ScreenSize.width * 0.15f
     val barHeight = ScreenSize.height * 0.2f
     val fontSize = ScreenSize.width.value * 0.038f
+    val sectionTitleSize = if (dimensions.isTablet) 18.sp else ScreenSize.width.value.times(0.04f).sp
 
-    // 각 멤버 진도 % 계산: 서버 progressPercent 우선, 없으면 lastPageRead 기반 계산
     fun percentOf(m: GroupMember): Int {
         val server = m.progressPercent
         if (server in 0..100) return server
@@ -602,13 +532,8 @@ fun ProgressStatusCard(
             .toInt().coerceIn(0, 100)
     }
 
-    // 이름 길이 제한 함수
     fun truncateName(name: String): String {
-        return if (name.length > 4) {
-            name.take(3) + "..."
-        } else {
-            name
-        }
+        return if (name.length > 4) name.take(3) + "..." else name
     }
 
     val percents = members.map { percentOf(it) }
@@ -620,9 +545,9 @@ fun ProgressStatusCard(
             .padding(ScreenSize.width * 0.05f)
             .background(Color.White, RoundedCornerShape(ScreenSize.width * 0.03f))
     ) {
-        Text(text = "문서 읽기 진도", color = Color.Gray, fontSize = fontSize.sp)
-        Text(text = "$avg%", fontSize = (fontSize + 8).sp, fontWeight = FontWeight.Bold)
-        Text(text = "전체 평균", fontSize = fontSize.sp, color = Color(0xFF2E7D32))
+        Text(text = "문서 읽기 진도", color = Color.Gray, fontSize = sectionTitleSize)
+        Text(text = "$avg%", fontSize = sectionTitleSize, fontWeight = FontWeight.Bold)
+        Text(text = "전체 평균", fontSize = sectionTitleSize, color = Color(0xFF2E7D32))
 
         Spacer(modifier = Modifier.height(ScreenSize.height * 0.02f))
 
@@ -651,13 +576,13 @@ fun ProgressStatusCard(
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = truncateName(m.userNickName),
-                        fontSize = fontSize.sp,
+                        fontSize = sectionTitleSize,
                         color = Color.DarkGray,
                         maxLines = 1
                     )
                     Text(
                         text = "$p%",
-                        fontSize = (fontSize * 0.9f).sp,
+                        fontSize = sectionTitleSize,
                         color = Color.Gray
                     )
                 }
@@ -665,7 +590,6 @@ fun ProgressStatusCard(
         }
     }
 }
-
 
 fun hexToColor(hex: String?): Color {
     if (hex.isNullOrBlank()) return Color(0xFFE5E7EB)
@@ -690,8 +614,8 @@ private fun MemberAvatar(
     val bg = remember(colorHex) { hexToColor(colorHex) }
     val resId = remember(profileImgKey) { keyToResId(profileImgKey) }
 
-    val borderW   = size * 0.016f                  // ≈ 2dp 비율
-    val badgeSize = size * 0.36f                   // 왕관 배지 크기
+    val borderW   = size * 0.016f
+    val badgeSize = size * 0.36f
 
     Box(
         modifier = Modifier
@@ -700,13 +624,12 @@ private fun MemberAvatar(
             .background(bg)
             .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
             .then(
-                if (isHost) Modifier.border(2.dp, Color(0xFFFFC107), CircleShape) // 금색 테두리
+                if (isHost) Modifier.border(2.dp, Color(0xFFFFC107), CircleShape)
                 else Modifier
             ),
         contentAlignment = Alignment.Center
     ) {
         if (resId != null) {
-            // 키가 유효하면 로컬 드로어블 표시
             androidx.compose.material3.Icon(
                 painter = painterResource(id = resId),
                 contentDescription = "avatar",
@@ -714,7 +637,6 @@ private fun MemberAvatar(
                 modifier = Modifier.size(size * 0.8f)
             )
         } else {
-            // 키가 없거나 매핑 실패 → 이니셜
             val initial = nickname.firstOrNull()?.uppercaseChar()?.toString() ?: "?"
             Text(
                 text = initial,
@@ -728,7 +650,7 @@ private fun MemberAvatar(
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .offset(x = (-11).dp, y = (-1).dp) // 바깥으로 살짝
+                    .offset(x = (-11).dp, y = (-1).dp)
                     .clip(CircleShape)
                     .background(Color.Transparent)
                     .size(size * 0.5f),
@@ -765,13 +687,13 @@ private fun BookRatingBar(
     bookWidth: Dp = 24.dp,
     bookHeight: Dp = 24.dp,
     gap: Dp = 12.dp,
-    activeColor: Color = MainColor,                     // 프로젝트 메인 컬러
+    activeColor: Color = MainColor,
     inactiveColor: Color = Color(0xFFE5E7EB),
     outlineColor: Color = Color(0xFFCBD5E1)
 ) {
     Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(gap)) {
         repeat(books) { i ->
-            val fill = (value - i).coerceIn(0f, 1f) // 0~1: 해당 책의 채움 비율
+            val fill = (value - i).coerceIn(0f, 1f)
             Box(
                 modifier = Modifier
                     .size(bookWidth, bookHeight)
@@ -790,14 +712,12 @@ private fun BookRatingBar(
                     },
                 contentAlignment = Alignment.BottomStart
             ) {
-                // 채워지는 책 등 (좌→우)
                 Box(
                     Modifier
                         .fillMaxHeight()
                         .fillMaxWidth(fill)
                         .background(activeColor)
                 )
-                // 책 등 느낌의 얇은 띠(디테일)
                 Spacer(
                     Modifier
                         .matchParentSize()
@@ -832,13 +752,12 @@ private fun QuickPickChip(
     )
 }
 
-
 @Composable
 private fun MemberInfoDialogWhite(
     member: GroupMember,
     pageCount: Int,
     onDismiss: () -> Unit,
-    illustrationRes: Int? = null          // 우하단 이미지(없으면 생략)
+    illustrationRes: Int? = null
 ) {
     val percent = remember(member, pageCount) {
         when {
@@ -851,7 +770,7 @@ private fun MemberInfoDialogWhite(
 
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = Color(0xFFF2F4F7),      // 흰 배경
+        containerColor = Color(0xFFF2F4F7),
         shape = RoundedCornerShape(16.dp),
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -885,8 +804,6 @@ private fun MemberInfoDialogWhite(
                         Text("이 멤버는 이미 다른 사람에게서 평가를 받았습니다.", color = Color.Gray, fontSize = 12.sp)
                     }
                 }
-
-                // 우하단 캐릭터/일러스트
                 illustrationRes?.let {
                     Image(
                         painter = painterResource(id = it),
@@ -904,11 +821,10 @@ private fun MemberInfoDialogWhite(
     )
 }
 
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun RateMemberBottomSheet(
-    member: GroupMember?,                 // null이면 표시 안 함
+    member: GroupMember?,
     onDismiss: () -> Unit,
     onConfirm: (score: Float) -> Unit
 ) {
@@ -920,7 +836,7 @@ private fun RateMemberBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         dragHandle = { BottomSheetDefaults.DragHandle() },
-        containerColor = Color(0xFFFEFBF4),            // 종이 느낌 살짝
+        containerColor = Color(0xFFFEFBF4),
         tonalElevation = 0.dp
     ) {
         Column(
@@ -975,4 +891,3 @@ private fun RateMemberBottomSheet(
         }
     }
 }
-

@@ -18,10 +18,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
@@ -34,7 +36,11 @@ import com.ssafy.bookglebookgle.entity.ChatListResponse
 import com.ssafy.bookglebookgle.navigation.Screen
 import com.ssafy.bookglebookgle.ui.component.CustomTopAppBar
 import com.ssafy.bookglebookgle.ui.theme.MainColor
+import com.ssafy.bookglebookgle.ui.theme.ResponsiveDimensions
+import com.ssafy.bookglebookgle.ui.theme.defaultPadding
+import com.ssafy.bookglebookgle.ui.theme.rememberResponsiveDimensions
 import com.ssafy.bookglebookgle.viewmodel.ChatListViewModel
+import kotlinx.serialization.json.Json.Default.configuration
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
@@ -46,11 +52,16 @@ enum class ChatFilter(val displayName: String, val category: String?) {
     STUDY("학습", "STUDY")
 }
 
+@SuppressLint("UnusedBoxWithConstraintsScope")
 @Composable
 fun ChatListScreen(
     navController: NavHostController,
     viewModel: ChatListViewModel = hiltViewModel()
 ) {
+    // 반응형 디멘션 사용
+    val dimensions = rememberResponsiveDimensions()
+    val configuration = LocalConfiguration.current
+
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showCategoryFilter by remember { mutableStateOf(false) }
     var selectedCategory by remember { mutableStateOf<String?>(null) }
@@ -73,9 +84,13 @@ fun ChatListScreen(
         viewModel.loadChatList()
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    BoxWithConstraints(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = if (dimensions.isTablet) Alignment.TopCenter else Alignment.TopStart
+    ) {
         Column(
             modifier = Modifier
+                .widthIn(max = if (dimensions.isTablet) dimensions.contentMaxWidth * 1.5f else Dp.Infinity)
                 .fillMaxSize()
                 .background(Color.White)
         ) {
@@ -160,7 +175,7 @@ fun ChatListScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(start = 16.dp)
+                                .padding(start = dimensions.defaultPadding)
                         ) {
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
@@ -182,7 +197,10 @@ fun ChatListScreen(
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(start = 16.dp, end = 16.dp)
+                            .padding(
+                                start = dimensions.defaultPadding,
+                                end = dimensions.defaultPadding
+                            )
                     ) {
                         itemsIndexed(filteredChatList) { index, chatList ->
                             ChatCard(
@@ -193,7 +211,7 @@ fun ChatListScreen(
                                         chatList.groupId
                                     )
                                     // 채팅방 화면으로 이동
-                                     navController.navigate(Screen.ChatRoomScreen.route)
+                                    navController.navigate(Screen.ChatRoomScreen.route)
                                 }
                             )
 
@@ -215,9 +233,21 @@ fun ChatListScreen(
             FilterDropdown(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(top = 52.dp, end = 16.dp)
+                    .padding(
+                        top = 52.dp,
+                        end = if (dimensions.isTablet) {
+                            // 태블릿에서는 중앙 정렬된 컨텐츠의 오른쪽 끝에서 패딩 적용
+                            maxOf(
+                                dimensions.defaultPadding,
+                                (configuration.screenWidthDp.dp - dimensions.contentMaxWidth * 1.5f) / 2
+                            ) + dimensions.defaultPadding
+                        } else {
+                            dimensions.defaultPadding
+                        }
+                    )
                     .zIndex(10f),
                 currentFilter = currentFilter,
+                dimensions = dimensions,
                 onFilterSelected = { filter ->
                     selectedCategory = filter.category
                     showCategoryFilter = false
@@ -247,6 +277,7 @@ fun ChatListScreen(
 fun FilterDropdown(
     modifier: Modifier = Modifier,
     currentFilter: ChatFilter,
+    dimensions: ResponsiveDimensions,
     onFilterSelected: (ChatFilter) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -258,8 +289,8 @@ fun FilterDropdown(
     ) {
         Column(
             modifier = Modifier
-                .width(160.dp)
-                .padding(vertical = 8.dp)
+                .width(dimensions.dropdownWidth)
+                .padding(vertical = dimensions.spacingTiny)
         ) {
             ChatFilter.values().forEach { filter ->
                 FilterDropdownItem(
