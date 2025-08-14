@@ -8,6 +8,12 @@ ocr:
   server:
     url: bgbgaiai-server:50505
 
+jwt:
+  accessSecret: ${JWT_ACCESS_SECRET}
+  refreshSecret: ${JWT_REFRESH_SECRET}
+  accessTtlMillis: ${JWT_ACCESS_TTL_MILLIS:1800000}       # 30m
+  refreshTtlMillis: ${JWT_REFRESH_TTL_MILLIS:1209600000} # 14d
+
 spring:
   config:
     import: optional:env[.env]
