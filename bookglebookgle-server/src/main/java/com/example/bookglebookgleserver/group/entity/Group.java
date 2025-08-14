@@ -2,6 +2,7 @@ package com.example.bookglebookgleserver.group.entity;
 
 import com.example.bookglebookgleserver.chat.entity.ChatRoom;
 import com.example.bookglebookgleserver.pdf.entity.PdfFile;
+import com.example.bookglebookgleserver.pdf.entity.PdfReadingProgress;
 import com.example.bookglebookgleserver.user.entity.User;
 import jakarta.persistence.*;
 import lombok.*;
@@ -91,4 +92,8 @@ public class Group {
 
     @OneToOne(mappedBy = "group", cascade = CascadeType.ALL, orphanRemoval = true)
     private ChatRoom chatRoom;
+
+    @OneToMany(mappedBy = "group", cascade = CascadeType.REMOVE, orphanRemoval = true)
+    private List<PdfReadingProgress> readingProgresses = new ArrayList<>();
+
 }
