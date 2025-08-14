@@ -24,6 +24,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
+import com.ssafy.bookglebookgle.navigation.Screen
 import com.ssafy.bookglebookgle.notification.NotificationChannels
 import com.ssafy.bookglebookgle.notification.NotificationPermissionRequester
 import com.ssafy.bookglebookgle.repository.fcm.FcmRepository
@@ -49,10 +50,8 @@ class MainActivity : ComponentActivity() {
 
         setTheme(R.style.Theme_BookgleBookgle)
 
-        // 시스템 스플래시를 최대한 빨리 제거
+        // 시스템 스플래시 제거
         val splashScreen = installSplashScreen()
-
-        // 즉시 스플래시 제거
         splashScreen.setKeepOnScreenCondition { false }
 
         // 최초 Intent 처리 → 스트림으로 방출
@@ -72,6 +71,7 @@ class MainActivity : ComponentActivity() {
         NotificationChannels.createDefaultChannel(this)
 
         setContent {
+            var navController: NavHostController? by remember { mutableStateOf(null) }
             NotificationPermissionRequester(
                 autoRequest = true,
                 onGranted = { fcmRepository.registerTokenAsync() }
@@ -84,7 +84,15 @@ class MainActivity : ComponentActivity() {
                         .windowInsetsPadding(WindowInsets.systemBars),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    MainNavigation()
+                    val nav = rememberNavController()
+                    navController = nav
+
+                    // 앱 시작 시 딥링크 처리
+                    LaunchedEffect(Unit) {
+                        intent?.let { handleInitialDeepLink(it, nav) }
+                    }
+
+                    MainNavigation(nav)
                 }
             }
         }
@@ -105,6 +113,37 @@ class MainActivity : ComponentActivity() {
             // 최신 값 push (버퍼가 있으면 drop 되지 않음)
             MainActivity.deepLinkIntents.tryEmit(intent)
         }
+    }
+
+    // 앱이 완전히 종료된 상태에서 알림을 눌렀을 때의 처리
+    private fun handleInitialDeepLink(intent: Intent, navController: NavHostController) {
+        val deeplinkType = intent.getStringExtra("deeplink_type")
+        val groupId = intent.getStringExtra("groupId")?.toLongOrNull()
+
+        Log.d("DeepLink", "초기 딥링크 처리 - type=$deeplinkType, groupId=$groupId")
+
+        if (groupId == null || groupId == -1L) return
+
+        // 스플래시 화면을 거치지 않고 직접 해당 화면으로 이동
+        when (deeplinkType) {
+            "chat" -> {
+                navController.currentBackStackEntry?.savedStateHandle?.set("groupId", groupId)
+                navController.navigate(Screen.ChatRoomScreen.route) {
+                    launchSingleTop = true
+                }
+            }
+            "group_detail" -> {
+                navController.currentBackStackEntry?.savedStateHandle?.set("groupId", groupId)
+                navController.currentBackStackEntry?.savedStateHandle?.set("isMyGroup", true)
+                navController.navigate(Screen.GroupDetailScreen.route) {
+                    launchSingleTop = true
+                }
+            }
+        }
+
+        // 처리 후 Intent 정리
+        intent.removeExtra("deeplink_type")
+        intent.removeExtra("groupId")
     }
 }
 
