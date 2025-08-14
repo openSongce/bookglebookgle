@@ -248,34 +248,6 @@ fun ProfileScreen(
 
                     Spacer(modifier = Modifier.height(dimensions.spacingLarge))
 
-                    // 버튼들
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
-                    ) {
-                        ProfileItemHorizontal(
-                            label = "내 책장",
-                            dimensions = dimensions,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            val userId: Long = viewModel.userId.value
-                            navController.currentBackStackEntry
-                                ?.savedStateHandle
-                                ?.set(NavKeys.USER_ID, userId)
-                            navController.navigate(Screen.MyBookShelfScreen.route)
-                        }
-
-                        ProfileItemHorizontal(
-                            label = "로그아웃",
-                            dimensions = dimensions,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            viewModel.logout()
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(dimensions.spacingExtraLarge))
-
                     // 내 통계
                     Column(modifier = Modifier.fillMaxWidth()) {
                         Text(
@@ -316,6 +288,32 @@ fun ProfileScreen(
                                     dimensions = dimensions
                                 )
                             }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(150.dp))
+
+                    // 버튼들
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
+                    ) {
+                        ProfileItemHorizontal(
+                            label = "회원탈퇴",
+                            dimensions = dimensions,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            viewModel.deleteAccount()
+                            navController.navigate(Screen.LoginScreen.route)
+
+                        }
+
+                        ProfileItemHorizontal(
+                            label = "로그아웃",
+                            dimensions = dimensions,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            viewModel.logout()
                         }
                     }
 
@@ -477,7 +475,7 @@ fun ProfileItemHorizontal(
             text = label,
             fontSize = if (dimensions.isTablet) dimensions.textSizeSubtitle else dimensions.textSizeBody,
             fontWeight = FontWeight.Medium,
-            color = Color.Black
+            color = if(label == "회원탈퇴") Color.Red else Color.Black
         )
     }
 }
