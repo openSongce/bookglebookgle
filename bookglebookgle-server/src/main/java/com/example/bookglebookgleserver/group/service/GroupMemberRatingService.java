@@ -20,6 +20,10 @@ public class GroupMemberRatingService {
     private final GroupRepository groupRepository;
     private final UserRepository userRepository;
 
+    //평점계산
+    private static final float BASELINE_SCORE = 3.0f;
+    private static final int BASELINE_WEIGHT = 1;
+
     @Transactional
     public void addRating(Long groupId, Long fromId, Long toId, float score) {
         if (fromId.equals(toId)) {
@@ -57,23 +61,33 @@ public class GroupMemberRatingService {
 
     // 평균 평점 반환
     public Float getAverageRating(Long groupId, Long toId) {
-        List<GroupMemberRating> ratings = groupMemberRatingRepository.findByGroup_IdAndToMember_Id(groupId, toId);
-        if (ratings.isEmpty()) return null;
-        return (float) ratings.stream().mapToDouble(GroupMemberRating::getScore).average().orElse(0.0);
+        List<GroupMemberRating> ratings =
+                groupMemberRatingRepository.findByGroup_IdAndToMember_Id(groupId, toId);
+
+        int n = ratings.size();
+        double sum = ratings.stream().mapToDouble(GroupMemberRating::getScore).sum();
+
+        // 가상의 3점 1표를 포함
+        double smoothed = (sum + BASELINE_SCORE * BASELINE_WEIGHT) / (n + BASELINE_WEIGHT);
+
+        // 필요하면 반올림 자리수 조정
+        return (float) smoothed;
     }
 
     // users 테이블 avg_rating 반영 메서드
     private void updateUserAverageRating(Long toUserId) {
-        // 1. 모든 평가에서 평균 점수 계산 (모든 그룹 기준, 또는 필요 시 그룹 제한)
-        List<GroupMemberRating> allRatings = groupMemberRatingRepository.findByToMember_Id(toUserId);
-        float avg = 0f;
-        if (!allRatings.isEmpty()) {
-            avg = (float) allRatings.stream().mapToDouble(GroupMemberRating::getScore).average().orElse(0.0);
-        }
-        // 2. 유저 조회 및 avg_rating 필드 업데이트
+        List<GroupMemberRating> allRatings =
+                groupMemberRatingRepository.findByToMember_Id(toUserId);
+
+        int n = allRatings.size();
+        double sum = allRatings.stream().mapToDouble(GroupMemberRating::getScore).sum();
+
+        // 가상의 3점 1표를 포함
+        float avg = (float) ((sum + BASELINE_SCORE * BASELINE_WEIGHT) / (n + BASELINE_WEIGHT));
+
         User user = userRepository.findById(toUserId)
                 .orElseThrow(() -> new IllegalArgumentException("평가 대상 유저가 존재하지 않습니다."));
-        user.setAvgRating(avg); // User 엔티티에 setAvgRating(float avgRating) 메서드 필요!
+        user.setAvgRating(avg);
         userRepository.save(user);
     }
 }
