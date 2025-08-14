@@ -64,7 +64,7 @@ class ChatRepositoryImpl @Inject constructor(
                 response.body()?.let { messages ->
                     Log.d(TAG, "채팅 메시지 - 총 ${messages.size}개 메시지 발견")
                     messages.forEach { message ->
-                        Log.d(TAG, "메시지 ID: ${message.id}, 보낸이: ${message.userNickname}, 내용: ${message.message}")
+                        Log.d(TAG, "메시지 ID: ${message.id}, 보낸이: ${message.userNickname}, 내용: ${message.message}, ${message.profileColor}, ${message.profileImgUrl}")
                     }
                     messages
                 } ?: run {
