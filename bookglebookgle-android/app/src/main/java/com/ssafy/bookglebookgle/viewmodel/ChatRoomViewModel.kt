@@ -204,10 +204,11 @@ class ChatRoomViewModel @Inject constructor(
                         messageId = response.id,
                         userId = response.userId,
                         nickname = response.userNickname,
-                        profileImage = null,
+                        profileImage = response.profileImgUrl,
                         message = response.message,
                         timestamp = DateTimeUtils.formatChatTime(response.createdAt),
-                        type = MessageType.NORMAL // 기존 메시지는 NORMAL로 처리
+                        type = MessageType.NORMAL, // 기존 메시지는 NORMAL로 처리
+                        avatarBgColor = response.profileColor
                     )
                 }.sortedBy { it.messageId }
 
@@ -386,10 +387,11 @@ class ChatRoomViewModel @Inject constructor(
                             messageId = response.id,
                             userId = response.userId,
                             nickname = response.userNickname,
-                            profileImage = null,
+                            profileImage = response.profileImgUrl,
                             message = response.message,
                             timestamp = DateTimeUtils.formatChatTime(response.createdAt),
-                            type = MessageType.NORMAL
+                            type = MessageType.NORMAL,
+                            avatarBgColor = response.profileColor
                         )
                     }.sortedBy { it.messageId }
 
