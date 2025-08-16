@@ -1,5 +1,7 @@
 package com.ssafy.bookglebookgle.ui.screen
 
+import android.content.Intent
+import android.util.Log
 import androidx.compose.foundation.ExperimentalFoundationApi
 import com.ssafy.bookglebookgle.R
 import androidx.compose.foundation.Image
@@ -21,6 +23,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -29,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
+import com.ssafy.bookglebookgle.MainActivity
 import com.ssafy.bookglebookgle.entity.GroupListResponse
 import com.ssafy.bookglebookgle.navigation.Screen
 import com.ssafy.bookglebookgle.ui.component.CustomTopAppBar
@@ -52,6 +56,7 @@ fun MainScreen(navController: NavHostController, viewModel: MainViewModel = hilt
     val searchResults = viewModel.searchResults.value
     val isSearching = viewModel.isSearching.value
     val isInSearchMode = viewModel.isInSearchMode()
+    val context = LocalContext.current
 
     // 추천 모임용 랜덤 그룹 3개 선택
     val recommendedGroups = remember(allGroups) {
@@ -82,6 +87,13 @@ fun MainScreen(navController: NavHostController, viewModel: MainViewModel = hilt
 
     LaunchedEffect(Unit) {
         viewModel.getchAllGroups()
+    }
+
+    LaunchedEffect(Unit) {
+        val activity = context as? MainActivity
+        activity?.intent?.let { intent ->
+            handleDeepLinkFromMainScreen(intent, navController)
+        }
     }
 
     Column(
@@ -495,6 +507,46 @@ fun MeetingCard(group: GroupListResponse, onClick: () -> Unit) {
                 contentScale = ContentScale.Crop
             )
         }
+    }
+}
+
+private fun handleDeepLinkFromMainScreen(
+    intent: Intent,
+    navController: NavHostController
+) {
+    val deeplinkType = intent.getStringExtra("deeplink_type")
+    val groupId = intent.getStringExtra("groupId")?.toLongOrNull()
+
+    Log.d("DeepLink", "MainScreen에서 딥링크 처리 - type=$deeplinkType, groupId=$groupId")
+
+    if (groupId == null || groupId == -1L) return
+
+    try {
+        when (deeplinkType) {
+            "chat" -> {
+                // 채팅방으로 이동
+                navController.currentBackStackEntry?.savedStateHandle?.set("groupId", groupId)
+                navController.navigate(Screen.ChatRoomScreen.route) {
+                    launchSingleTop = true
+                }
+            }
+            "group_detail" -> {
+                // 모임 상세로 이동
+                navController.currentBackStackEntry?.savedStateHandle?.set("groupId", groupId)
+                navController.currentBackStackEntry?.savedStateHandle?.set("isMyGroup", true)
+                navController.navigate(Screen.GroupDetailScreen.route) {
+                    launchSingleTop = true
+                }
+            }
+        }
+
+        // 처리 후 Intent에서 딥링크 정보 제거 (재처리 방지)
+        (navController.context as? MainActivity)?.intent?.apply {
+            removeExtra("deeplink_type")
+            removeExtra("groupId")
+        }
+    } catch (e: Exception) {
+        Log.e("DeepLink", "MainScreen에서 네비게이션 실패: ${e.message}", e)
     }
 }
 

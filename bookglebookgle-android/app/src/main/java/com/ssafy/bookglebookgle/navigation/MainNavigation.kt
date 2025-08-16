@@ -303,7 +303,7 @@ private fun handleDeepLinkFromIntent(
                     launchSingleTop = true
                 }
             }
-            "group_detail", null -> {
+            "group_detail" -> {
                 navController.currentBackStackEntry?.savedStateHandle?.set("groupId", groupId)
                 navController.currentBackStackEntry?.savedStateHandle?.set("isMyGroup", true)
                 navController.navigate(Screen.GroupDetailScreen.route) {
@@ -312,10 +312,10 @@ private fun handleDeepLinkFromIntent(
             }
         }
 
-        // 한 번 처리 후 같은 인텐트로 재처리 방지
-        (navController.context as? MainActivity)?.intent?.removeExtra("deeplink_type")
-        (navController.context as? MainActivity)?.intent?.removeExtra("groupId")
+        // 처리 후 Intent 정리
+        intent.removeExtra("deeplink_type")
+        intent.removeExtra("groupId")
     } catch (e: Exception) {
-        Log.e("DeepLink", "navigate failed: ${e.message}", e)
+        Log.e("DeepLink", "네비게이션 실패: ${e.message}", e)
     }
 }
