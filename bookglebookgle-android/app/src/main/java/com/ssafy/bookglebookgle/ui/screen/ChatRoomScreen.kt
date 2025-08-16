@@ -71,6 +71,7 @@ import com.ssafy.bookglebookgle.ui.theme.ResponsiveDimensions
 import com.ssafy.bookglebookgle.ui.theme.defaultCornerRadius
 import com.ssafy.bookglebookgle.ui.theme.defaultPadding
 import com.ssafy.bookglebookgle.ui.theme.rememberResponsiveDimensions
+import com.ssafy.bookglebookgle.util.LottieOverlay
 import com.ssafy.bookglebookgle.viewmodel.ChatRoomViewModel
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
@@ -1004,85 +1005,21 @@ fun ChatRoomScreen(
 
             // 토론 연결 중 로딩 오버레이
             if (uiState.isReadingCategory && uiState.isDiscussionConnecting) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.5f))
-                        .clickable { }, // 클릭 차단
-                    contentAlignment = Alignment.Center
-                ) {
-                    Card(
-                        modifier = Modifier
-                            .padding(dimensions.spacingLarge),
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
-                        elevation = CardDefaults.cardElevation(defaultElevation = dimensions.spacingSmall)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(dimensions.spacingLarge),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            CircularProgressIndicator(
-                                color = BaseColor,
-                                modifier = Modifier.size(dimensions.iconSizeXLarge),
-                                strokeWidth = 4.dp
-                            )
-                            Spacer(modifier = Modifier.height(dimensions.spacingLarge))
-                            Text(
-                                text = "토론 준비 중입니다...",
-                                fontSize = dimensions.textSizeHeadline,
-                                fontWeight = FontWeight.Medium,
-                                color = Color.Black
-                            )
-                            Spacer(modifier = Modifier.height(dimensions.spacingSmall))
-                            Text(
-                                text = "AI가 토론을 준비하고 있어요",
-                                fontSize = dimensions.textSizeBody,
-                                color = Color.Gray
-                            )
-                        }
-                    }
-                }
+                LottieOverlay(
+                    raw = R.raw.ai_discussion_loading,
+                    title = "토론 준비 중입니다...",
+                    subtitle = "AI가 토론을 준비하고 있어요",
+                )
             }
 
             // 퀴즈 연결 중 로딩 오버레이 - 새로 추가
             if (uiState.isStudyCategory && uiState.isQuizConnecting) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.5f))
-                        .clickable { },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Card(
-                        modifier = Modifier.padding(dimensions.spacingLarge),
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
-                        elevation = CardDefaults.cardElevation(defaultElevation = dimensions.spacingSmall)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(dimensions.spacingLarge),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            CircularProgressIndicator(
-                                color = BaseColor,
-                                modifier = Modifier.size(dimensions.iconSizeXLarge),
-                                strokeWidth = 4.dp
-                            )
-                            Spacer(modifier = Modifier.height(dimensions.spacingLarge))
-                            Text(
-                                text = "퀴즈 준비 중입니다...",
-                                fontSize = dimensions.textSizeHeadline,
-                                fontWeight = FontWeight.Medium,
-                                color = Color.Black
-                            )
-                            Spacer(modifier = Modifier.height(dimensions.spacingSmall))
-                            Text(
-                                text = "퀴즈 문제를 준비하고 있어요",
-                                fontSize = dimensions.textSizeBody,
-                                color = Color.Gray
-                            )
-                        }
-                    }
-                }
+                LottieOverlay(
+                    raw = R.raw.ai_discussion_loading,
+                    title = "퀴즈 준비 중입니다...",
+                    subtitle = "퀴즈 문제를 준비하고 있어요",
+                )
+
             }
         }
     }

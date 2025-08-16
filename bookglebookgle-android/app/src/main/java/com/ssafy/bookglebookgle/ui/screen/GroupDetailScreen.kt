@@ -684,14 +684,14 @@ private fun BookRatingBar(
     modifier: Modifier = Modifier,
     books: Int = 5,
     allowHalf: Boolean = true,
-    bookWidth: Dp = 24.dp,
+    bookWidth: Dp = 20.dp,
     bookHeight: Dp = 24.dp,
-    gap: Dp = 12.dp,
+    gap: Dp = 28.dp,
     activeColor: Color = MainColor,
     inactiveColor: Color = Color(0xFFE5E7EB),
     outlineColor: Color = Color(0xFFCBD5E1)
 ) {
-    Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(gap)) {
+    Row(modifier = modifier.padding(start = 8.dp), horizontalArrangement = Arrangement.spacedBy(gap)) {
         repeat(books) { i ->
             val fill = (value - i).coerceIn(0f, 1f)
             Box(
@@ -862,13 +862,13 @@ private fun RateMemberBottomSheet(
             Spacer(Modifier.height(12.dp))
             val full = score.toInt()
             val half = (score - full) >= 0.5f
-            Text("📚".repeat(full) + if (half) "📖" else "", fontSize = 28.sp)
+            Text("📚  ".repeat(full) + if (half) "📖" else "", fontSize = 28.sp)
 
             Spacer(Modifier.height(12.dp))
             BookRatingBar(value = score, onValueChange = { score = it }, allowHalf = true)
 
             Spacer(Modifier.height(10.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 listOf(1f, 2f, 3f, 4f, 5f).forEach { v ->
                     QuickPickChip(
                         label = "${v.toInt()}권",
