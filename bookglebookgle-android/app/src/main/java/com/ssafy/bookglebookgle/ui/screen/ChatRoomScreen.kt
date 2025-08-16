@@ -65,6 +65,7 @@ import com.ssafy.bookglebookgle.ui.component.CustomTopAppBar
 import com.ssafy.bookglebookgle.ui.theme.BaseColor
 import com.ssafy.bookglebookgle.ui.theme.DeepMainColor
 import com.ssafy.bookglebookgle.ui.theme.MainColor
+import com.ssafy.bookglebookgle.util.LottieOverlay
 import com.ssafy.bookglebookgle.viewmodel.ChatRoomViewModel
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
@@ -992,85 +993,21 @@ fun ChatRoomScreen(
 
         // 토론 연결 중 로딩 오버레이
         if (uiState.isReadingCategory && uiState.isDiscussionConnecting) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.5f))
-                    .clickable { }, // 클릭 차단
-                contentAlignment = Alignment.Center
-            ) {
-                Card(
-                    modifier = Modifier
-                        .padding(32.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(32.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        CircularProgressIndicator(
-                            color = BaseColor,
-                            modifier = Modifier.size(48.dp),
-                            strokeWidth = 4.dp
-                        )
-                        Spacer(modifier = Modifier.height(24.dp))
-                        Text(
-                            text = "토론 준비 중입니다...",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = Color.Black
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "AI가 토론을 준비하고 있어요",
-                            fontSize = 14.sp,
-                            color = Color.Gray
-                        )
-                    }
-                }
-            }
+            LottieOverlay(
+                raw = R.raw.ai_discussion_loading,
+                title = "토론 준비 중입니다...",
+                subtitle = "AI가 토론을 준비하고 있어요",
+            )
         }
 
         // 퀴즈 연결 중 로딩 오버레이 - 새로 추가
         if (uiState.isStudyCategory && uiState.isQuizConnecting) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.5f))
-                    .clickable { },
-                contentAlignment = Alignment.Center
-            ) {
-                Card(
-                    modifier = Modifier.padding(32.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(32.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        CircularProgressIndicator(
-                            color = BaseColor,
-                            modifier = Modifier.size(48.dp),
-                            strokeWidth = 4.dp
-                        )
-                        Spacer(modifier = Modifier.height(24.dp))
-                        Text(
-                            text = "퀴즈 준비 중입니다...",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = Color.Black
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "퀴즈 문제를 준비하고 있어요",
-                            fontSize = 14.sp,
-                            color = Color.Gray
-                        )
-                    }
-                }
-            }
+            LottieOverlay(
+                raw = R.raw.ai_discussion_loading,
+                title = "퀴즈 준비 중입니다...",
+                subtitle = "퀴즈 문제를 준비하고 있어요",
+            )
+
         }
     }
 
