@@ -3,6 +3,7 @@ package com.example.bookglebookgleserver.group.service;
 import com.example.bookglebookgleserver.group.entity.Group;
 import com.example.bookglebookgleserver.group.entity.GroupMemberRating;
 import com.example.bookglebookgleserver.group.repository.GroupMemberRatingRepository;
+import com.example.bookglebookgleserver.group.repository.GroupMemberRepository;
 import com.example.bookglebookgleserver.group.repository.GroupRepository;
 import com.example.bookglebookgleserver.user.entity.User;
 import com.example.bookglebookgleserver.user.repository.UserRepository;
@@ -19,6 +20,7 @@ public class GroupMemberRatingService {
     private final GroupMemberRatingRepository groupMemberRatingRepository;
     private final GroupRepository groupRepository;
     private final UserRepository userRepository;
+    private final GroupMemberRepository groupMemberRepository;
 
     //평점계산
     private static final float BASELINE_SCORE = 3.0f;

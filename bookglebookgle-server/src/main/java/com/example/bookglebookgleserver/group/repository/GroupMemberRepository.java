@@ -39,6 +39,7 @@ public interface GroupMemberRepository extends JpaRepository<GroupMember, Long> 
     int countIncompleteGroupsByUserId(@Param("userId") Long userId);
 
     List<GroupMember> findByGroup_Id(Long groupId);
+    long countByGroup_Id(Long groupId);
 
 
     @Query("""
@@ -50,7 +51,8 @@ select new com.example.bookglebookgleserver.group.dto.GroupMemberDetailDto(
   cast(round(coalesce(gm.progressPercent, 0)) as integer),
   gm.isHost,
   u.profileImageUrl,
-  false
+  false,
+  null
 )
 from GroupMember gm join gm.user u
 where gm.group.id = :groupId

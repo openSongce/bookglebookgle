@@ -2,6 +2,8 @@ package com.example.bookglebookgleserver.group.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
+import java.util.List;
+
 @Schema(description = "그룹 멤버 상세 정보")
 public record GroupMemberDetailDto(
         @Schema(description = "유저 ID", example = "3")
@@ -21,5 +23,9 @@ public record GroupMemberDetailDto(
         String profileImageUrl,
 
         @Schema(description = "이 멤버가 그룹 평점을 제출(완료)했는지", example = "true")
-        boolean ratingSubmitted
+        boolean ratingSubmitted,
+
+        @Schema(description = "이 멤버가 평점을 준 대상들의 ID 목록", example = "[2, 5, 7]")
+        List<Long> ratedUserIds
+
 ) {}

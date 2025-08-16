@@ -223,21 +223,26 @@ public class GroupServiceImpl implements GroupService {
 
         // 기본 멤버 정보
         List<GroupMemberDetailDto> base = groupMemberRepository.findMemberDetailsByGroupId(groupId);
+        // 2) (from→to) 벌크 조회 후 Map<Long, List<Long>>로 변환
+        List<Object[]> pairs = groupMemberRatingRepository.findAllFromToPairsByGroupId(groupId);
+        Map<Long, List<Long>> fromToMap = pairs.stream()
+                .collect(Collectors.groupingBy(
+                        row -> (Long) row[0],                                   // fromUserId
+                        Collectors.mapping(row -> (Long) row[1],                // toUserId
+                                Collectors.collectingAndThen(Collectors.toList(), list -> {
+                                    // 중복 제거 + 불변 리스트
+                                    return List.copyOf(new LinkedHashSet<>(list));
+                                }))
+                ));
 
+        long otherMembersCountIfAll = Math.max(0, base.size() - 1);
+
+        // 3) DTO에 ratedUserIds / ratingSubmitted / progressPercent 주입
         List<GroupMemberDetailDto> members = base.stream().map(m -> {
             int progressPercent = calcProgressPercent(m.maxReadPage(), pageCount);
 
-            // 그룹 내 다른 멤버들의 수 (자신 제외)
-            long otherMembersCount = base.size() - 1;
-
-            // 이 멤버가 평가한 서로 다른 대상들의 수 (User ID 사용)
-            long ratedTargetsCount = groupMemberRatingRepository.countDistinctTargetsByUserInGroup(groupId, m.userId());
-
-            // 모든 다른 멤버를 평가했는지 확인
-            boolean ratingSubmitted = (ratedTargetsCount >= otherMembersCount);
-
-            log.info("🔍 User {} - Rated targets: {}/{}, RatingSubmitted: {}",
-                    m.userId(), ratedTargetsCount, otherMembersCount, ratingSubmitted);
+            List<Long> ratedUserIds = fromToMap.getOrDefault(m.userId(), Collections.emptyList());
+            boolean ratingSubmitted = (otherMembersCountIfAll > 0) && (ratedUserIds.size() == otherMembersCountIfAll);
 
             return new GroupMemberDetailDto(
                     m.userId(),
@@ -247,7 +252,8 @@ public class GroupServiceImpl implements GroupService {
                     progressPercent,
                     m.isHost(),
                     m.profileImageUrl(),
-                    ratingSubmitted
+                    ratingSubmitted,
+                    ratedUserIds
             );
         }).toList();
 
@@ -271,67 +277,6 @@ public class GroupServiceImpl implements GroupService {
                 allMemberCompleted
         );
     }
-
-//    @Transactional(readOnly = true)
-//    public GroupDetailResponse getGroupDetail(Long groupId, User requester) {
-//        Group group = groupRepository.findById(groupId)
-//                .orElseThrow(() -> new NotFoundException("해당 모임이 존재하지 않습니다."));
-//
-//        int pageCount = resolvePageCount(group);
-//        boolean requesterIsHost = group.getHostUser().getId().equals(requester.getId());
-//
-//        List<GroupMemberDetailDto> base = groupMemberRepository.findMemberDetailsByGroupId(groupId);
-//
-//        // 평가 제출자 집합 조회
-//        Set<Long> raterMemberIds = groupMemberRatingRepository.findAllRaterMemberIdsByGroupId(groupId);
-//
-//        List<GroupMemberDetailDto> members = base.stream().map(m -> {
-//            int progressPercent = calcProgressPercent(m.maxReadPage(), pageCount);
-//
-//            // 이 사용자가 평가해야 할 다른 멤버들의 수 (자신 제외)
-//            long otherMembersCount = base.stream().filter(other -> !other.userId().equals(m.userId())).count();
-//
-//            // 이 사용자가 실제로 평가한 다른 멤버들의 수
-//            long ratedCount = groupMemberRatingRepository.countRatingsByUserInGroup(groupId, m.userId());
-//
-//            // 모든 다른 멤버를 평가했는지 확인
-//            boolean ratingSubmitted = (ratedCount >= otherMembersCount);
-//
-//            log.info("🔍 User {} - Rated: {}/{}, RatingSubmitted: {}",
-//                    m.userId(), ratedCount, otherMembersCount, ratingSubmitted);
-//
-//            return new GroupMemberDetailDto(
-//                    m.userId(),
-//                    m.userNickName(),
-//                    m.profileColor(),
-//                    m.maxReadPage(),
-//                    progressPercent,
-//                    m.isHost(),
-//                    ratingSubmitted
-//            );
-//        }).toList();
-//
-//
-//        boolean allMemberCompleted = !members.isEmpty() &&
-//                members.stream().allMatch(mm -> mm.progressPercent() >= 100);
-//
-//        String readableSchedule = cronToReadable(group.getSchedule());
-//
-//        return new GroupDetailResponse(
-//                group.getRoomTitle(),
-//                group.getCategory().name(),
-//                readableSchedule,
-//                members.size(),
-//                group.getGroupMaxNum(),
-//                group.getDescription(),
-//                null,
-//                requesterIsHost,
-//                group.getMinRequiredRating(),
-//                pageCount,
-//                members,
-//                allMemberCompleted
-//        );
-//    }
 
 
 
@@ -516,7 +461,7 @@ public class GroupServiceImpl implements GroupService {
             throw new ForbiddenException("그룹 수정 권한이 없습니다.");
         }
 
-        // 그룹 정보 업데이트 (기존 로직과 동일)
+        // 그룹 정보 업데이트
         if (dto.getRoomTitle() != null) group.setRoomTitle(dto.getRoomTitle());
         if (dto.getDescription() != null) group.setDescription(dto.getDescription());
         if (dto.getCategory() != null) group.setCategory(Group.Category.valueOf(dto.getCategory().toUpperCase()));
@@ -524,7 +469,7 @@ public class GroupServiceImpl implements GroupService {
         if (dto.getMinRequiredRating() > 0) group.setMinRequiredRating(dto.getMinRequiredRating());
         if (dto.getReadingMode() != null) group.setReadingMode(Group.ReadingMode.valueOf(dto.getReadingMode().toUpperCase()));
 
-        // 스케줄 업데이트 (기존 로직과 동일)
+        // 스케줄 업데이트
         if (dto.getSchedule() != null) {
             String input = dto.getSchedule();
             if (input.isBlank()) {
@@ -546,23 +491,33 @@ public class GroupServiceImpl implements GroupService {
 
         groupRepository.save(group);
 
-        // 응답 생성 (getGroupDetail과 동일한 로직으로 수정)
+        // === 응답 생성 ===
         boolean isHost = group.getHostUser().getId().equals(user.getId());
         int pageCount = resolvePageCount(group);
 
+        // 1) 기본 멤버 정보
         List<GroupMemberDetailDto> base = groupMemberRepository.findMemberDetailsByGroupId(groupId);
 
+        // 2) (from→to) 벌크 조회 후 Map<Long, List<Long>>로 변환
+        List<Object[]> pairs = groupMemberRatingRepository.findAllFromToPairsByGroupId(groupId);
+        Map<Long, List<Long>> fromToMap = pairs.stream()
+                .collect(Collectors.groupingBy(
+                        row -> (Long) row[0],                                   // fromUserId
+                        Collectors.mapping(row -> (Long) row[1],                // toUserId
+                                Collectors.collectingAndThen(Collectors.toList(), list -> {
+                                    // 중복 제거 + 불변 리스트
+                                    return List.copyOf(new LinkedHashSet<>(list));
+                                }))
+                ));
+
+        long otherMembersCountIfAll = Math.max(0, base.size() - 1);
+
+        // 3) DTO에 ratedUserIds / ratingSubmitted / progressPercent 주입
         List<GroupMemberDetailDto> members = base.stream().map(m -> {
             int progressPercent = calcProgressPercent(m.maxReadPage(), pageCount);
 
-            // 그룹 내 다른 멤버들의 수 (자신 제외)
-            long otherMembersCount = base.size() - 1;
-
-            // 이 멤버가 평가한 서로 다른 대상들의 수
-            long ratedTargetsCount = groupMemberRatingRepository.countDistinctTargetsByUserInGroup(groupId, m.userId());
-
-            // 모든 다른 멤버를 평가했는지 확인
-            boolean ratingSubmitted = (ratedTargetsCount >= otherMembersCount);
+            List<Long> ratedUserIds = fromToMap.getOrDefault(m.userId(), Collections.emptyList());
+            boolean ratingSubmitted = (otherMembersCountIfAll > 0) && (ratedUserIds.size() == otherMembersCountIfAll);
 
             return new GroupMemberDetailDto(
                     m.userId(),
@@ -572,7 +527,8 @@ public class GroupServiceImpl implements GroupService {
                     progressPercent,
                     m.isHost(),
                     m.profileImageUrl(),
-                    ratingSubmitted
+                    ratingSubmitted,
+                    ratedUserIds
             );
         }).toList();
 
