@@ -702,7 +702,7 @@ fun PdfReadScreen(
                                             centerXNorm: Float,
                                             centerYNorm: Float
                                         ) {
-                                            lastViewportOrScrollTs = SystemClock.elapsedRealtime()
+//                                            lastViewportOrScrollTs = SystemClock.elapsedRealtime()
                                             viewModel.onViewportChangedFromUi(
                                                 pageIndex0 = pageIndex,
                                                 fitWidthZoom = fitWidthZoom,
