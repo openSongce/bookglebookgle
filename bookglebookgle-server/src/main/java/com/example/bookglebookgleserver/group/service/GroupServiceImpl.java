@@ -38,6 +38,8 @@ import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBo
 
 import java.io.File;
 import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -297,11 +299,20 @@ public class GroupServiceImpl implements GroupService {
             throw new NotFoundException("서버에 PDF 파일이 존재하지 않습니다.");
         }
 
+
+        String cd = buildContentDisposition("inline", pdfFile.getFileName());
+
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_PDF)
-                .header("Content-Disposition", "inline; filename=\"" + pdfFile.getFileName() + "\"")
+                .header("Content-Disposition", cd)
                 .header("X-OCR-Available", String.valueOf(pdfFile.isHasOcr()))
                 .body(new FileSystemResource(file));
+
+//        return ResponseEntity.ok()
+//                .contentType(MediaType.APPLICATION_PDF)
+//                .header("Content-Disposition", "inline; filename=\"" + pdfFile.getFileName() + "\"")
+//                .header("X-OCR-Available", String.valueOf(pdfFile.isHasOcr()))
+//                .body(new FileSystemResource(file));
     }
 
     // ✅ Accept 헤더 기반: PDF 혹은 ZIP
@@ -334,12 +345,19 @@ public class GroupServiceImpl implements GroupService {
                 outputStream.flush();
             }
         };
+        String cd = buildContentDisposition("inline", pdfFile.getFileName());
 
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_PDF)
-                .header("Content-Disposition", "inline; filename=\"" + filename + "\"")
+                .header("Content-Disposition", cd)
                 .header("X-OCR-Available", String.valueOf(hasOcr))
                 .body(body);
+
+//        return ResponseEntity.ok()
+//                .contentType(MediaType.APPLICATION_PDF)
+//                .header("Content-Disposition", "inline; filename=\"" + filename + "\"")
+//                .header("X-OCR-Available", String.valueOf(hasOcr))
+//                .body(body);
     }
 
 
@@ -383,12 +401,21 @@ public class GroupServiceImpl implements GroupService {
         };
 
         String zipName = safeFilename("group-" + groupId + "-pdf-with-ocr.zip");
+
+
+        String cd = buildContentDisposition("attachment", zipName);
+
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType("application/zip"))
-                .header("Content-Disposition", "attachment; filename=\"" + zipName + "\"")
+                .header("Content-Disposition", cd)
                 .header("X-OCR-Available", "true")
-                // Nginx 사용 시 버퍼링 방지(선택): .header("X-Accel-Buffering","no")
                 .body(body);
+//        return ResponseEntity.ok()
+//                .contentType(MediaType.parseMediaType("application/zip"))
+//                .header("Content-Disposition", "attachment; filename=\"" + zipName + "\"")
+//                .header("X-OCR-Available", "true")
+//                // Nginx 사용 시 버퍼링 방지(선택): .header("X-Accel-Buffering","no")
+//                .body(body);
     }
 
     private static boolean wantsZip(String accept) {
@@ -728,6 +755,22 @@ public class GroupServiceImpl implements GroupService {
                         Group.Category.valueOf(r.getCategory())  // 문자열 → Enum
                 ))
                 .toList();
+    }
+
+
+    private static String buildContentDisposition(String type, String rawName) {
+        String raw = (rawName == null || rawName.isBlank()) ? "document.pdf" : rawName;
+        // CR/LF, 따옴표 제거(헤더 인젝션 방지)
+        String sanitized = raw.replaceAll("[\\r\\n\"]", "_");
+
+        // ASCII fallback
+        String asciiFallback = sanitized.replaceAll("[^\\x20-\\x7E]", "_");
+
+        // RFC 5987: UTF-8 percent-encode (공백을 %20으로)
+        String utf8Encoded = URLEncoder.encode(sanitized, StandardCharsets.UTF_8).replace("+", "%20");
+
+        // e.g., inline; filename="ascii.pdf"; filename*=UTF-8''%ED%95%9C%EA%B8%80.pdf
+        return type + "; filename=\"" + asciiFallback + "\"; filename*=UTF-8''" + utf8Encoded;
     }
 
 
