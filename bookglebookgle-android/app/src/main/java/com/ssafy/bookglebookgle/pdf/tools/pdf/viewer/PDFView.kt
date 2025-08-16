@@ -2515,7 +2515,7 @@ class PDFView(context: Context?, set: AttributeSet?) :
             return false
         }
     }
-    private val viewportThrottler = Throttler(50)
+    private val viewportThrottler = Throttler(0)
 
     private fun notifyViewportChangedThrottled() {
         if (viewportThrottler.allow()) notifyViewportChanged()

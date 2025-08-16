@@ -1022,7 +1022,7 @@ class PdfViewModel @Inject constructor(
         // 가벼운 디바운스 (핀치 중 난사 방지)
         viewportDebounceJob?.cancel()
         viewportDebounceJob = viewModelScope.launch {
-            delay(30) // 50~100ms 선호
+            delay(0) // 50~100ms 선호
             val gid = currentGroupId ?: return@launch
             pdfGrpcRepository.sendViewportFollow(
                 groupId = gid,
