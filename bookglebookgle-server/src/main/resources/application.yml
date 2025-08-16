@@ -11,7 +11,7 @@ ocr:
 jwt:
   accessSecret: ${JWT_ACCESS_SECRET}
   refreshSecret: ${JWT_REFRESH_SECRET}
-  accessTtlMillis: ${JWT_ACCESS_TTL_MILLIS:1800000}       # 30m
+  accessTtlMillis: ${JWT_ACCESS_TTL_MILLIS:7200000}       # 2h
   refreshTtlMillis: ${JWT_REFRESH_TTL_MILLIS:1209600000} # 14d
 
 spring:
