@@ -22,7 +22,8 @@ data class GroupMemberDetailDto(
     val progressPercent: Int,
     val isHost: Boolean,
     val ratingSubmitted: Boolean,
-    val profileImageUrl: String?
+    val profileImageUrl: String?,
+    val ratedUserIds : List<Long>
 )
 
 data class GroupDetail(
@@ -47,7 +48,8 @@ data class GroupMember(
     val progressPercent: Int,
     val isHost: Boolean,
     val hasRated: Boolean,
-    val profileImageUrl: String?
+    val profileImageUrl: String?,
+    val ratedUserIds : List<Long>
 )
 
 fun GroupDetailResponse.toDomain(): GroupDetail = GroupDetail(
@@ -72,5 +74,7 @@ fun GroupMemberDetailDto.toDomain(): GroupMember = GroupMember(
     progressPercent = progressPercent,
     isHost = isHost,
     hasRated = ratingSubmitted,   // ★ 서버 필드명은 isCompleted지만 의미는 "평가 완료"
-    profileImageUrl = profileImageUrl
+    profileImageUrl = profileImageUrl,
+    ratedUserIds = ratedUserIds
+
 )

@@ -107,7 +107,8 @@ class GroupDetailViewModel @Inject constructor(
         val color: String?,
         val imageUrl: String? = null,
         val isHost: Boolean,
-        val maxReadPage1Based: Int // 0-based -> 1-based 변환
+        val maxReadPage1Based: Int, // 0-based -> 1-based 변환
+        val ratedUserIds: List<Long> = emptyList()
     )
 
     fun GroupDetail.toInitialMembers(): List<InitialMember> =
@@ -118,7 +119,8 @@ class GroupDetailViewModel @Inject constructor(
                 color = it.profileColor,
                 imageUrl = it.profileImageUrl,
                 isHost = it.isHost,
-                maxReadPage1Based = (it.lastPageRead + 1).coerceAtLeast(0)
+                maxReadPage1Based = (it.lastPageRead + 1).coerceAtLeast(0),
+                ratedUserIds = it.ratedUserIds
             )
         }
 
