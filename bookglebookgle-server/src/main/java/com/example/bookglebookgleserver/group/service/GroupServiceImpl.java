@@ -300,14 +300,17 @@ public class GroupServiceImpl implements GroupService {
         }
 
 
-        String cd = buildContentDisposition("inline", pdfFile.getFileName());
+        // 간단한 한국어 파일명 처리
+        String raw = pdfFile.getFileName();
+        String asciiFallback = raw.replaceAll("[^\\x20-\\x7E]", "_");
+        String cd = "inline; filename=\"" + asciiFallback + "\"; filename*=UTF-8''" +
+                URLEncoder.encode(raw, StandardCharsets.UTF_8);
 
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_PDF)
                 .header("Content-Disposition", cd)
                 .header("X-OCR-Available", String.valueOf(pdfFile.isHasOcr()))
                 .body(new FileSystemResource(file));
-
 //        return ResponseEntity.ok()
 //                .contentType(MediaType.APPLICATION_PDF)
 //                .header("Content-Disposition", "inline; filename=\"" + pdfFile.getFileName() + "\"")
@@ -337,7 +340,11 @@ public class GroupServiceImpl implements GroupService {
         File file = new File(pdfFile.getFilePath());
         if (!file.exists()) throw new NotFoundException("서버에 PDF 파일이 존재하지 않습니다.");
 
-        String filename = safeFilename(pdfFile.getFileName());
+        // 간단한 한국어 파일명 처리
+        String raw = pdfFile.getFileName();
+        String asciiFallback = raw.replaceAll("[^\\x20-\\x7E]", "_");
+        String cd = "inline; filename=\"" + asciiFallback + "\"; filename*=UTF-8''" +
+                URLEncoder.encode(raw, StandardCharsets.UTF_8);
 
         StreamingResponseBody body = outputStream -> {
             try (java.io.FileInputStream in = new java.io.FileInputStream(file)) {
@@ -345,7 +352,6 @@ public class GroupServiceImpl implements GroupService {
                 outputStream.flush();
             }
         };
-        String cd = buildContentDisposition("inline", pdfFile.getFileName());
 
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_PDF)
@@ -400,15 +406,17 @@ public class GroupServiceImpl implements GroupService {
             }
         };
 
-        String zipName = safeFilename("group-" + groupId + "-pdf-with-ocr.zip");
-
-
-        String cd = buildContentDisposition("attachment", zipName);
+        // ZIP 파일명 처리
+        String zipName = "group-" + groupId + "-pdf-with-ocr.zip";
+        String asciiZip = zipName.replaceAll("[^\\x20-\\x7E]", "_");
+        String cd = "attachment; filename=\"" + asciiZip + "\"; filename*=UTF-8''" +
+                URLEncoder.encode(zipName, StandardCharsets.UTF_8);
 
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType("application/zip"))
                 .header("Content-Disposition", cd)
                 .header("X-OCR-Available", "true")
+                .header("X-Accel-Buffering", "no")
                 .body(body);
 //        return ResponseEntity.ok()
 //                .contentType(MediaType.parseMediaType("application/zip"))
@@ -757,23 +765,20 @@ public class GroupServiceImpl implements GroupService {
                 .toList();
     }
 
+    private String createContentDispositionHeader(String filename, boolean isAttachment) {
+        if (filename == null || filename.trim().isEmpty()) {
+            filename = "document.pdf";
+        }
 
-    private static String buildContentDisposition(String type, String rawName) {
-        String raw = (rawName == null || rawName.isBlank()) ? "document.pdf" : rawName;
-        // CR/LF, 따옴표 제거(헤더 인젝션 방지)
-        String sanitized = raw.replaceAll("[\\r\\n\"]", "_");
+        String raw = filename;
+        String asciiFallback = raw.replaceAll("[^\\x20-\\x7E]", "_"); // ASCII가 아닌 문자를 _로 치환
 
-        // ASCII fallback
-        String asciiFallback = sanitized.replaceAll("[^\\x20-\\x7E]", "_");
+        String disposition = isAttachment ? "attachment" : "inline";
+        String cd = disposition + "; filename=\"" + asciiFallback + "\"; filename*=UTF-8''" +
+                URLEncoder.encode(raw, StandardCharsets.UTF_8);
 
-        // RFC 5987: UTF-8 percent-encode (공백을 %20으로)
-        String utf8Encoded = URLEncoder.encode(sanitized, StandardCharsets.UTF_8).replace("+", "%20");
-
-        // e.g., inline; filename="ascii.pdf"; filename*=UTF-8''%ED%95%9C%EA%B8%80.pdf
-        return type + "; filename=\"" + asciiFallback + "\"; filename*=UTF-8''" + utf8Encoded;
+        return cd;
     }
-
-
 
 }
 
