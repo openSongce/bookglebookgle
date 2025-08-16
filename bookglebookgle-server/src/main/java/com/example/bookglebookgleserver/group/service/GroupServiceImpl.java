@@ -300,17 +300,18 @@ public class GroupServiceImpl implements GroupService {
         }
 
 
-        // 간단한 한국어 파일명 처리
+        // 한국어 파일명을 URL 인코딩해서 직접 filename에 넣기
         String raw = pdfFile.getFileName();
-        String asciiFallback = raw.replaceAll("[^\\x20-\\x7E]", "_");
-        String cd = "inline; filename=\"" + asciiFallback + "\"; filename*=UTF-8''" +
-                URLEncoder.encode(raw, StandardCharsets.UTF_8);
+        String encodedFilename = URLEncoder.encode(raw, StandardCharsets.UTF_8)
+                .replace("+", "%20"); // 공백 처리
+        String cd = "inline; filename=\"" + encodedFilename + "\"";
 
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_PDF)
                 .header("Content-Disposition", cd)
                 .header("X-OCR-Available", String.valueOf(pdfFile.isHasOcr()))
                 .body(new FileSystemResource(file));
+
 //        return ResponseEntity.ok()
 //                .contentType(MediaType.APPLICATION_PDF)
 //                .header("Content-Disposition", "inline; filename=\"" + pdfFile.getFileName() + "\"")
@@ -340,11 +341,11 @@ public class GroupServiceImpl implements GroupService {
         File file = new File(pdfFile.getFilePath());
         if (!file.exists()) throw new NotFoundException("서버에 PDF 파일이 존재하지 않습니다.");
 
-        // 간단한 한국어 파일명 처리
+        // 한국어 파일명을 URL 인코딩해서 직접 filename에 넣기
         String raw = pdfFile.getFileName();
-        String asciiFallback = raw.replaceAll("[^\\x20-\\x7E]", "_");
-        String cd = "inline; filename=\"" + asciiFallback + "\"; filename*=UTF-8''" +
-                URLEncoder.encode(raw, StandardCharsets.UTF_8);
+        String encodedFilename = URLEncoder.encode(raw, StandardCharsets.UTF_8)
+                .replace("+", "%20"); // 공백 처리
+        String cd = "inline; filename=\"" + encodedFilename + "\"";
 
         StreamingResponseBody body = outputStream -> {
             try (java.io.FileInputStream in = new java.io.FileInputStream(file)) {
@@ -406,11 +407,11 @@ public class GroupServiceImpl implements GroupService {
             }
         };
 
-        // ZIP 파일명 처리
+        // ZIP 파일명을 URL 인코딩해서 직접 filename에 넣기
         String zipName = "group-" + groupId + "-pdf-with-ocr.zip";
-        String asciiZip = zipName.replaceAll("[^\\x20-\\x7E]", "_");
-        String cd = "attachment; filename=\"" + asciiZip + "\"; filename*=UTF-8''" +
-                URLEncoder.encode(zipName, StandardCharsets.UTF_8);
+        String encodedZipName = URLEncoder.encode(zipName, StandardCharsets.UTF_8)
+                .replace("+", "%20"); // 공백 처리
+        String cd = "attachment; filename=\"" + encodedZipName + "\"";
 
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType("application/zip"))
@@ -770,14 +771,11 @@ public class GroupServiceImpl implements GroupService {
             filename = "document.pdf";
         }
 
-        String raw = filename;
-        String asciiFallback = raw.replaceAll("[^\\x20-\\x7E]", "_"); // ASCII가 아닌 문자를 _로 치환
-
         String disposition = isAttachment ? "attachment" : "inline";
-        String cd = disposition + "; filename=\"" + asciiFallback + "\"; filename*=UTF-8''" +
-                URLEncoder.encode(raw, StandardCharsets.UTF_8);
+        String encodedFilename = URLEncoder.encode(filename, StandardCharsets.UTF_8)
+                .replace("+", "%20"); // 공백 처리
 
-        return cd;
+        return disposition + "; filename=\"" + encodedFilename + "\"";
     }
 
 }
