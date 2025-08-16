@@ -300,11 +300,9 @@ public class GroupServiceImpl implements GroupService {
         }
 
 
-        // 한국어 파일명을 URL 인코딩해서 직접 filename에 넣기
+        // UTF-8 바이트를 직접 헤더에 넣기 (가장 호환성 좋음)
         String raw = pdfFile.getFileName();
-        String encodedFilename = URLEncoder.encode(raw, StandardCharsets.UTF_8)
-                .replace("+", "%20"); // 공백 처리
-        String cd = "inline; filename=\"" + encodedFilename + "\"";
+        String cd = "inline; filename*=UTF-8''" + URLEncoder.encode(raw, StandardCharsets.UTF_8);
 
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_PDF)
@@ -341,11 +339,9 @@ public class GroupServiceImpl implements GroupService {
         File file = new File(pdfFile.getFilePath());
         if (!file.exists()) throw new NotFoundException("서버에 PDF 파일이 존재하지 않습니다.");
 
-        // 한국어 파일명을 URL 인코딩해서 직접 filename에 넣기
+        // UTF-8 바이트를 직접 헤더에 넣기 (가장 호환성 좋음)
         String raw = pdfFile.getFileName();
-        String encodedFilename = URLEncoder.encode(raw, StandardCharsets.UTF_8)
-                .replace("+", "%20"); // 공백 처리
-        String cd = "inline; filename=\"" + encodedFilename + "\"";
+        String cd = "inline; filename*=UTF-8''" + URLEncoder.encode(raw, StandardCharsets.UTF_8);
 
         StreamingResponseBody body = outputStream -> {
             try (java.io.FileInputStream in = new java.io.FileInputStream(file)) {
@@ -353,7 +349,6 @@ public class GroupServiceImpl implements GroupService {
                 outputStream.flush();
             }
         };
-
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_PDF)
                 .header("Content-Disposition", cd)
@@ -407,11 +402,9 @@ public class GroupServiceImpl implements GroupService {
             }
         };
 
-        // ZIP 파일명을 URL 인코딩해서 직접 filename에 넣기
+        // UTF-8 바이트를 직접 헤더에 넣기
         String zipName = "group-" + groupId + "-pdf-with-ocr.zip";
-        String encodedZipName = URLEncoder.encode(zipName, StandardCharsets.UTF_8)
-                .replace("+", "%20"); // 공백 처리
-        String cd = "attachment; filename=\"" + encodedZipName + "\"";
+        String cd = "attachment; filename*=UTF-8''" + URLEncoder.encode(zipName, StandardCharsets.UTF_8);
 
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType("application/zip"))
@@ -781,10 +774,8 @@ public class GroupServiceImpl implements GroupService {
         }
 
         String disposition = isAttachment ? "attachment" : "inline";
-        String encodedFilename = URLEncoder.encode(filename, StandardCharsets.UTF_8)
-                .replace("+", "%20"); // 공백 처리
 
-        return disposition + "; filename=\"" + encodedFilename + "\"";
+        return disposition + "; filename*=UTF-8''" + URLEncoder.encode(filename, StandardCharsets.UTF_8);
     }
 
 }
