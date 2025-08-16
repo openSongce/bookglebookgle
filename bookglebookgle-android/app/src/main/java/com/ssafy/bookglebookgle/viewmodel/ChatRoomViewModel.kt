@@ -68,6 +68,7 @@ data class ChatRoomUiState(
     val averageProgress: Int = 0,
     val isLoadingProgress: Boolean = false,
     val progressError: String? = null,
+    val showQuizLoading: Boolean = false,
     )
 
 @HiltViewModel
@@ -88,6 +89,15 @@ class ChatRoomViewModel @Inject constructor(
         val currentTime = System.currentTimeMillis()
         return currentTime + (++systemMessageIdCounter)
     }
+
+    // 대기 중인 퀴즈 문제 큐
+    private var pendingQuizQuestion: QuizQuestion? = null
+    private var isWaitingForResultDisplay = false
+
+    // 대기 중인 최종 요약 추가
+    private var pendingQuizSummary: QuizSummary? = null
+    private var totalQuestions: Int = 0  // 전체 문제 수
+    private var currentQuestionIndex: Int = 0  // 현재 문제 번호
 
     // 메시지 타입별 Observer들
     private val grpcMessageObserver = Observer<ChatMessage> { newMessage ->
@@ -141,6 +151,8 @@ class ChatRoomViewModel @Inject constructor(
     // 퀴즈 연결 타임아웃 관련 변수 추가
     private var quizConnectionTimeoutJob: Job? = null
     private val QUIZ_CONNECTION_TIMEOUT_SECONDS = 15
+
+    private var quizResultAutoCloseJob: Job? = null
 
 
     init {
@@ -868,6 +880,13 @@ class ChatRoomViewModel @Inject constructor(
         super.onCleared()
         stopQuizTimer()
         stopAiTypingTimeout()
+        quizResultAutoCloseJob?.cancel()
+        pendingQuizQuestion = null
+        pendingQuizSummary = null
+        isWaitingForResultDisplay = false
+        totalQuestions = 0
+        currentQuestionIndex = 0
+
         chatGrpcRepository.newMessages.removeObserver(grpcMessageObserver)
         chatGrpcRepository.aiResponses.removeObserver(aiResponseObserver)
         chatGrpcRepository.discussionStatus.removeObserver(discussionStatusObserver)
@@ -889,12 +908,19 @@ class ChatRoomViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(isQuizConnecting = false)
         }
 
-        // 퀴즈 메시지도 채팅에 추가
-        addNewMessage(quizMessage)
+        // QUIZ_ANSWER 타입은 채팅에 추가하지 않음 (답안 제출 메시지 숨김)
+        if (quizMessage.type != MessageType.QUIZ_ANSWER) {
+            addNewMessage(quizMessage)
+        }
 
         when (quizMessage.type) {
             MessageType.QUIZ_START -> {
                 Log.d("QuizDebug", "퀴즈 시작 처리")
+
+                // 전체 문제 수 저장
+                totalQuestions = quizMessage.quizStart?.totalQuestions ?: 0
+                currentQuestionIndex = 0
+
                 _uiState.value = _uiState.value.copy(
                     isQuizActive = true,
                     currentQuizId = quizMessage.quizStart?.quizId,
@@ -905,43 +931,103 @@ class ChatRoomViewModel @Inject constructor(
                     currentQuizReveal = null,
                     quizSummary = null,
                     currentQuestion = null,
+                    showQuizLoading = false, // 로딩 상태 추가
                     shouldScrollToBottom = true
                 )
+
+                // 모든 대기 상태 초기화
+                pendingQuizQuestion = null
+                pendingQuizSummary = null
+                isWaitingForResultDisplay = false
             }
 
             MessageType.QUIZ_QUESTION -> {
                 quizMessage.quizQuestion?.let { question ->
                     Log.d("QuizDebug", "퀴즈 문제 수신: ${question.questionText}")
-                    _uiState.value = _uiState.value.copy(
-                        currentQuestion = question,
-                        selectedAnswerIndex = null,
-                        isAnswerSubmitted = false,
-                        quizTimeRemaining = question.timeoutSeconds,
-                        showQuizResult = false,
-                        currentQuizReveal = null,
-                        quizSummary = null,
-                        shouldScrollToBottom = true
-                    )
-                    startQuizTimer(question.timeoutSeconds)
+
+                    // 현재 문제 번호 업데이트
+                    currentQuestionIndex = question.questionIndex
+
+                    // 현재 정답 결과를 표시 중이라면 새 문제를 대기 큐에 저장
+                    if (_uiState.value.showQuizResult && isWaitingForResultDisplay) {
+                        Log.d("QuizDebug", "정답 표시 중이므로 새 문제를 대기 큐에 저장")
+                        pendingQuizQuestion = question
+                        return
+                    }
+
+                    // 정답 결과를 표시 중이 아니라면 바로 문제 표시
+                    showQuizQuestion(question)
+
                 }
             }
 
+            // QUIZ_REVEAL 부분도 수정
             MessageType.QUIZ_REVEAL -> {
                 quizMessage.quizReveal?.let { reveal ->
                     Log.d("QuizDebug", "퀴즈 정답 공개: 정답=${reveal.correctAnswerIndex}, 참여자=${reveal.userAnswers.size}명")
+
+                    // 마지막 문제인지 확인
+                    val isLastQuestion = reveal.questionIndex >= (totalQuestions - 1)
+                    Log.d("QuizDebug", "마지막 문제 여부: $isLastQuestion (${reveal.questionIndex}/${totalQuestions-1})")
+
+                    // 정답 공개 시작
+                    isWaitingForResultDisplay = true
+
+                    // 정답 공개 화면 표시 (이미 showQuizResult가 true일 수 있음)
                     _uiState.value = _uiState.value.copy(
-                        currentQuizReveal = null,
+                        currentQuestion = null, // 문제 화면 제거
+                        currentQuizReveal = reveal,
                         selectedAnswerIndex = null,
                         isAnswerSubmitted = false,
-                        showQuizResult = true,
-                        currentQuestion = null,
+                        showQuizResult = true, // 정답 공개 화면 표시
                         quizSummary = null,
+                        showQuizLoading = false,
                         shouldScrollToBottom = true
                     )
                     stopQuizTimer()
 
+                    // 3초 후 자동으로 정답 공개 화면 닫기
+                    quizResultAutoCloseJob?.cancel()
+                    quizResultAutoCloseJob = viewModelScope.launch {
+                        delay(3000) // 3초 대기
+
+                        // 3초 후에도 여전히 이 결과를 보여주고 있다면 닫기
+                        if (_uiState.value.showQuizResult && _uiState.value.currentQuizReveal == reveal) {
+                            _uiState.value = _uiState.value.copy(
+                                showQuizResult = false,
+                                currentQuizReveal = null
+                            )
+
+                            isWaitingForResultDisplay = false
+
+                            if (isLastQuestion) {
+                                // 마지막 문제라면 대기 중인 요약이 있는지 확인
+                                pendingQuizSummary?.let { waitingSummary ->
+                                    Log.d("QuizDebug", "마지막 문제 정답 표시 완료 - 대기 중이던 요약 표시")
+                                    pendingQuizSummary = null
+                                    showQuizSummary(waitingSummary)
+                                } ?: run {
+                                    // 대기 중인 요약이 없다면 로딩 표시 (요약 대기)
+                                    Log.d("QuizDebug", "마지막 문제 완료 - 최종 요약 대기 중")
+                                    _uiState.value = _uiState.value.copy(showQuizLoading = true)
+                                }
+                            } else {
+                                // 마지막 문제가 아니라면 다음 문제 또는 로딩 표시
+                                pendingQuizQuestion?.let { waitingQuestion ->
+                                    Log.d("QuizDebug", "대기 중이던 문제 표시: ${waitingQuestion.questionText}")
+                                    pendingQuizQuestion = null
+                                    showQuizQuestion(waitingQuestion)
+                                } ?: run {
+                                    _uiState.value = _uiState.value.copy(showQuizLoading = true)
+                                }
+                            }
+
+                            Log.d("QuizDebug", "정답 공개 화면 자동 닫기 완료")
+                        }
+                    }
                 }
             }
+
             MessageType.QUIZ_ANSWER -> {
                 // 다른 사용자의 답안 제출 알림
                 Log.d("QuizDebug", "답안 제출 알림 수신")
@@ -950,45 +1036,126 @@ class ChatRoomViewModel @Inject constructor(
             MessageType.QUIZ_SUMMARY -> {
                 quizMessage.quizSummary?.let { summary ->
                     Log.d("QuizDebug", "퀴즈 요약 수신: 총 ${summary.totalQuestions}문제, 참여자 ${summary.scores.size}명")
-                    _uiState.value = _uiState.value.copy(
-                        quizSummary = summary,
-                        showQuizResult = false,
-                        currentQuizReveal = null,
-                        currentQuestion = null,
-                        shouldScrollToBottom = true
-                    )
+
+                    // 현재 정답 결과를 표시 중이라면 요약을 대기 큐에 저장하고 리턴
+                    if (_uiState.value.showQuizResult && isWaitingForResultDisplay) {
+                        Log.d("QuizDebug", "정답 표시 중이므로 요약을 대기 큐에 저장 (즉시 표시하지 않음)")
+                        pendingQuizSummary = summary
+                        return // 여기서 리턴해서 바로 표시하지 않도록 함
+                    }
+
+                    // 현재 문제 화면이 표시 중인 경우에도 대기 큐에 저장
+                    if (_uiState.value.currentQuestion != null) {
+                        Log.d("QuizDebug", "문제 화면 표시 중이므로 요약을 대기 큐에 저장")
+                        pendingQuizSummary = summary
+                        return
+                    }
+
+                    // 정답 결과나 문제 화면을 표시 중이 아니라면 바로 요약 표시
+                    Log.d("QuizDebug", "다른 화면 표시 중이 아니므로 바로 요약 표시")
+                    showQuizSummary(summary)
                 }
             }
 
             MessageType.QUIZ_END -> {
+                addNewMessage(quizMessage) // 퀴즈 종료 메시지도 채팅에 추가
                 Log.d("QuizDebug", "퀴즈 종료 처리")
-                viewModelScope.launch {
-                    // QUIZ_SUMMARY가 표시되고 있다면 잠시 대기
-                    if (_uiState.value.quizSummary != null) {
-                        delay(3000) // 3초 대기
-                    }
 
+                // 현재 요약이나 정답 공개를 표시 중이라면 그대로 두고 퀴즈 활성 상태만 해제
+                if (_uiState.value.quizSummary != null) {
+                    Log.d("QuizDebug", "요약 표시 중이므로 요약은 유지하고 퀴즈 활성 상태만 해제")
                     _uiState.value = _uiState.value.copy(
-                        isQuizActive = false,
+                        isQuizActive = false, // 퀴즈 비활성화
                         currentQuizId = null,
-                        currentQuestion = null,
-                        selectedAnswerIndex = null,
-                        isAnswerSubmitted = false,
-                        showQuizResult = false,
-                        currentQuizReveal = null,
-                        quizTimeRemaining = 0,
-                        userQuizAnswers = emptyMap(),
-                        isQuizConnecting = false,
+                        currentQuestion = null, // 현재 문제는 제거
+                        showQuizLoading = false,
                         shouldScrollToBottom = true
                     )
-                    stopQuizTimer()
+                    // 요약(quizSummary)은 그대로 유지
+                    return
                 }
+
+                if (_uiState.value.showQuizResult && isWaitingForResultDisplay) {
+                    Log.d("QuizDebug", "정답 공개 중이므로 정답 공개는 유지하고 퀴즈 활성 상태만 해제")
+                    _uiState.value = _uiState.value.copy(
+                        isQuizActive = false, // 퀴즈 비활성화
+                        currentQuizId = null,
+                        currentQuestion = null, // 현재 문제는 제거
+                        showQuizLoading = false,
+                        shouldScrollToBottom = true
+                    )
+                    // showQuizResult와 currentQuizReveal은 그대로 유지
+                    return
+                }
+
+                // 요약이나 정답 공개 중이 아닐 때만 모든 상태 초기화
+                Log.d("QuizDebug", "요약/정답 공개 중이 아니므로 모든 퀴즈 상태 초기화")
+
+                // 퀴즈 종료 시 모든 관련 상태 및 대기 상태 초기화
+                quizResultAutoCloseJob?.cancel()
+                pendingQuizQuestion = null
+                pendingQuizSummary = null
+                isWaitingForResultDisplay = false
+                totalQuestions = 0
+                currentQuestionIndex = 0
+
+                _uiState.value = _uiState.value.copy(
+                    isQuizActive = false,
+                    currentQuizId = null,
+                    currentQuestion = null,
+                    selectedAnswerIndex = null,
+                    isAnswerSubmitted = false,
+                    showQuizResult = false,
+                    currentQuizReveal = null,
+                    quizSummary = null,
+                    quizTimeRemaining = 0,
+                    userQuizAnswers = emptyMap(),
+                    showQuizLoading = false,
+                    shouldScrollToBottom = true
+                )
+                stopQuizTimer()
             }
 
             else -> {
                 Log.d("QuizDebug", "기타 퀴즈 메시지: ${quizMessage.type}")
             }
         }
+    }
+
+    // 퀴즈 요약 표시 함수 분리
+    private fun showQuizSummary(summary: QuizSummary) {
+        // 최종 요약이 오면 모든 대기 상태 해제
+        quizResultAutoCloseJob?.cancel()
+        pendingQuizQuestion = null
+        pendingQuizSummary = null
+        isWaitingForResultDisplay = false
+
+        _uiState.value = _uiState.value.copy(
+            quizSummary = summary,
+            showQuizResult = false,
+            currentQuizReveal = null,
+            currentQuestion = null,
+            showQuizLoading = false,
+            shouldScrollToBottom = true
+        )
+    }
+
+    // 퀴즈 문제 표시 함수 분리
+    private fun showQuizQuestion(question: QuizQuestion) {
+        _uiState.value = _uiState.value.copy(
+            currentQuestion = question,
+            selectedAnswerIndex = null,
+            isAnswerSubmitted = false,
+            quizTimeRemaining = 10,
+            showQuizResult = false,
+            currentQuizReveal = null,
+            quizSummary = null,
+            showQuizLoading = false,
+            shouldScrollToBottom = true
+        )
+
+        // 10초 타이머 시작
+        startQuizTimer(10)
     }
 
     // 퀴즈 타이머 시작
@@ -998,10 +1165,20 @@ class ChatRoomViewModel @Inject constructor(
         quizTimerJob = viewModelScope.launch {
             var remainingTime = timeoutSeconds
 
+            // 시작 시 즉시 UI 업데이트
+            _uiState.value = _uiState.value.copy(quizTimeRemaining = remainingTime)
+
             while (remainingTime > 0 && _uiState.value.currentQuestion != null) {
+                delay(1000) // 1초 대기
+                remainingTime-- // 시간 감소
                 _uiState.value = _uiState.value.copy(quizTimeRemaining = remainingTime)
-                delay(1000)
-                remainingTime--
+
+                if (remainingTime == 0) {
+                    // 시간 종료 처리
+                    handleQuizTimeout()
+                    break
+                }
+
             }
 
             // 시간 종료시 자동 제출 (답안을 선택했지만 제출하지 않은 경우)
@@ -1010,6 +1187,33 @@ class ChatRoomViewModel @Inject constructor(
             }
         }
     }
+
+    // 퀴즈 시간 종료 처리 함수 수정
+    private fun handleQuizTimeout() {
+        Log.d("QuizDebug", "퀴즈 시간 종료")
+
+        // 답안을 선택했지만 제출하지 않은 경우 자동 제출
+        if (_uiState.value.selectedAnswerIndex != null && !_uiState.value.isAnswerSubmitted) {
+            submitQuizAnswer()
+        }
+
+        // 시간 종료 시 제출 완료 상태로만 변경 (화면은 자동으로 닫힘)
+        _uiState.value = _uiState.value.copy(
+            isAnswerSubmitted = true,
+            quizTimeRemaining = 0
+            // currentQuestion은 별도 타이머에 의해 10초 후 자동으로 null이 됨
+        )
+
+        // 1초 후 문제 화면 닫고 로딩 표시
+        viewModelScope.launch {
+            delay(1000)
+            _uiState.value = _uiState.value.copy(
+                currentQuestion = null,
+                showQuizLoading = true // 다음 결과 대기 로딩 표시
+            )
+        }
+    }
+
 
     // 퀴즈 타이머 정지
     private fun stopQuizTimer() {
@@ -1057,6 +1261,7 @@ class ChatRoomViewModel @Inject constructor(
         // 타임아웃 메시지를 채팅에 추가
         addNewMessage(timeoutMessage)
     }
+
 
     // 퀴즈 연결 타임아웃 타이머 정지
     private fun stopQuizConnectionTimeout() {
@@ -1214,6 +1419,8 @@ class ChatRoomViewModel @Inject constructor(
                             (currentQuestion.questionIndex to selectedIndex)
                 )
 
+                Log.d("QuizDebug", "답안 제출 완료: 문제${currentQuestion.questionIndex}, 답안${selectedIndex}")
+
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     error = "답안 제출 실패: ${e.message}"
@@ -1222,16 +1429,70 @@ class ChatRoomViewModel @Inject constructor(
         }
     }
 
-    // 퀴즈 결과 닫기
+    // 수정된 퀴즈 결과 수동 닫기 함수
     fun dismissQuizResult() {
+        quizResultAutoCloseJob?.cancel()
+
         _uiState.value = _uiState.value.copy(
             showQuizResult = false,
             currentQuizReveal = null
         )
+
+        isWaitingForResultDisplay = false
+
+        // 마지막 문제였는지 확인
+        val isLastQuestion = currentQuestionIndex >= (totalQuestions - 1)
+
+        if (isLastQuestion) {
+            // 마지막 문제라면 대기 중인 요약이 있는지 확인
+            pendingQuizSummary?.let { waitingSummary ->
+                Log.d("QuizDebug", "수동 닫기 후 대기 중이던 요약 표시")
+                pendingQuizSummary = null
+                showQuizSummary(waitingSummary)
+            } ?: run {
+                // 대기 중인 요약이 없다면 로딩 표시
+                Log.d("QuizDebug", "마지막 문제 수동 닫기 - 최종 요약 대기 중")
+                _uiState.value = _uiState.value.copy(showQuizLoading = true)
+            }
+        } else {
+            // 마지막 문제가 아니라면 다음 문제 또는 로딩 표시
+            pendingQuizQuestion?.let { waitingQuestion ->
+                Log.d("QuizDebug", "수동 닫기 후 대기 중이던 문제 표시")
+                pendingQuizQuestion = null
+                showQuizQuestion(waitingQuestion)
+            } ?: run {
+                _uiState.value = _uiState.value.copy(showQuizLoading = true)
+            }
+        }
     }
 
     // 퀴즈 요약 닫기
     fun dismissQuizSummary() {
-        _uiState.value = _uiState.value.copy(quizSummary = null)
+        Log.d("QuizDebug", "퀴즈 요약 수동 닫기")
+
+        // 요약을 닫을 때 퀴즈 관련 모든 상태 초기화
+        quizResultAutoCloseJob?.cancel()
+        pendingQuizQuestion = null
+        pendingQuizSummary = null
+        isWaitingForResultDisplay = false
+        totalQuestions = 0
+        currentQuestionIndex = 0
+
+        _uiState.value = _uiState.value.copy(
+            quizSummary = null,
+            isQuizActive = false, // 퀴즈 비활성화
+            currentQuizId = null,
+            currentQuestion = null,
+            selectedAnswerIndex = null,
+            isAnswerSubmitted = false,
+            showQuizResult = false,
+            currentQuizReveal = null,
+            quizTimeRemaining = 0,
+            userQuizAnswers = emptyMap(),
+            showQuizLoading = false
+        )
+
+        stopQuizTimer()
+        Log.d("QuizDebug", "퀴즈 요약 닫기 - 모든 퀴즈 상태 초기화 완료")
     }
 }

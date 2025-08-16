@@ -389,6 +389,7 @@ class PdfViewModel @Inject constructor(
                     return@launch
                 }
 
+                Log.d(TAG, "loadGroupPdf: ${pdfData.fileName}")
                 _pdfTitle.value = pdfData.fileName
 
                 // 2) 스트림을 바로 파일로 복사 (IO)

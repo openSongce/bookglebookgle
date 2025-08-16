@@ -28,7 +28,7 @@ class PdfAnnotationHandler(
     resource: Resources,
 ) {
     var annotations = arrayListOf<PdfAnnotationModel>() // 현재 화면에 표시할 모든 주석 데이터
-    private var noteColor = Color.parseColor("#FFFF00") // 댓글 색상
+    private var noteColor = Color.parseColor("#AF926A") // 댓글 색상
 
     private var noteStampBitmap: Bitmap = BitmapFactory.decodeResource(resource, R.drawable.ic_comment) // 댓글 이미지
     private var stampWidth = 15f
@@ -39,7 +39,7 @@ class PdfAnnotationHandler(
      * 댓글 아이콘 크기를 dp -> px로 변환
      * */
     init {
-        stampWidth = getDpValue(resource, 14f).toFloat()
+        stampWidth = getDpValue(resource, 30f).toFloat()
         stampHeight = stampWidth
     }
 
