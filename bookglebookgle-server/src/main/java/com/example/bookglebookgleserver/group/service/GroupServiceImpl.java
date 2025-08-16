@@ -310,11 +310,6 @@ public class GroupServiceImpl implements GroupService {
                 .header("X-OCR-Available", String.valueOf(pdfFile.isHasOcr()))
                 .body(new FileSystemResource(file));
 
-//        return ResponseEntity.ok()
-//                .contentType(MediaType.APPLICATION_PDF)
-//                .header("Content-Disposition", "inline; filename=\"" + pdfFile.getFileName() + "\"")
-//                .header("X-OCR-Available", String.valueOf(pdfFile.isHasOcr()))
-//                .body(new FileSystemResource(file));
     }
 
     // ✅ Accept 헤더 기반: PDF 혹은 ZIP
@@ -355,11 +350,6 @@ public class GroupServiceImpl implements GroupService {
                 .header("X-OCR-Available", String.valueOf(hasOcr))
                 .body(body);
 
-//        return ResponseEntity.ok()
-//                .contentType(MediaType.APPLICATION_PDF)
-//                .header("Content-Disposition", "inline; filename=\"" + filename + "\"")
-//                .header("X-OCR-Available", String.valueOf(hasOcr))
-//                .body(body);
     }
 
 
@@ -412,12 +402,6 @@ public class GroupServiceImpl implements GroupService {
                 .header("X-OCR-Available", "true")
                 .header("X-Accel-Buffering", "no")
                 .body(body);
-//        return ResponseEntity.ok()
-//                .contentType(MediaType.parseMediaType("application/zip"))
-//                .header("Content-Disposition", "attachment; filename=\"" + zipName + "\"")
-//                .header("X-OCR-Available", "true")
-//                // Nginx 사용 시 버퍼링 방지(선택): .header("X-Accel-Buffering","no")
-//                .body(body);
     }
 
     private static boolean wantsZip(String accept) {
@@ -768,15 +752,6 @@ public class GroupServiceImpl implements GroupService {
                 .toList();
     }
 
-    private String createContentDispositionHeader(String filename, boolean isAttachment) {
-        if (filename == null || filename.trim().isEmpty()) {
-            filename = "document.pdf";
-        }
-
-        String disposition = isAttachment ? "attachment" : "inline";
-
-        return disposition + "; filename*=UTF-8''" + URLEncoder.encode(filename, StandardCharsets.UTF_8);
-    }
 
 }
 
