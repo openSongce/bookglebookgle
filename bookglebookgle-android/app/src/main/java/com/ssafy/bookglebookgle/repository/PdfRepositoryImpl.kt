@@ -96,6 +96,8 @@ class PdfRepositoryImpl @Inject constructor(
                         "group-$groupId.pdf"
                     }
 
+                    Log.d("HTTP", "CT=$contentType, CD=$contentDisposition, headers=${response.headers()}")
+
                     Log.d(TAG, "Content-Type: $contentType")
                     Log.d(TAG, "파일명: $fileName")
 

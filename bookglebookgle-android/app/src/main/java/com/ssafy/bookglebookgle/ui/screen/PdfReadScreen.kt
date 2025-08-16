@@ -75,6 +75,7 @@ import com.ssafy.bookglebookgle.entity.Participant
 import com.ssafy.bookglebookgle.viewmodel.GroupDetailViewModel
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.unit.Dp
+import com.ssafy.bookglebookgle.util.LottieOverlay
 import com.ssafy.bookglebookgle.viewmodel.ChatRoomViewModel
 
 // 키 문자열 ↔ 로컬 드로어블
@@ -501,18 +502,14 @@ fun PdfReadScreen(
             when {
                 // PDF 다운로드 중
                 isLoading -> {
-                    Column(
-                        modifier = Modifier.fillMaxSize(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        CircularProgressIndicator(
-                            color = BaseColor,
-                            strokeWidth = 4.dp
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text("PDF 다운로드 중...")
-                    }
+                    LottieOverlay(
+                        raw = R.raw.quiz_loading,
+                        title = "PDF 다운로드 중...",
+                        subtitle = "페이지와 텍스트를 준비하고 있어요",
+                        color = Color.Transparent,
+                        dimAmount = 0f,
+                        useCard = false
+                    )
                 }
 
                 // PDF 로드 에러
@@ -771,23 +768,14 @@ fun PdfReadScreen(
 
                         // 렌더링이 완료되지 않은 경우 로딩 오버레이 표시
                         if (!isPdfRenderingComplete) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(Color.White.copy(alpha = 0.8f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    CircularProgressIndicator(
-                                        color = BaseColor,
-                                        strokeWidth = 4.dp
-                                    )
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                    Text("PDF 불러오는 중...")
-                                }
-                            }
+                            LottieOverlay(
+                                raw = R.raw.quiz_loading,           // pdf용 json 따로 두면 더 좋아요
+                                title = "PDF 불러오는 중...",
+                                subtitle = "페이지와 텍스트를 준비하고 있어요",
+                                color = Color.Transparent,
+                                dimAmount = 0f,
+                                useCard = false
+                            )
                         }
                     }
                 }
