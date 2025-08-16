@@ -85,17 +85,11 @@ public class FcmGroupService {
 
         fcmService.sendToTokens(tokens, new FcmSendRequest(
                 null, null,
-                groupName,                         // title
-                senderName + (chatText != null && !chatText.isBlank() ? ": " + chatText : ""),
+                groupName,                        // title: 그룹 이름
+                senderName + ": " + chatText,     // body: "보낸사람: 내용"
                 null,
-                Map.of(
-                        "type", "CHAT_NEW_MESSAGE",
-                        "groupId", String.valueOf(groupId),
-                        "senderId", String.valueOf(senderId),
-                        "senderNick", senderName,
-                        "preview", chatText == null ? "" : chatText
-                ),
-                true // dataOnly 권장
+                Map.of("type","CHAT","groupId", String.valueOf(groupId)),
+                true  // dataOnly
         ));
 
 
