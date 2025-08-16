@@ -92,6 +92,9 @@ fun GroupDetailScreen(
     var rateTarget by remember { mutableStateOf<GroupMember?>(null) }    // ★ 평가 대상
     var infoTarget by remember { mutableStateOf<GroupMember?>(null) }    // ★ 정보 보기 대상
 
+    val myRatedIdsForDialog =
+        (uiState as? GroupDetailUiState.Success)?.groupDetail
+            ?.members?.firstOrNull { it.userId == myUserId }?.ratedUserIds.orEmpty()
 
 
     val context = LocalContext.current
@@ -243,15 +246,24 @@ fun GroupDetailScreen(
                     viewModel = viewModel,
                     myUserId = myUserId,                            // ★ 추가
                     onMemberClick = { member ->                     // ★ 추가
-                        if (currentIsMyGroup && currentState.groupDetail.isCompleted) {
+                        val detail = (uiState as? GroupDetailUiState.Success)?.groupDetail
+                        val completed = detail?.isCompleted == true
+                        val me = myUserId
+                        // 내 ratedUserIds (내가 평가한 사람들의 id)
+                        val myRatedIds: List<Long> =
+                            detail?.members?.firstOrNull { it.userId == me }?.ratedUserIds.orEmpty()
+                        if (currentIsMyGroup && completed) {
                             when {
-                                member.userId == myUserId -> {
+                                member.userId == me -> {
                                     Toast.makeText(context, "본인은 평가할 수 없습니다.", Toast.LENGTH_SHORT).show()
                                 }
-                                member.hasRated -> {
-                                    Toast.makeText(context, "이미 이 팀원을 평가했습니다.", Toast.LENGTH_SHORT).show()
+                                // 내가 이 멤버를 이미 평가했다면
+                                myRatedIds.contains(member.userId) -> {
+                                    infoTarget = member
                                 }
-                                else -> rateTarget = member
+                                else -> {
+                                    rateTarget = member
+                                }
                             }
                         } else {
                             infoTarget = member
@@ -292,9 +304,14 @@ fun GroupDetailScreen(
     rateTarget?.let { target ->
 // 기존 AlertDialog 버전 삭제하고 아래로 교체
         RateMemberBottomSheet(
-            member = rateTarget,
+            member = target,
             onDismiss = { rateTarget = null },
-            onConfirm = { score -> viewModel.rateMember(groupId, rateTarget!!.userId, score) }
+            onConfirm = { score ->
+                // 1) API 호출
+                viewModel.rateMember(groupId, target.userId, score)
+                // 2) 즉시 바텀시트 닫기
+                rateTarget = null
+            }
         )
 
     }
@@ -305,7 +322,8 @@ fun GroupDetailScreen(
             member = target,
             pageCount = (uiState as? GroupDetailUiState.Success)?.groupDetail?.pageCount ?: 0,
             illustrationRes = keyToResId(target.profileImageUrl) ?: R.drawable.ic_pdf, // 임시
-            onDismiss = { infoTarget = null }
+            onDismiss = { infoTarget = null },
+            myRatedIds = myRatedIdsForDialog
         )
     }
 
@@ -457,18 +475,19 @@ private fun GroupDetailContent(
             )
 
             Spacer(modifier = Modifier.height(ScreenSize.height * 0.01f))
-            val membersSorted = remember(groupDetail.members) {
-                groupDetail.members.sortedByDescending { it.isHost } // 호스트가 앞
-            }
+            val membersSorted = groupDetail.members.sortedByDescending { it.isHost }
+            val myRatedIds = groupDetail.members.firstOrNull { it.userId == myUserId }?.ratedUserIds.orEmpty()
+
             Row(horizontalArrangement = Arrangement.spacedBy(ScreenSize.width * 0.02f)) {
                 membersSorted.forEach { m ->
+                    val ratedByMe = myRatedIds.contains(m.userId) // 내가 그 멤버를 평가했는지
                     MemberAvatar(
                         nickname = m.userNickName,
                         colorHex = m.profileColor,
                         isHost = m.isHost,
                         profileImgKey = m.profileImageUrl,
-                        rated = if (isMyGroup && groupDetail.isCompleted) m.hasRated else null, // ★ 완료된 모임이면 '평가됨' 표시
-                        onClick = { onMemberClick(m) }                                           // ★ 아바타 클릭
+                        rated = if (isMyGroup && groupDetail.isCompleted) ratedByMe else null, //
+                        onClick = { onMemberClick(m) }                                   // ★ 아바타 클릭
                     )
                 }
             }
@@ -838,7 +857,9 @@ private fun MemberInfoDialogWhite(
     member: GroupMember,
     pageCount: Int,
     onDismiss: () -> Unit,
-    illustrationRes: Int? = null          // 우하단 이미지(없으면 생략)
+    illustrationRes: Int? = null,
+    myRatedIds: List<Long> = emptyList()
+
 ) {
     val percent = remember(member, pageCount) {
         when {
@@ -880,9 +901,9 @@ private fun MemberInfoDialogWhite(
                     Spacer(Modifier.height(6.dp))
                     Text("읽은 페이지: ${member.lastPageRead + 1}${if (pageCount > 0) " / $pageCount" else ""}")
                     Text("진도율: $percent%")
-                    if (member.hasRated) {
+                    if (myRatedIds.contains(member.userId)) {
                         Spacer(Modifier.height(6.dp))
-                        Text("이 멤버는 이미 다른 사람에게서 평가를 받았습니다.", color = Color.Gray, fontSize = 12.sp)
+                        Text("이 멤버를 이미 평가했습니다.", color = Color(0xFF2E7D32), fontSize = 12.sp)
                     }
                 }
 
