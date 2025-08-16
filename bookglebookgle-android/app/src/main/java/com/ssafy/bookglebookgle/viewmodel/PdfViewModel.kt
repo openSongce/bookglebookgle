@@ -1015,14 +1015,14 @@ class PdfViewModel @Inject constructor(
             val dz = kotlin.math.abs((a.scaleNorm ?: 0f) - (b.scaleNorm ?: 0f))
             val dx = kotlin.math.abs((a.centerXNorm ?: 0f) - (b.centerXNorm ?: 0f))
             val dy = kotlin.math.abs((a.centerYNorm ?: 0f) - (b.centerYNorm ?: 0f))
-            return dz > 0.01f || dx > 0.01f || dy > 0.01f || a.page != b.page
+            return dz > 0.005f || dx > 0.005f || dy > 0.005f || a.page != b.page
         }
         if (!changedEnough(lastSent, cur)) return
 
         // 가벼운 디바운스 (핀치 중 난사 방지)
         viewportDebounceJob?.cancel()
         viewportDebounceJob = viewModelScope.launch {
-            delay(70) // 50~100ms 선호
+            delay(0) // 50~100ms 선호
             val gid = currentGroupId ?: return@launch
             pdfGrpcRepository.sendViewportFollow(
                 groupId = gid,
