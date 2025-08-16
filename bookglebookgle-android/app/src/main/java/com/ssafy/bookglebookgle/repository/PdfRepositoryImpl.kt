@@ -44,6 +44,38 @@ class PdfRepositoryImpl @Inject constructor(
         val fileName: String
     )
 
+    // 교체: Content-Disposition 전체에서 안전하게 파일명 추출
+    private fun pickNiceFileName(resp: Response<ResponseBody>, groupId: Long, contentType: String): String {
+        val cds = resp.headers().values("Content-Disposition") // 모든 값(복수 헤더 대응)
+        extractFilenameFromCDs(cds)?.let { return it }
+        return if (contentType.contains("zip")) "group-$groupId.zip" else "group-$groupId.pdf"
+    }
+
+    private fun extractFilenameFromCDs(cds: List<String>): String? {
+        for (raw in cds) {
+            val cd = raw.replace("\r","").replace("\n","").trim()
+
+            // 1) filename* (RFC 5987)  예: UTF-8''%EA%B0%80%EB%82%98.pdf
+            Regex("""filename\*=\s*([^;]+)""", RegexOption.IGNORE_CASE).find(cd)?.let { m ->
+                return decodeRfc5987(m.groupValues[1])
+            }
+
+            // 2) 일반 filename="..."
+            Regex("""filename\s*=\s*("?)([^";]+)\1""", RegexOption.IGNORE_CASE).find(cd)?.let { m ->
+                return m.groupValues[2].trim()
+            }
+        }
+        return null
+    }
+
+    private fun decodeRfc5987(token: String): String {
+        var v = token.trim().trim('"','\'','\u201C','\u201D').replace("+","%20")
+        val idx = v.indexOf("''")
+        val encoded = if (idx >= 0) v.substring(idx + 2) else v
+        return try { java.net.URLDecoder.decode(encoded, "UTF-8") } catch (_: Exception) { encoded }
+    }
+
+
 
     override suspend fun uploadPdf(file: File): Boolean {
         return try {
@@ -90,11 +122,7 @@ class PdfRepositoryImpl @Inject constructor(
                 if (response.isSuccessful) {
                     val contentType = response.headers()["Content-Type"]?.lowercase().orEmpty()
                     val contentDisposition = response.headers()["Content-Disposition"].orEmpty()
-                    val fileName = parseFilename(contentDisposition) ?: if (contentType.contains("zip")) {
-                        "group-$groupId.zip"
-                    } else {
-                        "group-$groupId.pdf"
-                    }
+                    val fileName = pickNiceFileName(response, groupId, contentType)
 
                     Log.d("HTTP", "CT=$contentType, CD=$contentDisposition, headers=${response.headers()}")
 
