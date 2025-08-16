@@ -718,8 +718,17 @@ public class GroupServiceImpl implements GroupService {
 
     private int calcProgressPercent(int maxReadPage, int pageCount) {
         if (pageCount <= 0) return 0;
-        double ratio = ((double) (Math.max(0, maxReadPage) + 1)) / pageCount; // 0-based 보정
-        return (int) Math.round(Math.min(Math.max(ratio, 0.0), 1.0) * 100.0);
+
+        // 단일 페이지 문서: 0번 페이지만 존재
+        if (pageCount == 1) {
+            // maxReadPage가 0 이상이면 읽은 것으로 보고 100%
+            return (maxReadPage >= 0) ? 100 : 0;
+        }
+
+        // 다중 페이지(0..pageCount-1)에서 0-based로 계산
+        int clamped = Math.min(Math.max(0, maxReadPage), pageCount - 1);
+        double ratio = (double) clamped / (pageCount - 1);
+        return (int) Math.round(ratio * 100.0);
     }
 
 

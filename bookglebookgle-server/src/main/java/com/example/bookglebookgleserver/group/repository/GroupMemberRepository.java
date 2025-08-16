@@ -63,17 +63,25 @@ where gm.group.id = :groupId
     @Query("""
 update GroupMember gm
    set gm.maxReadPage = case
-       when :page > coalesce(gm.maxReadPage, 0) then :page
+       when :page > coalesce(gm.maxReadPage, 0)
+            then least( greatest(:page, 0), greatest(:totalPages - 1, 0) )
        else coalesce(gm.maxReadPage, 0)
      end,
        gm.progressPercent = case
-       when :totalPages <= 0 then 0
-       else least(100,
-            greatest(0,
-                cast( round( ((least(:page, :totalPages - 1) + 1) * 100.0) / :totalPages ) as integer )
-            )
-       )
-     end
+         when :totalPages <= 0 then 0
+         when :totalPages = 1 then 100
+         else least(
+                100,
+                greatest(
+                  0,
+                  cast(
+                    round(
+                      ( least(:page, :totalPages - 1) * 100.0 ) / (:totalPages - 1)
+                    ) as integer
+                  )
+                )
+              )
+       end
  where gm.user.id = :userId
    and gm.group.id = :groupId
 """)
@@ -111,17 +119,4 @@ order by u.id
     List<CompletedBookRow> findCompletedBooksByUserIdNative(@Param("userId") Long userId);
 
 
-
-
-
-
-
-    @Query("SELECT gm.id FROM GroupMember gm WHERE gm.user.id = :userId AND gm.group.id = :groupId")
-    Optional<Long> findGroupMemberIdByUserIdAndGroupId(@Param("userId") Long userId, @Param("groupId") Long groupId);
-
-
-
-
-
-    List<GroupMember> findByGroup(Group group);
 }
