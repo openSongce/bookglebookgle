@@ -282,7 +282,6 @@ fun PdfReadScreen(
 
 
 
-
     //thumbnail
     val thumbnails by viewModel.thumbnails.collectAsState()
     val showThumbnails = remember { mutableStateOf(false) }
