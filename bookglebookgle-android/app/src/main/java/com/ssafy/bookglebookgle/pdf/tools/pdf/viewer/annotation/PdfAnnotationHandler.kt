@@ -39,7 +39,7 @@ class PdfAnnotationHandler(
      * 댓글 아이콘 크기를 dp -> px로 변환
      * */
     init {
-        stampWidth = getDpValue(resource, 30f).toFloat()
+        stampWidth = getDpValue(resource, 15f).toFloat()
         stampHeight = stampWidth
     }
 
