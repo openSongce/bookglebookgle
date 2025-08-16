@@ -356,7 +356,7 @@ class ChatGrpcRepository @Inject constructor(
         val displayMessage = when (messageType) {
             MessageType.QUIZ_START -> "퀴즈가 시작되었습니다!"
             MessageType.QUIZ_QUESTION -> "새로운 문제가 출제되었습니다"
-            MessageType.QUIZ_ANSWER -> "${grpcMessage.senderName}님이 답안을 제출했습니다"
+            MessageType.QUIZ_ANSWER -> ""
             MessageType.QUIZ_REVEAL -> "정답이 공개되었습니다"
             MessageType.QUIZ_SUMMARY -> "퀴즈 결과가 나왔습니다"
             MessageType.QUIZ_END -> "퀴즈가 종료되었습니다"

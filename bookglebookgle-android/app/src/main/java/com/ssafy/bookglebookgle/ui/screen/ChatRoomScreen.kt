@@ -73,6 +73,7 @@ import com.ssafy.bookglebookgle.ui.theme.defaultPadding
 import com.ssafy.bookglebookgle.ui.theme.rememberResponsiveDimensions
 import com.ssafy.bookglebookgle.util.LottieOverlay
 import com.ssafy.bookglebookgle.viewmodel.ChatRoomViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
@@ -980,28 +981,42 @@ fun ChatRoomScreen(
                 }
             }
 
-            // 퀴즈 문제 오버레이
+            // 퀴즈 문제 오버레이 - 10초 후 자동으로 닫힘
             if (uiState.currentQuestion != null && uiState.isQuizActive) {
                 QuizQuestionOverlay(
                     question = uiState.currentQuestion!!,
                     selectedAnswerIndex = uiState.selectedAnswerIndex,
                     isAnswerSubmitted = uiState.isAnswerSubmitted,
                     timeRemaining = uiState.quizTimeRemaining,
-                    dimensions = dimensions,
                     onAnswerSelected = { index -> viewModel.selectQuizAnswer(index) },
-                    onSubmitAnswer = { viewModel.submitQuizAnswer() }
+                    onSubmitAnswer = { viewModel.submitQuizAnswer() },
+                    dimensions = dimensions
                 )
             }
-
-            // 퀴즈 요약 오버레이 - 새로 추가
-            if (uiState.quizSummary != null) {
+            // 2순위: 퀴즈 정답 공개 오버레이 (정답 공개 시)
+            else if (uiState.showQuizResult &&
+                uiState.currentQuizReveal != null &&
+                uiState.quizSummary == null) { // 요약이 없을 때만
+                QuizResultOverlay(
+                    quizReveal = uiState.currentQuizReveal!!,
+                    currentUserId = userId,
+                    onDismiss = { viewModel.dismissQuizResult() }
+                )
+            }
+            // 3순위: 퀴즈 최종 요약 오버레이 (최종 결과) - 가장 높은 우선순위로 변경
+            else if (uiState.quizSummary != null) {
                 QuizSummaryOverlay(
                     quizSummary = uiState.quizSummary!!,
                     currentUserId = userId,
-                    dimensions = dimensions,
-                    onDismiss = { viewModel.dismissQuizSummary() }
+                    onDismiss = { viewModel.dismissQuizSummary() },
+                    dimensions = dimensions
                 )
             }
+            // 4순위: 퀴즈 로딩 오버레이 (위 조건들이 모두 false일 때)
+            else if (uiState.showQuizLoading && uiState.isQuizActive) {
+                QuizLoadingOverlay()
+            }
+
 
             // 토론 연결 중 로딩 오버레이
             if (uiState.isReadingCategory && uiState.isDiscussionConnecting) {
@@ -1020,6 +1035,46 @@ fun ChatRoomScreen(
                     subtitle = "퀴즈 문제를 준비하고 있어요",
                 )
 
+            }
+        }
+    }
+}
+
+@Composable
+fun QuizLoadingOverlay() {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.7f)),
+        contentAlignment = Alignment.Center
+    ) {
+        Card(
+            modifier = Modifier.padding(32.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(40.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                CircularProgressIndicator(
+                    color = BaseColor,
+                    modifier = Modifier.size(48.dp),
+                    strokeWidth = 4.dp
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                Text(
+                    text = "정답 결과 불러오는 중...",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color.Black
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "잠시만 기다려주세요",
+                    fontSize = 14.sp,
+                    color = Color.Gray
+                )
             }
         }
     }
@@ -1557,10 +1612,18 @@ fun QuizQuestionOverlay(
         hideKeyboard()
     }
 
-    // 시간이 0이 되면 자동 제출
+    // 시간이 0이 되면 자동 제출 및 오버레이 닫기
     LaunchedEffect(timeRemaining) {
-        if (timeRemaining == 0 && selectedAnswerIndex != null && !isAnswerSubmitted) {
-            onSubmitAnswer()
+        if (timeRemaining == 0) {
+            // 답안을 선택했지만 제출하지 않은 경우 자동 제출
+            if (selectedAnswerIndex != null && !isAnswerSubmitted) {
+                onSubmitAnswer()
+            }
+
+            // 1초 후 오버레이 자동 닫기 (제출 완료 메시지를 잠깐 보여주기 위해)
+            delay(1000)
+            // 여기서 오버레이를 닫는 콜백을 호출해야 하지만,
+            // 현재 구조상 ViewModel에서 currentQuestion을 null로 만드는 것에 의존
         }
     }
 
@@ -1598,6 +1661,7 @@ fun QuizQuestionOverlay(
                         modifier = Modifier
                             .background(
                                 color = when {
+                                    timeRemaining <= 0 -> Color.Red // 0초일 때도 빨간색
                                     timeRemaining <= 3 -> Color.Red
                                     timeRemaining <= 5 -> Color(0xFFFF9800) // 주황색
                                     else -> BaseColor
@@ -1607,7 +1671,7 @@ fun QuizQuestionOverlay(
                             .padding(horizontal = dimensions.spacingSmall, vertical = dimensions.spacingTiny)
                     ) {
                         Text(
-                            text = "${timeRemaining}초",
+                            text = if (timeRemaining <= 0) "종료" else "${timeRemaining}초",
                             color = Color.White,
                             fontWeight = FontWeight.Bold,
                             fontSize = dimensions.textSizeBody
@@ -1634,10 +1698,10 @@ fun QuizQuestionOverlay(
                         index = index,
                         text = option,
                         isSelected = selectedAnswerIndex == index,
-                        isSubmitted = isAnswerSubmitted,
+                        isSubmitted = isAnswerSubmitted || timeRemaining <= 0,
                         dimensions = dimensions,
                         onClick = {
-                            if (!isAnswerSubmitted) {
+                            if (!isAnswerSubmitted && timeRemaining > 0) { // 시간 체크 추가
                                 onAnswerSelected(index)
                             }
                         }
@@ -1671,27 +1735,33 @@ fun QuizQuestionOverlay(
                     )
                 }
 
-                if (isAnswerSubmitted) {
-                    Spacer(modifier = Modifier.height(dimensions.spacingSmall))
-                    Text(
-                        text = "답안이 제출되었습니다. 잠시 후 결과가 공개됩니다.",
-                        fontSize = dimensions.textSizeCaption,
-                        color = Color.Gray,
-                        modifier = Modifier.fillMaxWidth(),
-                        textAlign = TextAlign.Center
-                    )
+                when {
+                    isAnswerSubmitted || timeRemaining <= 0 -> {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = when {
+                                timeRemaining <= 0 && !isAnswerSubmitted -> "시간이 종료되었습니다. 잠시 후 결과가 공개됩니다."
+                                else -> "답안이 제출되었습니다. 잠시 후 결과가 공개됩니다."
+                            },
+                            fontSize = dimensions.textSizeCaption,
+                            color = Color.Gray,
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                    timeRemaining <= 5 && selectedAnswerIndex == null -> {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "시간이 얼마 남지 않았습니다! 답을 선택해주세요.",
+                            fontSize = dimensions.textSizeCaption,
+                            color = Color.Red,
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.Center,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                 }
-                else if (timeRemaining <= 5 && selectedAnswerIndex == null) {
-                    Spacer(modifier = Modifier.height(dimensions.spacingSmall))
-                    Text(
-                        text = "시간이 얼마 남지 않았습니다! 답을 선택해주세요.",
-                        fontSize = dimensions.textSizeCaption,
-                        color = Color.Red,
-                        modifier = Modifier.fillMaxWidth(),
-                        textAlign = TextAlign.Center,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
+
             }
         }
     }
@@ -1761,6 +1831,193 @@ fun QuizOptionButton(
                 color = Color.Black,
                 modifier = Modifier.weight(1f)
             )
+        }
+    }
+}
+
+// 퀴즈 정답 결과
+@Composable
+fun QuizResultOverlay(
+    quizReveal: QuizReveal,
+    currentUserId: Long,
+    onDismiss: () -> Unit
+) {
+    // 3초 후 자동 닫기
+    LaunchedEffect(quizReveal) {
+        delay(3000)
+        onDismiss()
+    }
+
+    // 현재 사용자의 답안 찾기
+    val myAnswer = quizReveal.userAnswers.find { it.userId == currentUserId }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.7f)),
+        contentAlignment = Alignment.Center
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth(0.85f)
+                .padding(16.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // 정답 표시
+                Text(
+                    text = "정답: ${quizReveal.correctAnswerIndex + 1}번",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF4CAF50)
+                )
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // 내 결과만 표시
+                if (myAnswer != null) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (myAnswer.isCorrect)
+                                Color(0xFF4CAF50).copy(alpha = 0.1f)
+                            else
+                                Color(0xFFE74C3C).copy(alpha = 0.1f)
+                        ),
+                        border = BorderStroke(
+                            width = 1.dp,
+                            color = if (myAnswer.isCorrect) Color(0xFF4CAF50) else Color(0xFFE74C3C)
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = "내 답안",
+                                    fontSize = 14.sp,
+                                    color = Color.Gray
+                                )
+                                Text(
+                                    text = "${myAnswer.selectedIndex + 1}번",
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.Black
+                                )
+                            }
+
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = if (myAnswer.isCorrect) Icons.Default.Check else Icons.Default.Close,
+                                    contentDescription = null,
+                                    tint = if (myAnswer.isCorrect) Color(0xFF4CAF50) else Color(0xFFE74C3C),
+                                    modifier = Modifier.size(32.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = if (myAnswer.isCorrect) "정답!" else "오답",
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (myAnswer.isCorrect) Color(0xFF4CAF50) else Color(0xFFE74C3C)
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    // 답안을 제출하지 않은 경우
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = Color.Gray.copy(alpha = 0.1f)
+                        ),
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "답안을 제출하지 않았습니다",
+                                fontSize = 16.sp,
+                                color = Color.Gray,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                modifier = Modifier.padding(16.dp),
+                text = "3초 후 자동으로 닫힙니다",
+                fontSize = 12.sp,
+                color = Color.Gray,
+                textAlign = TextAlign.Center
+            )
+        }
+    }
+}
+
+@Composable
+fun QuizUserAnswerItem(
+    userAnswer: PerUserAnswer,
+    correctAnswer: Int,
+    isCurrentUser: Boolean
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isCurrentUser)
+                BaseColor.copy(alpha = 0.1f)
+            else
+                Color.Gray.copy(alpha = 0.05f)
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = if (isCurrentUser) "나" else "참여자 ${userAnswer.userId}",
+                fontSize = 14.sp,
+                fontWeight = if (isCurrentUser) FontWeight.Bold else FontWeight.Normal
+            )
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "${userAnswer.selectedIndex + 1}번",
+                    fontSize = 14.sp,
+                    color = if (userAnswer.isCorrect) Color(0xFF4CAF50) else Color(0xFFE74C3C)
+                )
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                Icon(
+                    imageVector = if (userAnswer.isCorrect) Icons.Default.Check else Icons.Default.Close,
+                    contentDescription = null,
+                    tint = if (userAnswer.isCorrect) Color(0xFF4CAF50) else Color(0xFFE74C3C),
+                    modifier = Modifier.size(16.dp)
+                )
+            }
         }
     }
 }
