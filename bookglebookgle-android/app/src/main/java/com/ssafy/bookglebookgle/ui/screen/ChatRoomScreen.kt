@@ -705,7 +705,7 @@ fun ChatRoomScreen(
                 }
 
                 // AI 추천 주제 오버레이
-                if (uiState.isReadingCategory && uiState.showAiSuggestions && uiState.suggestedTopics.isNotEmpty()) {
+                if (uiState.isReadingCategory && uiState.showAiSuggestions && uiState.suggestedTopics.isNotEmpty() && uiState.isHost) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
