@@ -400,7 +400,7 @@ private fun GroupDetailContent(
                 Image(
                     painter = painterResource(id = R.drawable.ic_pdf),
                     contentDescription = null,
-                    modifier = Modifier.size(ScreenSize.width * 0.15f)
+                    modifier = Modifier.size(ScreenSize.width * 0.12f)
                 )
             }
 
@@ -672,7 +672,7 @@ private fun MemberAvatar(
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .offset(x = (-11).dp, y = (-1).dp)
+                    .offset(x = (-23).dp, y = (-1).dp)
                     .clip(CircleShape)
                     .background(Color.Transparent)
                     .size(size * 0.5f),
