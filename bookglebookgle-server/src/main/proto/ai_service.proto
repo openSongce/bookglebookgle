@@ -1,0 +1,251 @@
+syntax = "proto3";
+
+import "google/protobuf/empty.proto";
+
+package bgbg.ai;
+
+option java_package = "com.bgbg.ai.grpc";
+option java_outer_classname = "AIServiceProto";
+
+// AI Service Definition
+service AIService {
+  // Quiz Generation
+  rpc GenerateQuiz(QuizRequest) returns (QuizResponse);
+
+  // Text Proofreading
+  rpc ProofreadText(ProofreadRequest) returns (ProofreadResponse);
+
+  // Discussion Moderation
+  rpc InitializeDiscussion(DiscussionInitRequest) returns (DiscussionInitResponse);
+  rpc ProcessChatMessage(stream ChatMessageRequest) returns (stream ChatMessageResponse);
+  rpc EndDiscussion(DiscussionEndRequest) returns (DiscussionEndResponse);
+
+  // Meeting Management (통합 모임 종료)
+  rpc EndMeeting(MeetingEndRequest) returns (MeetingEndResponse);
+
+  // Chat History Management
+  rpc GetChatHistory(GetChatHistoryRequest) returns (GetChatHistoryResponse);
+  rpc GetChaZtSessionStats(ChatSessionStatsRequest) returns (ChatSessionStatsResponse);
+
+  // PDF OCR Processing (includes vector DB storage)
+  rpc ProcessPdf(stream ProcessPdfRequest) returns (ProcessPdfResponse);
+
+  // PDF OCR Processing (fire-and-forget, no response)
+  rpc ProcessPdfStream(stream ProcessPdfRequest) returns (google.protobuf.Empty);
+}
+
+// Common Messages
+message TextContent {
+  string text = 1;
+  string language = 2; // e.g., "ko", "en"
+  optional string context = 3;
+}
+
+message User {
+  string user_id = 1;
+  string nickname = 2;
+}
+
+// Quiz Generation Messages
+message QuizRequest {
+  string document_id = 1;
+  string meeting_id = 2;
+  int32 progress_percentage = 3; // 50 or 100 (진도율 기반 벡터DB에서 문서 검색)
+}
+
+message Question {
+  string question_text = 1;
+  repeated string options = 2; // Multiple choice options
+  int32 correct_answer_index = 3; // 0-based index
+
+}
+
+message QuizResponse {
+  bool success = 1;
+  string message = 2;
+  repeated Question questions = 3;
+  string quiz_id = 4;
+}
+
+// Proofreading Messages
+message ProofreadRequest {
+  TextContent original_text = 1;
+  TextContent context_text = 2; // Page content for context
+  User user = 3;
+}
+
+message TextCorrection {
+  string original = 1;
+  string corrected = 2;
+  string correction_type = 3; // grammar, spelling, style, etc.
+  string explanation = 4;
+  int32 start_position = 5;
+  int32 end_position = 6;
+}
+
+message ProofreadResponse {
+  bool success = 1;
+  string message = 2;
+  string corrected_text = 3;
+  repeated TextCorrection corrections = 4;
+  double confidence_score = 5;
+}
+
+// Discussion Messages
+message DiscussionInitRequest {
+  string document_id = 1;
+  string meeting_id = 2;
+  string session_id = 3;
+  repeated User participants = 4;
+  int64 started_at = 5;
+}
+
+message DiscussionInitResponse {
+  bool success = 1;
+  string message = 2;
+  repeated string discussion_topics = 3;
+  string recommended_topic = 4;
+}
+
+message DiscussionEndRequest {
+  string meeting_id = 1;
+  string session_id = 2;
+  int64 ended_at = 3; // 종료 타임스탬프
+}
+
+message DiscussionEndResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// Meeting Management Messages (통합 모임 종료)
+message MeetingEndRequest {
+  string meeting_id = 1;
+  string meeting_type = 2; // "discussion", "quiz", "proofreading"
+  int64 ended_at = 3; // 종료 타임스탬프
+  optional string session_id = 4; // 토론 모임의 경우 세션 ID 필요
+}
+
+message MeetingEndResponse {
+  bool success = 1;
+  string message = 2;
+  string meeting_type = 3; // 종료된 모임 타입 확인용
+}
+
+// Chat History Messages
+message ChatHistoryMessage {
+  string message_id = 1;
+  string session_id = 2;
+  User sender = 3;
+  string content = 4;
+  int64 timestamp = 5;
+  string message_type = 6; // USER, AI, SYSTEM
+  map<string, string> metadata = 7;
+}
+
+message GetChatHistoryRequest {
+  string session_id = 1;
+  optional int32 limit = 2; // Maximum number of messages to retrieve
+  optional int64 since_timestamp = 3; // Get messages since this timestamp
+  optional string user_id = 4; // Get messages from specific user only
+}
+
+message GetChatHistoryResponse {
+  bool success = 1;
+  string message = 2;
+  repeated ChatHistoryMessage messages = 3;
+  int32 total_count = 4;
+  bool has_more = 5; // Whether there are more messages available
+}
+
+message ChatSessionStatsRequest {
+  string session_id = 1;
+}
+
+message ParticipantStats {
+  User participant = 1;
+  int32 message_count = 2;
+  int64 last_activity = 3;
+  double engagement_level = 4; // 0.0 to 1.0
+}
+
+message ChatSessionStatsResponse {
+  bool success = 1;
+  string message = 2;
+  string session_id = 3;
+  int32 total_messages = 4;
+  int32 total_participants = 5;
+  repeated ParticipantStats participant_stats = 6;
+  int64 session_start_time = 7;
+  int64 last_activity_time = 8;
+  bool chat_history_enabled = 9;
+}
+
+message ChatMessageRequest {
+  string discussion_session_id = 1;
+  User sender = 2;
+  string message = 3;
+  int64 timestamp = 4;
+  // Chat history context options
+  optional bool use_chat_context = 5; // Whether to use chat history context
+  optional int32 context_window_size = 6; // Number of recent messages to include
+  optional bool store_in_history = 7; // Whether to store this message in history
+}
+
+message ChatMessageResponse {
+  bool success = 1;
+  string message = 2;
+  optional string ai_response = 3; // AI moderator response
+  repeated string suggested_topics = 4;
+  bool requires_moderation = 5;
+  // Chat history context information
+  optional int32 context_messages_used = 6; // Number of context messages used
+  optional bool chat_history_enabled = 7; // Whether chat history is enabled
+  repeated ChatHistoryMessage recent_context = 8; // Recent messages for context (optional)
+}
+
+
+
+// PDF Processing Messages
+message ProcessPdfRequest {
+  oneof data {
+    PdfInfo info = 1;
+    bytes chunk = 2;
+  }
+}
+
+message PdfInfo {
+  string document_id = 1;
+  string file_name = 2;
+  string meeting_id = 3;
+  map<string, string> metadata = 4;
+  // NOTE: Currently unused - use ProcessPdf for responses, ProcessPdfStream for fire-and-forget
+  // bool requires_response = 5;
+}
+
+message TextBlock {
+  string text = 1;
+  int32 page_number = 2;
+  double x0 = 3;
+  double y0 = 4;
+  double x1 = 5;
+  double y1 = 6;
+  string block_type = 7;
+  double confidence = 8;
+}
+
+message ProcessPdfResponse {
+  bool success = 1;
+  string message = 2;
+  string document_id = 3;
+  int32 total_pages = 4;
+  repeated TextBlock text_blocks = 5;
+}
+
+
+// Error Handling
+message ErrorDetails {
+  string error_code = 1;
+  string error_message = 2;
+  string error_category = 3; // client_error, server_error, ai_error
+}

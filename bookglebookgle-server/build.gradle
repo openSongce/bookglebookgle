@@ -2,6 +2,7 @@ plugins {
     id 'java'
     id 'org.springframework.boot' version '3.5.3'
     id 'io.spring.dependency-management' version '1.1.7'
+    id 'com.google.protobuf' version '0.9.4'
 }
 
 group = 'com.example'
@@ -23,6 +24,19 @@ repositories {
     mavenCentral()
 }
 
+// 1) plain JAR 생성 비활성화
+tasks.named('jar') {
+    enabled = false
+}
+
+// 2) fat-jar 이름을 항상 app.jar 로 고정
+bootJar {
+    archiveFileName.set("app.jar")
+}
+
+def grpcVersion = '1.64.0'
+def protobufVersion = '3.25.0'
+
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-web'
@@ -32,8 +46,111 @@ dependencies {
     annotationProcessor 'org.projectlombok:lombok'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    runtimeOnly 'mysql:mysql-connector-java:8.0.33'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'io.github.cdimascio:java-dotenv:5.2.2'
+
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.5.0'
+
+    //stmp
+    implementation 'org.springframework.boot:spring-boot-starter-mail'
+
+    // JWT
+    implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
+    runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.11.5'
+    runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.11.5' // JSON 직렬화/역직렬화
+
+
+    //redis
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    implementation 'io.lettuce:lettuce-core'
+
+    // Google ID Token 검증용
+    implementation 'com.google.api-client:google-api-client:2.0.0'
+    implementation 'com.google.api-client:google-api-client-gson:2.0.0'
+
+    // JWT 토큰 발급용
+    implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
+    runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.11.5'
+    runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.11.5'
+
+    // grpc
+    implementation "io.grpc:grpc-netty-shaded:${grpcVersion}"
+    implementation "io.grpc:grpc-protobuf:${grpcVersion}"
+    implementation "io.grpc:grpc-stub:${grpcVersion}"
+    implementation "com.google.protobuf:protobuf-java:${protobufVersion}"
+    implementation "io.grpc:grpc-core:${grpcVersion}"
+    implementation "io.grpc:grpc-xds:${grpcVersion}"
+    implementation "io.grpc:grpc-services:${grpcVersion}"
+    implementation 'net.devh:grpc-spring-boot-starter:2.15.0.RELEASE'
+
+    implementation 'javax.annotation:javax.annotation-api:1.3.2'
+
+    // Google ID Token 검증용
+    implementation 'com.google.api-client:google-api-client:2.0.0'
+    implementation 'com.google.api-client:google-api-client-gson:2.0.0'
+
+
+    //kakao oauth
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+
+    // log
+    implementation("net.logstash.logback:logstash-logback-encoder:7.4")
+
+    //pdf
+    implementation 'org.apache.pdfbox:pdfbox:2.0.27'
+
+    //FCM
+    implementation("com.google.firebase:firebase-admin:9.3.0")
+
+    testImplementation 'com.h2database:h2'
 }
 
 tasks.named('test') {
     useJUnitPlatform()
 }
+
+protobuf {
+    protoc {
+        artifact = "com.google.protobuf:protoc:${protobufVersion}"
+    }
+    plugins {
+        grpc {
+            artifact = "io.grpc:protoc-gen-grpc-java:${grpcVersion}"
+        }
+    }
+	generateProtoTasks {
+	    all().each { task ->
+	        task.builtins {
+	            java {}
+	        }
+	        task.plugins {
+	            grpc {}
+	        }
+	    }
+	}
+}
+
+sourceSets {
+    main {
+        java {
+            srcDirs = [
+                    'src/main/java',
+                    'build/generated/source/proto/main/java',
+                    'build/generated/source/proto/main/grpc',   // ✅ 이 줄 추가!
+                    'build/generated/source/grpc/main/java'
+            ]
+        }
+        proto {
+            srcDir 'src/main/proto'
+        }
+    }
+}
+
+
+tasks.withType(ProcessResources).configureEach {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+compileJava.dependsOn 'generateProto'
+

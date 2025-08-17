@@ -1,0 +1,69 @@
+server:
+  port: 8081
+  error:
+    whitelabel:
+      enabled: false
+
+ocr:
+  server:
+    url: bgbgaiai-server:50505
+
+jwt:
+  accessSecret: ${JWT_ACCESS_SECRET}
+  refreshSecret: ${JWT_REFRESH_SECRET}
+  accessTtlMillis: ${JWT_ACCESS_TTL_MILLIS:7200000}       # 2h
+  refreshTtlMillis: ${JWT_REFRESH_TTL_MILLIS:1209600000} # 14d
+
+spring:
+  config:
+    import: optional:env[.env]
+  datasource:
+    #    url: jdbc:mysql://127.0.0.1:3307/bookglebookgle
+    url: jdbc:mysql://mysql:3306/bookglebookgle
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.MySQL8Dialect
+
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
+
+  data:
+    redis:
+      host: redis
+      port: 6379
+
+grpc:
+  server:
+    port: 6565
+    security:
+      enabled: false
+
+firebase:
+  enabled: true
+  credentials:
+    base64: ${FIREBASE_CREDENTIALS_BASE64:}   # 운영: 여기로 받음
+    file-path: classpath:service-account.json # 로컬 개발만 사용

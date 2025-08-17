@@ -35,3 +35,21 @@ out/
 
 ### VS Code ###
 .vscode/
+
+# bookglebookgle-server/.gitignore
+.env
+
+# pdf
+/uploads/
+
+# 로그/데이터/빌드
+backend-logs/
+mysql-data/
+redis-data/
+prometheus/
+*.log
+/build/
+
+# Firebase SA 로컬 보관 금지
+src/main/resources/firebase/service-account.json
+*.b64

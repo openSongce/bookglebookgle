@@ -1,0 +1,113 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_DATABASE: bookglebookgle
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./mysql-data:/var/lib/mysql
+    networks:
+      - test-net
+
+  spring:
+    build:
+      context: ./bookglebookgle-server
+      dockerfile: Dockerfile
+    container_name: spring-app
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+      - "6565:6565"
+    depends_on:
+      - mysql
+      - redis
+    env_file:
+      - ./bookglebookgle-server/.env
+    volumes:
+      - ./backend-logs:/logs
+      - /home/ubuntu/bookglebookgle-server/uploads:/home/ubuntu/pdf-uploads
+      - ./application.yml:/app/config/application.yml
+    networks:
+      - test-net
+      - bgbg-network
+
+  loki:
+    image: grafana/loki:2.9.4
+    container_name: loki
+    ports:
+      - "3100:3100"
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+    networks:
+      - test-net
+
+  promtail:
+    image: grafana/promtail:2.9.4
+    container_name: promtail
+    volumes:
+      - ./promtail-config.yml:/etc/promtail/promtail-config.yml
+      - ./backend-logs:/logs
+    command: ["-config.file=/etc/promtail/promtail-config.yml"]
+    networks:
+      - test-net
+
+  grafana:
+    image: grafana/grafana:10.4.2
+    container_name: grafana
+    restart: always
+    ports:
+      - "3001:3000"
+    depends_on:
+      - loki
+    volumes:
+      - grafana-storage:/var/lib/grafana
+      - ./grafana-provisioning:/etc/grafana/provisioning
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin1234
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+      - GF_SESSION_PROVIDER=file
+      - GF_SESSION_PROVIDER_CONFIG=session.db
+    networks:
+      - test-net
+      - monitoring
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus:/etc/prometheus
+    networks:
+      - test-net
+
+  redis:
+    image: redis:7.2
+    container_name: redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      test-net:
+        aliases: ["bookgle-redis"]   
+
+volumes:
+  grafana-storage:
+    external: true
+    name: springboot-deploy_grafana-storage
+  redis-data:
+
+networks:
+  test-net:
+    driver: bridge
+    name: test-net           # ← 이름 고정(검사 편의)
+  monitoring:
+    external: true
+  bgbg-network:
+    external: true

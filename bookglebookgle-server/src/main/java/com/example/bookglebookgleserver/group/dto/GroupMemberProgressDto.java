@@ -1,0 +1,18 @@
+package com.example.bookglebookgleserver.group.dto;
+
+import io.swagger.v3.oas.annotations.media.Schema;
+
+
+
+
+@Schema(description = "그룹 내 특정 멤버의 진도율 정보")
+public record GroupMemberProgressDto (
+        @Schema(description = "유저 ID", example = "3")
+        Long userId,
+        @Schema(description = "닉네임", example = "mike")
+        String userNickName,
+        @Schema(description = "최대 읽은 페이지(0-based)", example = "45")
+        int maxReadPage,
+        @Schema(description = "진행 퍼센트(0~100)", example = "38")
+        int progressPercent
+){}
