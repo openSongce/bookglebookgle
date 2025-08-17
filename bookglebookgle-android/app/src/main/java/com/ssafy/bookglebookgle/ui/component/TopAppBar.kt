@@ -49,6 +49,7 @@ import androidx.navigation.NavHostController
 import com.ssafy.bookglebookgle.R
 import com.ssafy.bookglebookgle.navigation.Screen
 import com.ssafy.bookglebookgle.ui.theme.BaseColor
+import com.ssafy.bookglebookgle.ui.theme.MainColor
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -330,6 +331,7 @@ fun CustomTopAppBar(
 
                 Icon(
                     painter = painterResource(id = R.drawable.main_selected_chat),
+                    tint = BaseColor,
                     contentDescription = "채팅 열기",
                     modifier = Modifier
                         .padding(end = 8.dp)
