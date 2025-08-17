@@ -317,31 +317,24 @@ fun MyGroupCard(
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Top
-                ) {
-                    // 설명
-                    Text(
-                        text = group.description,
-                        fontSize = 13.sp,
-                        color = Color(0xFF666666),
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        lineHeight = 16.sp
-                    )
+                // 설명
+                Text(
+                    text = group.description,
+                    fontSize = 13.sp,
+                    color = Color(0xFF666666),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    lineHeight = 16.sp
+                )
 
-                    Spacer(modifier = Modifier.width(6.dp))
+                Spacer(modifier = Modifier.height(4.dp))
 
-                    // 하단에 참여 인원 표시
-                    Text(
-                        text = "${group.currentMembers}/${group.maxMembers}명",
-                        fontSize = 12.sp,
-                        color = Color(0xFF888888)
-                    )
-                }
-
+                // 하단에 참여 인원 표시 - 별도 행으로 분리
+                Text(
+                    text = "${group.currentMembers}/${group.maxMembers}명",
+                    fontSize = 12.sp,
+                    color = Color(0xFF888888)
+                )
             }
 
             Spacer(modifier = Modifier.width(12.dp))

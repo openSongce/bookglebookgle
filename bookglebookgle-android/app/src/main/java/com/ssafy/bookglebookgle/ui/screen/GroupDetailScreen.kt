@@ -35,6 +35,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -585,19 +586,38 @@ private fun GroupDetailContent(
     }
 }
 
+
 @Composable
 fun InfoRow(label: String, value: String) {
     val screenW = ScreenSize.width
     val screenH = ScreenSize.height
 
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = screenH * 0.005f),
-        horizontalArrangement = Arrangement.SpaceBetween
+            .padding(vertical = screenH * 0.005f)
     ) {
-        Text(label, fontSize = screenW.value.times(0.035f).sp, color = Color.Gray)
-        Text(value, fontSize = screenW.value.times(0.035f).sp, fontWeight = FontWeight.Medium)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Top
+        ) {
+            Text(
+                text = label,
+                fontSize = screenW.value.times(0.035f).sp,
+                color = Color.Gray,
+                modifier = Modifier.width(screenW * 0.25f) // 라벨 너비 고정
+            )
+            Text(
+                text = value,
+                fontSize = screenW.value.times(0.035f).sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 16.dp), // 라벨과 간격
+                textAlign = TextAlign.End // 오른쪽 정렬 유지
+            )
+        }
     }
 }
 
