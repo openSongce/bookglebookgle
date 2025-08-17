@@ -252,11 +252,11 @@ fun ProfileScreen(
                     Column(modifier = Modifier.fillMaxWidth()) {
                         Text(
                             "내 통계",
-                            fontSize = dimensions.textSizeTitle,
+                            fontSize = dimensions.textSizeHeadline,
                             fontWeight = FontWeight.Bold
                         )
 
-                        Spacer(modifier = Modifier.height(dimensions.spacingMedium))
+                        Spacer(modifier = Modifier.height(60.dp))
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),

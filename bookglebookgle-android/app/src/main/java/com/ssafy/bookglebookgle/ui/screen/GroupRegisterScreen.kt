@@ -256,7 +256,7 @@ fun DateTimePickerDialog(
                                     val day = weekDays[index]
                                     Card(
                                         modifier = Modifier
-                                            .aspectRatio(1f)
+                                            .aspectRatio(1.5f)
                                             .clickable { selectedDayIndex = index },
                                         colors = CardDefaults.cardColors(
                                             containerColor = if (selectedDayIndex == index)
@@ -270,36 +270,18 @@ fun DateTimePickerDialog(
                                             )
                                         else null
                                     ) {
-                                        Column(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalAlignment = Alignment.CenterHorizontally,
-                                            verticalArrangement = Arrangement.Center
+                                        Box( // Column 대신 Box 사용
+                                            modifier = Modifier
+                                                .fillMaxSize(), // 전체 공간 사용
+                                            contentAlignment = Alignment.Center // 중앙 정렬
                                         ) {
                                             Text(
                                                 text = day.dayName,
                                                 fontSize = 12.sp,
                                                 fontWeight = if (selectedDayIndex == index) FontWeight.Bold else FontWeight.Normal,
-                                                color = if (selectedDayIndex == index) Color.Black else Color(
-                                                    0xFF4A5568
-                                                )
+                                                color = if (selectedDayIndex == index) Color.Black else Color(0xFF4A5568),
+                                                textAlign = TextAlign.Center // 텍스트 중앙 정렬
                                             )
-                                            Text(
-                                                text = "${day.dayOfMonth}",
-                                                fontSize = 10.sp,
-                                                fontWeight = if (selectedDayIndex == index) FontWeight.Medium else FontWeight.Normal,
-                                                color = if (selectedDayIndex == index) Color.Black else Color(
-                                                    0xFF64748B
-                                                )
-                                            )
-                                            if (day.isToday) {
-                                                Text(
-                                                    text = "오늘",
-                                                    fontSize = 8.sp,
-                                                    color = if (selectedDayIndex == index) Color.Black else Color(
-                                                        0xFF81C4E8
-                                                    )
-                                                )
-                                            }
                                         }
                                     }
                                 }
@@ -366,12 +348,12 @@ fun DateTimePickerDialog(
                                 columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(6),
                                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                                 verticalArrangement = Arrangement.spacedBy(6.dp),
-                                modifier = Modifier.height(130.dp)
+                                modifier = Modifier.height(250.dp)
                             ) {
                                 items(24) { hour ->
                                     Card(
                                         modifier = Modifier
-                                            .aspectRatio(1f)
+                                            .aspectRatio(1.5f)
                                             .clickable { selectedHour = hour },
                                         colors = CardDefaults.cardColors(
                                             containerColor = if (selectedHour == hour)

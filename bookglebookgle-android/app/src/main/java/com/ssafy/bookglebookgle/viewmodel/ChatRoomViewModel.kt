@@ -547,6 +547,10 @@ class ChatRoomViewModel @Inject constructor(
 
     // AI 응답 처리
     private fun handleAiResponse(aiMessage: ChatMessage) {
+        if (!_uiState.value.isDiscussionActive && !_uiState.value.isReadingCategory) {
+            return
+        }
+
         // AI 응답이 도착하면 타이핑 상태 해제
         setAiTyping(false)
 
@@ -721,6 +725,7 @@ class ChatRoomViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
+                stopAiTypingTimeout()
                 chatGrpcRepository.endDiscussion("AI 토론을 종료합니다. 수고하셨습니다!")
 
                 // 토론 종료 시 즉시 로컬 상태 업데이트
@@ -869,6 +874,13 @@ class ChatRoomViewModel @Inject constructor(
         if (_uiState.value.isStudyCategory && _uiState.value.isQuizActive) {
             endQuiz()
         }
+
+        // Observer들도 해제 (메모리 누수 방지)
+        chatGrpcRepository.newMessages.removeObserver(grpcMessageObserver)
+        chatGrpcRepository.aiResponses.removeObserver(aiResponseObserver)
+        chatGrpcRepository.discussionStatus.removeObserver(discussionStatusObserver)
+        chatGrpcRepository.quizMessages.removeObserver(quizMessageObserver)
+
         chatGrpcRepository.disconnect()
     }
 
