@@ -613,8 +613,8 @@ fun ProgressStatusCard(
 
     // 각 멤버 진도 % 계산: 서버 progressPercent 우선, 없으면 lastPageRead 기반 계산
     fun percentOf(m: GroupMember): Int {
-        val server = m.progressPercent
-        if (server in 0..100) return server
+//        val server = m.progressPercent
+//        if (server in 0..100) return server
         if (pageCount <= 0) return 0
         val oneBased = (m.lastPageRead + 1).coerceAtLeast(0)
         return ((oneBased.toFloat() / pageCount.toFloat()) * 100f)
@@ -863,7 +863,7 @@ private fun MemberInfoDialogWhite(
 ) {
     val percent = remember(member, pageCount) {
         when {
-            member.progressPercent in 0..100 -> member.progressPercent
+//            member.progressPercent in 0..100 -> member.progressPercent
             pageCount > 0 -> (((member.lastPageRead + 1).coerceAtLeast(0).toFloat() / pageCount) * 100f)
                 .toInt().coerceIn(0, 100)
             else -> 0
