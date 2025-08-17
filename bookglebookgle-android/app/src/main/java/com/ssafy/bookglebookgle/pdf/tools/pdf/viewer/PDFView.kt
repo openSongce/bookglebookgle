@@ -1442,9 +1442,9 @@ class PDFView(context: Context?, set: AttributeSet?) :
             scrollHandle!!.setScroll(positionOffset)
         }
         callbacks.callOnPageScroll(currentPage, positionOffset)
-        if (!maxScrollReached && fromScrolling) {
-            listener?.onScrolling()
-            notifyViewportChanged()
+        if (!maxScrollReached) {
+            if (fromScrolling) listener?.onScrolling()
+            notifyViewportChangedThrottled()
         }
         redraw()
     }
@@ -1605,7 +1605,7 @@ class PDFView(context: Context?, set: AttributeSet?) :
      */
     fun zoomTo(zoom: Float) {
         this.zoom = zoom
-        notifyViewportChanged()
+        notifyViewportChangedThrottled()
     }
 
     /**
@@ -1624,7 +1624,7 @@ class PDFView(context: Context?, set: AttributeSet?) :
         baseX += pivot.x - pivot.x * dZoom
         baseY += pivot.y - pivot.y * dZoom
         moveTo(baseX, baseY)
-        notifyViewportChanged()
+        notifyViewportChangedThrottled()
     }
 
     /**
@@ -2503,7 +2503,22 @@ class PDFView(context: Context?, set: AttributeSet?) :
         listener?.onTextSelectionCleared()
         redraw()
     }
-    
+
+
+    // 20Hz 정도로 알림 빈도 제한
+    private class Throttler(private val intervalMs: Long) {
+        private var last = 0L
+        fun allow(): Boolean {
+            val now = android.os.SystemClock.uptimeMillis()
+            if (now - last >= intervalMs) { last = now; return true }
+            return false
+        }
+    }
+    private val viewportThrottler = Throttler(0)
+
+    private fun notifyViewportChangedThrottled() {
+        if (viewportThrottler.allow()) notifyViewportChanged()
+    }
 
 
 
