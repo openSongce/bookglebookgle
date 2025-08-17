@@ -211,7 +211,7 @@ fun LoginScreen(navController: NavController, loginViewModel: LoginViewModel = h
                 modifier = Modifier.size(maxW * 0.3f)
             ) {
                 Image(
-                    painter = painterResource(id = R.drawable.login_logo),
+                    painter = painterResource(id = R.drawable.bookgle_final_icon),
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize()
                 )

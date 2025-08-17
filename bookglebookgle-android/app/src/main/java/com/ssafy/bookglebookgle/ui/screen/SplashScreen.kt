@@ -8,13 +8,17 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -61,20 +65,19 @@ fun SplashScreen(navController: NavController) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MainColor),
+            .background(androidx.compose.ui.graphics.Color.White),
         contentAlignment = Alignment.Center
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Image(
-                painter = painterResource(id = R.drawable.login_logo),
-                contentDescription = "BookgleBookgle Logo",
-                modifier = Modifier
-                    .size(150.dp, 150.dp),
-                contentScale = ContentScale.FillBounds
-            )
-        }
+        Image(
+            painter = painterResource(id = R.drawable.bookgle_final_icon),
+            contentDescription = "BookgleBookgle Logo",
+            modifier = Modifier
+                .fillMaxWidth(0.42f)   // 화면 너비의 42% (원하는 비율로 조절)
+                .aspectRatio(1f)       // 정사각형 유지
+                .clip(CircleShape),    // 여기! 동그랗게
+            contentScale = ContentScale.Crop // 원 안을 꽉 채우도록
+        )
     }
+
 
 }
