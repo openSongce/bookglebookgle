@@ -18,7 +18,7 @@ spring:
   config:
     import: optional:env[.env]
   datasource:
-#    url: jdbc:mysql://127.0.0.1:3307/bookglebookgle
+    #    url: jdbc:mysql://127.0.0.1:3307/bookglebookgle
     url: jdbc:mysql://mysql:3306/bookglebookgle
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
