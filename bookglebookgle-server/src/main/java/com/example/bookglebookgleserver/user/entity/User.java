@@ -66,15 +66,4 @@ public class User {
         this.active = active;
     }
 
-    public LocalDateTime getDeactivatedAt() {
-        return deactivatedAt;
-    }
-
-    public void setDeactivatedAt(LocalDateTime deactivatedAt) {
-        this.deactivatedAt = deactivatedAt;
-    }
-
-    public void setAvgRating(Float avgRating) {
-        this.avgRating = avgRating;
-    }
 }

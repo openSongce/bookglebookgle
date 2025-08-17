@@ -132,6 +132,7 @@ public class AuthService {
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .nickname(request.getNickname())
+                .active(true)
                 .avgRating(3.0f)
                 .ratingCnt(1)
                 .build();
