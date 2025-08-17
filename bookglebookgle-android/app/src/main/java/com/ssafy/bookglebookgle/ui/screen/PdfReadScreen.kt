@@ -1017,7 +1017,8 @@ fun PdfReadScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .fillMaxHeight(0.5f)  // 반 높이
+                            .fillMaxHeight(0.5f)
+                            .imePadding()// 반 높이
                     ) {
                         // ChatRoomScreen 안에 자체 TopBar가 있으니 그대로 써도 되고,
                         // 필요하면 'embedded' 플래그를 만들어 상단바를 숨겨도 됨.
