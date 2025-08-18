@@ -1,0 +1,321 @@
+package com.ssafy.bookglebookgle.navigation
+
+import android.annotation.SuppressLint
+import android.content.Intent
+import android.util.Log
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Scaffold
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import com.example.pdfnotemate.ui.activity.home.PdfScreen
+import com.ssafy.bookglebookgle.MainActivity
+import com.ssafy.bookglebookgle.ui.screen.PdfReadScreen
+import com.ssafy.bookglebookgle.pdf.response.PdfNoteListModel
+import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.BookmarkModel
+import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.CommentModel
+import com.ssafy.bookglebookgle.pdf.tools.pdf.viewer.model.HighlightModel
+import com.ssafy.bookglebookgle.pdf.ui.screen.AddPdfPageType
+import com.ssafy.bookglebookgle.pdf.ui.screen.AddPdfScreen
+import com.ssafy.bookglebookgle.pdf.ui.screen.BookmarkListScreen
+import com.ssafy.bookglebookgle.pdf.ui.screen.CommentsListScreen
+import com.ssafy.bookglebookgle.pdf.ui.screen.HighlightListScreen
+import com.ssafy.bookglebookgle.ui.screen.ChatListScreen
+import com.ssafy.bookglebookgle.ui.screen.ChatRoomScreen
+import com.ssafy.bookglebookgle.ui.screen.GroupRegisterScreen
+import com.ssafy.bookglebookgle.ui.screen.LoginScreen
+import com.ssafy.bookglebookgle.ui.screen.MainScreen
+import com.ssafy.bookglebookgle.ui.screen.MyGroupScreen
+import com.ssafy.bookglebookgle.ui.screen.ProfileScreen
+import com.ssafy.bookglebookgle.ui.screen.RegisterScreen
+import com.ssafy.bookglebookgle.ui.screen.SplashScreen
+import com.ssafy.bookglebookgle.ui.screen.GroupDetailScreen
+import com.ssafy.bookglebookgle.ui.screen.MyBookShelfScreen
+import com.ssafy.bookglebookgle.viewmodel.ProfileViewModel
+
+@SuppressLint("ContextCastToActivity")
+@Composable
+fun MainNavigation(
+    navController: NavHostController = rememberNavController()
+) {
+    val currentBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = currentBackStackEntry?.destination?.route
+
+    // 바텀 네비게이션을 표시할 화면들
+    val screensWithBottomNav = BottomNavItem.items.map { it.route }
+
+    LaunchedEffect(Unit) {
+        MainActivity.deepLinkIntents.collect { intent ->
+            handleDeepLinkFromIntent(intent, navController)
+        }
+    }
+
+    Scaffold(
+        bottomBar = {
+            // 바텀 네비게이션이 필요한 화면에서만 표시
+            if (currentRoute in screensWithBottomNav) {
+                BottomNavigationBar(
+                    modifier = Modifier.navigationBarsPadding(),
+                    selectedRoute = currentRoute,
+                    onItemSelected = { route ->
+                        if (route != currentRoute) {
+                            navController.navigate(route) {
+                                popUpTo(BottomNavItem.Home.route) {
+                                    saveState = true
+                                }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        }
+                    }
+                )
+            }
+        }
+    ) { innerPadding ->
+        NavHost(
+            navController = navController,
+            startDestination = Screen.SplashScreen.route,
+            modifier = Modifier.padding(innerPadding)
+        ) {
+            composable(Screen.SplashScreen.route) {
+                SplashScreen(navController)
+            }
+
+            composable(Screen.MainScreen.route){
+                MainScreen(navController)
+            }
+
+            composable(Screen.LoginScreen.route) {
+                LoginScreen(navController)
+            }
+
+            composable(Screen.RegisterScreen.route) {
+                RegisterScreen(navController)
+            }
+
+            composable(BottomNavItem.Home.route) {
+                MainScreen(navController)
+            }
+
+            composable(BottomNavItem.Chat.route) {
+                ChatListScreen(navController)
+            }
+
+            composable(BottomNavItem.MyGroup.route) {
+                MyGroupScreen(navController)
+            }
+
+            composable(BottomNavItem.Profile.route) {
+                ProfileScreen(navController)
+            }
+
+            composable(Screen.GroupRegisterScreen.route){
+                GroupRegisterScreen(navController)
+            }
+
+            composable(Screen.GroupDetailScreen.route) {
+                val groupId = navController.previousBackStackEntry
+                    ?.savedStateHandle?.get<Long>("groupId") ?: -1L
+
+                val isMyGroup = navController.previousBackStackEntry
+                    ?.savedStateHandle?.get<Boolean>("isMyGroup") ?: false
+
+                LaunchedEffect(Unit) {
+                    Log.d("GroupId", "GroupDetailScreen 전달 - groupId: $groupId, isMyGroup: $isMyGroup")
+                }
+
+                GroupDetailScreen(navController,  groupId, isMyGroup)
+            }
+
+            composable(Screen.PdfReadScreen.route){
+                val groupId = navController.previousBackStackEntry
+                    ?.savedStateHandle?.get<Long>("groupId") ?: -1L
+
+                LaunchedEffect(Unit) {
+                    Log.d("GroupId", "PdfReadScreen 전달 - groupId: $groupId")
+                }
+
+                val profileViewModel: ProfileViewModel = hiltViewModel()
+                val userId by profileViewModel.userId.collectAsState()
+                PdfReadScreen(groupId = groupId, userId = userId.toString(), navController = navController)
+            }
+
+            composable(Screen.ChatRoomScreen.route){
+                val groupId = navController.previousBackStackEntry
+                    ?.savedStateHandle?.get<Long>("groupId") ?: -1L
+
+                LaunchedEffect(Unit) {
+                    Log.d("GroupId", "ChatRoomScreen 전달 - groupId: $groupId")
+                }
+                val profileViewModel: ProfileViewModel = hiltViewModel()
+                val userId by profileViewModel.userId.collectAsState()
+                ChatRoomScreen(navController =  navController, groupId, userId)
+            }
+
+
+            /** PDF 라이브러리 호출*/
+            composable(Screen.AddPdfScreen.route) {
+                val pageType = navController.previousBackStackEntry
+                    ?.savedStateHandle
+                    ?.get<AddPdfPageType>(NavKeys.PAGE_TYPE) ?: AddPdfPageType.PickFromGallery
+
+                AddPdfScreen(
+                    pageType = pageType,
+                    onBackPressed = {
+                        navController.navigateUp()
+                    },
+                    onPdfAdded = {
+                        navController.previousBackStackEntry
+                            ?.savedStateHandle
+                            ?.set(NavKeys.PDF_ADDED, true)
+                        navController.navigateUp()
+                    }
+                )
+            }
+
+
+
+            composable(Screen.CommentsListScreen.route) {
+                val comments = navController.previousBackStackEntry
+                    ?.savedStateHandle?.get<List<CommentModel>>(NavKeys.COMMENTS) ?: emptyList()
+
+                CommentsListScreen(
+                    initialComments = comments,
+                    onBackPressed = { deletedIds ->
+                        if (deletedIds.isNotEmpty()) {
+                            navController.previousBackStackEntry
+                                ?.savedStateHandle
+                                ?.set(NavKeys.DELETED_COMMENT_IDS, deletedIds)
+                        }
+                        navController.navigateUp()
+                    },
+                    onCommentClicked = { comment, deletedIds ->
+                        if (deletedIds.isNotEmpty()) {
+                            navController.previousBackStackEntry
+                                ?.savedStateHandle
+                                ?.set(NavKeys.DELETED_COMMENT_IDS, deletedIds)
+                        }
+                        navController.previousBackStackEntry
+                            ?.savedStateHandle
+                            ?.set(NavKeys.SELECTED_COMMENT, comment)
+                        navController.navigateUp()
+                    }
+                )
+            }
+
+            composable(Screen.HighlightsListScreen.route) {
+                val highlights = navController.previousBackStackEntry
+                    ?.savedStateHandle
+                    ?.get<List<HighlightModel>>(NavKeys.HIGHLIGHTS) ?: emptyList()
+
+                HighlightListScreen(
+                    initialHighlights = highlights,
+                    onBackPressed = { deletedIds ->
+                        if (deletedIds.isNotEmpty()) {
+                            navController.previousBackStackEntry
+                                ?.savedStateHandle
+                                ?.set(NavKeys.DELETED_HIGHLIGHT_IDS, deletedIds)
+                        }
+                        navController.navigateUp()
+                    },
+                    onHighlightClicked = { highlight, deletedIds ->
+                        if (deletedIds.isNotEmpty()) {
+                            navController.previousBackStackEntry
+                                ?.savedStateHandle
+                                ?.set(NavKeys.DELETED_HIGHLIGHT_IDS, deletedIds)
+                        }
+                        navController.previousBackStackEntry
+                            ?.savedStateHandle
+                            ?.set(NavKeys.SELECTED_HIGHLIGHT, highlight)
+                        navController.navigateUp()
+                    }
+                )
+            }
+
+            composable(Screen.BookmarksListScreen.route) {
+                val bookmarks = navController.previousBackStackEntry
+                    ?.savedStateHandle
+                    ?.get<List<BookmarkModel>>(NavKeys.BOOKMARKS) ?: emptyList()
+
+                BookmarkListScreen(
+                    initialBookmarks = bookmarks,
+                    onBackPressed = { deletedIds ->
+                        if (deletedIds.isNotEmpty()) {
+                            navController.previousBackStackEntry
+                                ?.savedStateHandle
+                                ?.set(NavKeys.DELETED_BOOKMARK_IDS, deletedIds)
+                        }
+                        navController.navigateUp()
+                    },
+                    onBookmarkClicked = { bookmark, deletedIds ->
+                        if (deletedIds.isNotEmpty()) {
+                            navController.previousBackStackEntry
+                                ?.savedStateHandle
+                                ?.set(NavKeys.DELETED_BOOKMARK_IDS, deletedIds)
+                        }
+                        navController.previousBackStackEntry
+                            ?.savedStateHandle
+                            ?.set(NavKeys.SELECTED_BOOKMARK, bookmark)
+                        navController.navigateUp()
+                    }
+                )
+            }
+
+
+            composable(Screen.MyBookShelfScreen.route) {
+                val userId: Long = navController.previousBackStackEntry
+                    ?.savedStateHandle
+                    ?.get<Long>(NavKeys.USER_ID)
+                    ?: -1L
+
+                MyBookShelfScreen(userId = userId)
+            }
+
+
+
+        }
+    }
+}
+
+private fun handleDeepLinkFromIntent(
+    intent: Intent,
+    navController: NavHostController
+) {
+    val deeplinkType = intent.getStringExtra("deeplink_type")
+    val groupId = intent.getStringExtra("groupId")?.toLongOrNull()
+
+    Log.d("DeepLink", "handleDeepLinkFromIntent - type=$deeplinkType, groupId=$groupId")
+
+    if (groupId == null || groupId == -1L) return
+
+    try {
+        when (deeplinkType) {
+            "chat" -> {
+                navController.currentBackStackEntry?.savedStateHandle?.set("groupId", groupId)
+                navController.navigate(Screen.ChatRoomScreen.route) {
+                    launchSingleTop = true
+                }
+            }
+            "group_detail" -> {
+                navController.currentBackStackEntry?.savedStateHandle?.set("groupId", groupId)
+                navController.currentBackStackEntry?.savedStateHandle?.set("isMyGroup", true)
+                navController.navigate(Screen.GroupDetailScreen.route) {
+                    launchSingleTop = true
+                }
+            }
+        }
+
+        // 처리 후 Intent 정리
+        intent.removeExtra("deeplink_type")
+        intent.removeExtra("groupId")
+    } catch (e: Exception) {
+        Log.e("DeepLink", "네비게이션 실패: ${e.message}", e)
+    }
+}
