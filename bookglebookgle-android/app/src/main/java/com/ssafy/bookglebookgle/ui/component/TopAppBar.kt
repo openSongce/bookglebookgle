@@ -330,6 +330,7 @@ fun CustomTopAppBar(
 
                 Icon(
                     painter = painterResource(id = R.drawable.main_selected_chat),
+                    tint = BaseColor,
                     contentDescription = "채팅 열기",
                     modifier = Modifier
                         .padding(end = 8.dp)

@@ -132,6 +132,23 @@ class ProfileViewModel @Inject constructor(
         _uiState.value = ProfileUiState.Success(profile)
     }
 
+    fun deleteAccount() {
+        viewModelScope.launch {
+            try {
+                val response = logoutUseCase.deleteAccount()
+                if (response.isSuccessful) {
+                    _events.emit("계정이 삭제됐어요")
+                    _logoutCompleted.value = true
+                } else {
+                    _events.emit("계정 삭제 실패: ${response.message()}")
+                }
+            } catch (e: Exception) {
+                Log.e("ProfileVM", "Error deleting account: ${e.message}", e)
+                _events.emit("계정 삭제 중 오류 발생: ${e.message ?: "알 수 없는 오류"}")
+            }
+        }
+    }
+
     fun logout() {
         viewModelScope.launch {
             logoutUseCase()

@@ -178,6 +178,8 @@ dependencies {
     // Hilt WorkManager
     implementation("androidx.hilt:hilt-work:1.1.0")
     kapt("androidx.hilt:hilt-compiler:1.1.0")
+
+    implementation("com.airbnb.android:lottie-compose:6.4.0")
 }
 
 kapt {

@@ -6,7 +6,9 @@ import com.ssafy.bookglebookgle.entity.LoginRequest
 import com.ssafy.bookglebookgle.entity.LoginResponse
 import com.ssafy.bookglebookgle.entity.LogoutRequest
 import com.ssafy.bookglebookgle.entity.RefreshRequest
+import retrofit2.Response
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.POST
 
 interface LoginApi {
@@ -27,4 +29,7 @@ interface LoginApi {
 
     @POST("fcm/unregister")
     suspend fun unregisterFcmToken(@Body request: LogoutRequest)
+
+    @DELETE("auth/users/account")
+    suspend fun deleteAccount(): Response<Unit>
 }

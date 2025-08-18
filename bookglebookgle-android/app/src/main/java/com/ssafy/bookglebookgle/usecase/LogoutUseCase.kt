@@ -2,6 +2,7 @@ package com.ssafy.bookglebookgle.usecase
 
 import com.ssafy.bookglebookgle.repository.LoginRepository
 import com.ssafy.bookglebookgle.util.TokenManager
+import retrofit2.Response
 import javax.inject.Inject
 
 class LogoutUseCase @Inject constructor(
@@ -18,5 +19,9 @@ class LogoutUseCase @Inject constructor(
 
         // 토큰 삭제 (성공/실패 상관없이)
         tokenManager.clearTokens()
+    }
+
+    suspend fun deleteAccount(): Response<Unit> {
+        return repository.deleteAccount()
     }
 }

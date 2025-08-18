@@ -99,6 +99,12 @@ class ChatGrpcRepository @Inject constructor(
                     Handler(Looper.getMainLooper()).post {
                         Log.d(TAG, "실시간 메시지 수신: ${chatMessage.nickname}: ${chatMessage.message}")
 
+                        // 시스템 입장/퇴장 메시지 필터링 - 채팅방에 표시하지 않음
+                        if (isSystemJoinLeaveMessage(chatMessage)) {
+                            Log.d(TAG, "시스템 입장/퇴장 메시지 필터링됨: ${chatMessage.message}")
+                            return@post // 이 메시지는 UI에 표시하지 않음
+                        }
+
                         // 메시지 타입별로 다른 LiveData로 분배
                         when (chatMessage.type) {
                             MessageType.AI_RESPONSE -> {
@@ -146,6 +152,15 @@ class ChatGrpcRepository @Inject constructor(
         sendSystemMessage("$currentUserName 님이 채팅방에 입장했습니다.")
 
         Log.d(TAG, "채팅방 입장 완료")
+    }
+
+    // 시스템 입장/퇴장 메시지인지 확인하는 함수
+    private fun isSystemJoinLeaveMessage(chatMessage: ChatMessage): Boolean {
+        // 시스템 메시지이고 입장/퇴장 키워드가 포함된 경우
+        return chatMessage.nickname == "시스템" &&
+                chatMessage.type == MessageType.NORMAL &&
+                (chatMessage.message.contains("입장했습니다") ||
+                        chatMessage.message.contains("퇴장했습니다"))
     }
 
     // 일반 메시지 전송
@@ -356,7 +371,7 @@ class ChatGrpcRepository @Inject constructor(
         val displayMessage = when (messageType) {
             MessageType.QUIZ_START -> "퀴즈가 시작되었습니다!"
             MessageType.QUIZ_QUESTION -> "새로운 문제가 출제되었습니다"
-            MessageType.QUIZ_ANSWER -> "${grpcMessage.senderName}님이 답안을 제출했습니다"
+            MessageType.QUIZ_ANSWER -> ""
             MessageType.QUIZ_REVEAL -> "정답이 공개되었습니다"
             MessageType.QUIZ_SUMMARY -> "퀴즈 결과가 나왔습니다"
             MessageType.QUIZ_END -> "퀴즈가 종료되었습니다"
