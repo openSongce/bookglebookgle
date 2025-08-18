@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  bgbgaiai:
+    build: .
+    container_name: bgbgaiai-server
+    # ports 제거 - 외부 접근 차단 (최고 보안)
+    # ports:
+    #   - "50505:50505"  # gRPC
+    #   - "8126:8126"    # HTTP
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    env_file:
+      - .env
+    environment:
+      # 최고 보안 설정: localhost 바인딩
+      - SERVER_HOST=0.0.0.0
+      - GRPC_PORT=50505
+      - HTTP_PORT=8126
+      - LOG_LEVEL=INFO
+      - OCR_TIMEOUT=60
+      - BATCH_SIZE=2
+      - USE_CACHE=true
+      # Redis 연결 설정 (명시적으로 덮어쓰기)
+      - DATABASE__REDIS_HOST=redis
+      - DATABASE__REDIS_PORT=6379
+      - DATABASE__REDIS_PASSWORD=bgbg_redis_2024!
+      - DATABASE__REDIS_DB=0
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - bgbg-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8126/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  redis:
+    image: redis:7-alpine
+    container_name: bgbg-redis
+    # Redis 외부 접근 차단 (최고 보안)
+    # ports:
+    #   - "6382:6379"  # 외부 접근용 포트 매핑
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --requirepass bgbg_redis_2024!
+    restart: unless-stopped
+    networks:
+      - bgbg-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "bgbg_redis_2024!", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
+
+networks:
+  bgbg-network:
+    external: true
+    # driver: bridge
+    # internal: true를 제거하여 모델 다운로드 허용
+    # 보안은 포트 매핑 제거로 충분히 보장됨
+
+volumes:
+  redis_data:

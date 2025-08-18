@@ -1,0 +1,28 @@
+# Tesseract OCR Local Service Requirements
+# Minimal dependencies for stability
+
+# Core dependencies
+loguru==0.7.3
+numpy>=1.24.4,<2.0
+pillow>=10.0.1
+opencv-python-headless>=4.8.0
+
+# gRPC dependencies
+grpcio==1.64.0
+grpcio-status==1.64.0
+grpcio-tools==1.64.0
+protobuf==5.26.1
+
+# PDF processing
+PyMuPDF==1.23.26
+PyMuPDFb==1.23.22
+
+# Tesseract OCR
+pytesseract==0.3.13
+
+# System utilities
+psutil==5.9.8
+
+# Windows compatibility
+pyreadline3==3.5.4;platform_system=="Windows"
+win32_setctime==1.2.0;platform_system=="Windows"
