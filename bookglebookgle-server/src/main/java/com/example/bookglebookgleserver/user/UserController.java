@@ -43,28 +43,11 @@ public class UserController {
 
         Long userId = currentUser.getId();
 
-        // ✅ 모든 계산을 서비스로 위임 (prettyActiveTime/seconds 포함)
+        // 모든 계산을 서비스로 위임 (prettyActiveTime/seconds 포함)
         return viewingSessionService.getProfile(currentUser.getId());
 
-//        double avgRating = currentUser.getAvgRating() != null ? currentUser.getAvgRating() : 0.0;
-//        int participated = groupMemberRepository.countJoinedGroupsByUserId(userId);
-//        int completed    = groupMemberRepository.countCompletedGroupsByUserId(userId);
-//        int incomplete   = groupMemberRepository.countIncompleteGroupsByUserId(userId);
-//        Long totalSeconds = pdfViewingSessionRepository.sumTotalViewingTimeByUserId(userId);
-//        int totalHours = totalSeconds == null ? 0 : (int)(totalSeconds / 3600);
-//
-//        return UserProfileResponse.builder()
-//                .email(currentUser.getEmail())
-//                .nickname(currentUser.getNickname())
-//                .profileImgUrl(currentUser.getProfileImageUrl())
-//                .avgRating(avgRating)
-//                .participatedGroups(participated)
-//                .completedGroups(completed)
-//                .incompleteGroups(incomplete)
-//                .totalActiveHours(totalHours)
-//                .profileColor(currentUser.getProfileColor())
-//                .build();
     }
+
 
 
     @Operation(summary = "프로필 수정", description = "닉네임, 프로필 이미지 URL을 수정합니다.")

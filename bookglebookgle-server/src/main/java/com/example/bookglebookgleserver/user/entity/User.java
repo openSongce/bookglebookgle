@@ -48,6 +48,19 @@ public class User {
     @Column(name = "deactivated_at")
     private LocalDateTime deactivatedAt;
 
+    @Column(name = "total_active_seconds", nullable = false)
+    private Long totalActiveSeconds = 0L;
+
+    // 생성 컬럼 매핑 (DB가 계산하므로 읽기 전용)
+    @Column(name = "total_active_hours", insertable = false, updatable = false)
+    private Integer totalActiveHours;
+
+    // 편의 getter (분/시 포맷이 필요하면 DTO에서 사용)
+    public int getTotalActiveHoursFloor() {
+        long sec = (totalActiveSeconds == null ? 0L : totalActiveSeconds);
+        return (int) (sec / 3600);
+    }
+
     @PrePersist
     public void prePersist() {
         if (avgRating == null) {

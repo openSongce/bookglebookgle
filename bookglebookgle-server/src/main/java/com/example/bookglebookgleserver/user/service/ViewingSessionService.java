@@ -38,6 +38,11 @@ public class ViewingSessionService {
                 .build();
 
         pdfViewingSessionRepository.save(session);
+
+        // 누적(초) 업데이트
+        long add = (seconds == null ? 0L : seconds);
+        user.setTotalActiveSeconds((user.getTotalActiveSeconds() == null ? 0L : user.getTotalActiveSeconds()) + add);
+        // total_active_hours 는 DB 생성 컬럼이므로 자동 반영
     }
 
     @Transactional(readOnly = true)
@@ -51,19 +56,7 @@ public class ViewingSessionService {
         long totalSec = getTotalViewingSeconds(userId);
         return (int) (totalSec / 3600);
     }
-//
-//    // 시 단위(반올림/올림이 필요하면 아래 중 택1)
-//    @Transactional(readOnly = true)
-//    public int getTotalActiveHoursRound(Long userId) {
-//        long totalSec = getTotalViewingSeconds(userId);
-//        return (int) Math.round(totalSec / 3600.0);
-//    }
-//
-//    @Transactional(readOnly = true)
-//    public int getTotalActiveHoursCeil(Long userId) {
-//        long totalSec = getTotalViewingSeconds(userId);
-//        return (int) Math.ceil(totalSec / 3600.0);
-//    }
+
 //
     // "12h 05m" 같은 포맷이 필요하면
     @Transactional(readOnly = true)
@@ -78,47 +71,83 @@ public class ViewingSessionService {
     public UserProfileResponse getProfile(Long userId) {
         User user = userRepository.findById(userId).orElseThrow();
 
-        // 합계 초 가져오기
-        long totalSec =getTotalViewingSeconds(userId);
 
-        // 시/분 계산
+        // 1) users 테이블 값으로 조회
+        long totalSecFromUsers = (user.getTotalActiveSeconds() == null ? 0L : user.getTotalActiveSeconds());
+
+        // 2) 혹시 컬럼이 0이고, 세션 합계가 필요한 경우에만 fallback 하고 싶다면:
+        long totalSec = totalSecFromUsers;
+//  if (totalSecFromUsers == 0L) {
+//      totalSec = getTotalViewingSeconds(userId); // fallback
+//  }
+
         long hours = totalSec / 3600;
         long minutes = (totalSec % 3600) / 60;
 
-        // 포맷(영문)
-        String pretty;
-        if (hours == 0) {
-            pretty = String.format("%d분", minutes);      // 59분이면 "59분"
-        } else {
-            pretty = String.format("%d시간 %02d분", hours, minutes); // 3시간 05분
-        }
+        String pretty = (hours == 0)
+                ? String.format("%d분", minutes)
+                : String.format("%d시간 %02d분", hours, minutes);
 
-
-
-
-        // 한국어 포맷 원하면 아래 사용:
-        // String pretty = String.format("%d시간 %02d분", hours, minutes);
-
-        int totalActiveHours = (int)(totalSec / 3600);
-        int completed = groupMemberRepository.countCompletedGroupsByUserId(userId);
-        int incomplete = groupMemberRepository.countIncompleteGroupsByUserId(userId);
-        int participated = groupMemberRepository.countJoinedGroupsByUserId(userId);
+        int completed   = groupMemberRepository.countCompletedGroupsByUserId(userId);
+        int incomplete  = groupMemberRepository.countIncompleteGroupsByUserId(userId);
+        int participated= groupMemberRepository.countJoinedGroupsByUserId(userId);
 
         return UserProfileResponse.builder()
                 .email(user.getEmail())
                 .nickname(user.getNickname())
                 .profileImgUrl(user.getProfileImageUrl())
                 .avgRating(user.getAvgRating() == null ? 0.0 : user.getAvgRating())
-                .totalActiveHours(totalActiveHours)
+                .totalActiveHours(user.getTotalActiveHours())      // 또는 user.getTotalActiveHours() (생성 컬럼이면)
+                .prettyActiveTime(pretty)
+                .totalActiveSeconds(totalSec)
                 .completedGroups(completed)
                 .incompleteGroups(incomplete)
                 .participatedGroups(participated)
-                .progressPercent(0.0)
                 .profileColor(user.getProfileColor())
-
-                .prettyActiveTime(pretty)
-                .totalActiveSeconds(totalSec)
+                .progressPercent(0.0)
                 .build();
+
+//        // 합계 초 가져오기
+//        long totalSec =getTotalViewingSeconds(userId);
+//
+//        // 시/분 계산
+//        long hours = totalSec / 3600;
+//        long minutes = (totalSec % 3600) / 60;
+//
+//        // 포맷(영문)
+//        String pretty;
+//        if (hours == 0) {
+//            pretty = String.format("%d분", minutes);      // 59분이면 "59분"
+//        } else {
+//            pretty = String.format("%d시간 %02d분", hours, minutes); // 3시간 05분
+//        }
+//
+//
+//
+//
+//        // 한국어 포맷 원하면 아래 사용:
+//        // String pretty = String.format("%d시간 %02d분", hours, minutes);
+//
+//        int totalActiveHours = (int)(totalSec / 3600);
+//        int completed = groupMemberRepository.countCompletedGroupsByUserId(userId);
+//        int incomplete = groupMemberRepository.countIncompleteGroupsByUserId(userId);
+//        int participated = groupMemberRepository.countJoinedGroupsByUserId(userId);
+//
+//        return UserProfileResponse.builder()
+//                .email(user.getEmail())
+//                .nickname(user.getNickname())
+//                .profileImgUrl(user.getProfileImageUrl())
+//                .avgRating(user.getAvgRating() == null ? 0.0 : user.getAvgRating())
+//                .totalActiveHours(totalActiveHours)
+//                .completedGroups(completed)
+//                .incompleteGroups(incomplete)
+//                .participatedGroups(participated)
+//                .progressPercent(0.0)
+//                .profileColor(user.getProfileColor())
+//
+//                .prettyActiveTime(pretty)
+//                .totalActiveSeconds(totalSec)
+//                .build();
     }
 
 
