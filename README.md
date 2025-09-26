@@ -292,12 +292,13 @@ AI가 참여하여 학습과 토론을 더 깊고 효과적으로 만들어 줍�
 | --- | --- | --- |
 | 허지명 | 팀장, Backend & Infra 개발 | wlaud0823@naver.com |
 | 홍은솔 | BackEnd 개발 | eunsolhh@gmail.com |
-| 송진우 | Mobile 개발, UI/UX 디자인 | rkddkwl059@naver.com |
+| 송진우 | Mobile 개발, UI/UX 디자인, Infra 보조 | rkddkwl059@naver.com |
 | 최운수 | Mobile 개발, UI/UX 디자인 | [g](mailto:gews30025@naver.com)ews300255@gmail.com |
 | 송하윤 | AI개발 | sdf8556@naver.com |
 
 <br>
 
 ### [🎨 Figma](https://www.figma.com/design/fc7T25rVce9NzzSfE5h6pm/Untitled?node-id=0-1&p=f&t=uuhq0vrpWAXzrhCK-0)
+
 
 [ERD Diagram](asset/erd.png)
